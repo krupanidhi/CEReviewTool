@@ -1,0 +1,7 @@
+{
+  "enableCache": false,
+  "multipleApplications": false,
+  "multipleChecklists": false,
+  "maxCacheSize": 100,
+  "cacheLocation": "./cache"
+}
