@@ -103,11 +103,11 @@ Return results in JSON format with this structure:
   "sections": [
     {
       "checklistSection": "section name from checklist",
-      "requirement": "specific requirement text",
+      "requirement": "specific requirement text FROM CHECKLIST ONLY - DO NOT add formQuestions here",
       "status": "met" | "partial" | "not_met",
       "applicationSection": "corresponding section in application",
       "pageReferences": [26],
-      "evidence": "EXACT copy from application - Example: 'Applicant Name: FAMILY PRACTICE & COUNSELING SERVICES NETWORK INC\\nFiscal Year End Date: June 30\\nApplication Type: New\\nBusiness Entity: [ X ] Private, non-profit (non-Tribal or Urban Indian)\\nOrganization Type: [ X ] Community based organization'",
+      "evidence": "EXACT copy from application. CRITICAL: If table has formQuestions array, START with question-answer pairs, THEN table. Example: 'How many unduplicated patients do you project to serve in the assessment period? For a 4-year period of performance, the assessment period is CY 2028: 15617\\n\\nPopulation Type | UDS Patients | UDS Visits | Projected Patients | Projected Visits\\nTotal | 15617 | 89085 | 15617 | 88181'",
       "explanation": "why this meets/doesn't meet the requirement with field-level details",
       "recommendation": "what needs to be done (if not met)",
       "missingFields": ["list of empty/missing required fields if applicable"]
@@ -116,6 +116,21 @@ Return results in JSON format with this structure:
   "criticalIssues": ["list of critical missing requirements"],
   "recommendations": ["overall recommendations for improvement"]
 }
+
+🚨 CRITICAL RULE - FORM QUESTIONS ARE MANDATORY PRIMARY EVIDENCE:
+
+VALIDATION REQUIREMENT: Your response will be REJECTED if you omit formQuestions.
+- Each table object has a "formQuestions" array containing pre-extracted question-answer pairs
+- If formQuestions array is NOT EMPTY, you MUST output every question-answer pair BEFORE the table
+- Format (EXACT): "[Full question text]: [answer]" (NO "Answer:" prefix, just question: value)
+- Example: "How many unduplicated patients do you project to serve in the assessment period? For a 4-year period of performance, the assessment period is CY 2028: 15617"
+
+GRADING CRITERIA:
+✅ CORRECT: Output formQuestions first, then table
+❌ WRONG: Output only table, skip formQuestions
+❌ WRONG: Output "Answer: 15617" without the question text
+
+This applies to ALL sections (3.1.x, 3.2.x, 3.3.x, etc.). Questions are PRIMARY EVIDENCE, tables are SECONDARY.
 
 EVIDENCE FORMAT EXAMPLE:
 For Form 1A validation, your evidence should look like:
@@ -137,47 +152,53 @@ Organization Type: [ X ] Community based organization
 * Choose Service Area Type: [ X ] Urban [ _ ] Rural
 
 2c. Patients and Visits (Page 135, Table 43)
+How many unduplicated patients do you project to serve in the assessment period? For a 4-year period of performance, the assessment period is CY 2028: 15617
+
+Unduplicated Patients and Visits by Population Type:
+Population Type | UDS Patients | UDS Visits | Projected Patients | Projected Visits
 Total | 15617 | 89085 | 15617 | 88181
 Medically Underserved Populations (CHC) | 0 | 0 | 0 | 0
 Migratory and Seasonal Agricultural Workers (MSAW) | 0 | 0 | 0 | 0
 Residents of Public Housing (RPH) | 15617 | 89085 | 15617 | 88181
 Homeless Population (HP) | 0 | 0 | 0 | 0"
 
-⚠️ MANDATORY TABLE FORMATTING REQUIREMENT (CRITICAL - MUST FOLLOW):
+⚠️ MANDATORY TABLE FORMATTING REQUIREMENT (CRITICAL - MUST FOLLOW FOR ALL TABLES):
 
-FOR ANY PATIENT/VISIT TABLE DATA, YOU **MUST** USE THIS EXACT FORMAT:
-- Each data row MUST be pipe-delimited with EXACTLY 5 values
-- Format: "PopulationType | UDSPatients | UDSVisits | ProjectedPatients | ProjectedVisits"
-- NO header rows, NO descriptive text, ONLY data rows
-- DO NOT include form questions like "How many unduplicated patients..."
-- DO NOT include instructions like "For a 4-year period of performance..."
-- DO NOT include standalone numbers that are not part of the table
-- ONLY include the actual table rows (population type names with their 4 numeric values)
+FOR **ANY TABLE DATA** (Income Analysis, Staffing, Patient/Visit, Service Sites, etc.), YOU **MUST** USE PIPE-DELIMITED FORMAT:
 
-Example (FOLLOW THIS EXACTLY):
+RULES FOR EVIDENCE STRUCTURE:
+1. INCLUDE form questions/prompts that have answers (e.g., "How many unduplicated patients do you project to serve? Answer: 15617")
+2. INCLUDE descriptive labels before tables (e.g., "Unduplicated Patients and Visits by Population Type:")
+3. EXCLUDE empty form instructions that don't have answers (e.g., "Click here to add a row")
+4. For TABLE DATA specifically:
+   - FIRST ROW = HEADERS (column names separated by pipes)
+   - SUBSEQUENT ROWS = DATA (values separated by pipes)
+   - Each row must have the SAME number of pipe-separated values
+   - DO NOT mix regular text with pipe-delimited rows
+
+Example 1 - Patient/Visit Table (5 columns):
   2c. Patients and Visits
+  Population Type | UDS Patients | UDS Visits | Projected Patients | Projected Visits
   Total | 15617 | 89085 | 15617 | 88181
   Medically Underserved Populations (CHC) | 0 | 0 | 0 | 0
-  Migratory and Seasonal Agricultural Workers (MSAW) | 0 | 0 | 0 | 0
   Residents of Public Housing (RPH) | 15617 | 89085 | 15617 | 88181
-  Homeless Population (HP) | 0 | 0 | 0 | 0
 
-❌ WRONG (DO NOT DO THIS):
-  2c. Patients and Visits
-  Unduplicated Patients and Visits by Population Type
-  How many unduplicated patients do you project to serve in the assessment period?
-  For a 4-year period of performance, the assessment period is CY 2028.
-  15617
-  Population Type
-  UDS / Baseline Value
-  Patients
-  Visits
-  Total
-  15617
+Example 2 - Income Analysis Table (6 columns):
+  Form 3 - Income Analysis
+  Payer Category | Patients (a) | Billable Visits (b) | Income Per Visit (c) | Projected Income (d) | Prior FY Income (e)
+  1. Medicaid | 7,206 | 50,442 | $275.80 | $13,911,903.60 | $15,223,241.00
+  2. Medicare | 5,562 | 5,562 | $161.22 | $896,705.64 | $1,203,493.00
+  3. Other Public | 0 | 0 | $0.00 | $0.00 | $0.00
+  4. Private | 3,151 | 12,604 | $73.72 | $929,166.88 | $1,149,427.00
 
-✅ CORRECT (DO THIS):
-  2c. Patients and Visits
-  Total | 15617 | 89085 | 15617 | 88181
+Example 3 - Staffing Table (4 columns):
+  Form 2 - Staffing Profile
+  Position Type | FTE | Salary | Total Cost
+  Physicians | 5.0 | $180,000 | $900,000
+  Nurses | 12.0 | $75,000 | $900,000
+
+✅ CORRECT FORMAT: Header row + data rows, all pipe-delimited
+❌ WRONG: Raw text, standalone numbers, form questions, or unstructured data
 
 CRITICAL INSTRUCTIONS FOR MULTI-SOURCE DATA EXTRACTION:
 1. PRIMARY SOURCE - structuredData (tables):
@@ -192,7 +213,15 @@ CRITICAL INSTRUCTIONS FOR MULTI-SOURCE DATA EXTRACTION:
    - Extract the value that appears near these keywords
    - This makes the system work with ANY document, even if table extraction is incomplete
 
-3. STRICT RULES:
+3. INCLUDE ALL FORM QUESTIONS WITH ANSWERS:
+   - If a form has a question/prompt with an answer, INCLUDE BOTH in evidence
+   - Example: "How many unduplicated patients do you project to serve in the assessment period? For a 4-year period of performance, the assessment period is CY 2028. Answer: 15617"
+   - Example: "What is your organization's fiscal year end date? Answer: June 30"
+   - Example: "Total number of service sites? Answer: 5"
+   - DO NOT exclude questions just because they look like "instructions" - if they have answers, include them
+   - This applies to ALL sections (3.1, 3.2, 3.3, 3.4, 3.5) and ALL forms
+
+4. STRICT RULES:
    - DO NOT aggregate or sum values from multiple tables
    - DO NOT use values like "1016690" if they don't appear in the application's specific table
    - NEVER invent or hallucinate values (e.g., don't write "Philadelphia, PA" if it's not in tables OR pages)
@@ -221,11 +250,25 @@ When the checklist requires a form to be completed (e.g., "Complete Form 1A", "C
    - YOU MUST search ALL tables in the application to find ALL sections of the form
    
 2. For each checklist subsection (e.g., 3.1.1.2 "Completing the Proposed Service Area Section"):
-   - FIRST: Search for tables containing "2. Proposed Service Area", "2a.", "2b.", "2c." in structuredData keys
+   
+   🚨🚨🚨 MANDATORY STEP 1 - OUTPUT formQuestions FIRST (NON-NEGOTIABLE):
+   - Each table object contains a "formQuestions" array with question-answer pairs
+   - If formQuestions array has ANY entries, you MUST output them FIRST, BEFORE the table
+   - This is NOT optional - formQuestions are PRIMARY EVIDENCE, tables are SECONDARY
+   - Output format (EXACT): "[Full question text]: [answer value]"
+   - Example: "How many unduplicated patients do you project to serve in the assessment period? For a 4-year period of performance, the assessment period is CY 2028: 15617"
+   - Then add a blank line, then output the table
+   - FAILURE TO INCLUDE formQuestions = INCOMPLETE EVIDENCE = VALIDATION FAILURE
+   - If you output ONLY the table without the formQuestions, your response is WRONG
+   
+   STEP 2 - Extract table data:
+   - Search for tables containing "2. Proposed Service Area", "2a.", "2b.", "2c." in structuredData keys
    - Look for tables with keys like "2b. Service Area Type", "2c. Patients and Visits"
    - structuredData is an ARRAY of row objects - read the correct row index
    - For "2c. Patients and Visits" - look for a SEPARATE table with patient data (e.g., table with "Population Type", "Total" rows)
-   - FALLBACK: If field NOT found in tables, search the "pages" array for raw text on the relevant page
+   
+   STEP 3 - Fallback to raw text:
+   - If field NOT found in tables, search the "pages" array for raw text on the relevant page
    - Example: If "2a. Service Area Designation" not in tables, search pages[135].text for "2a" or "MUA" or "MUP"
    
 3. CRITICAL - NEVER MAKE UP OR AGGREGATE VALUES:
@@ -307,19 +350,101 @@ SELECTED SECTIONS TO VALIDATE: ${selectedSectionNumbersStr}
 
 Application Document Content (includes tables with actual page numbers, structured form data, AND raw page text for fields not in tables):
 ${(() => {
+  // Helper function to extract form questions from page text
+  const extractFormQuestions = (pageText) => {
+    const questions = [];
+    const lines = pageText.split('\n');
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // Look for multi-line questions that start with common question words
+      // and eventually end with '?' (may span multiple lines)
+      if (line.toLowerCase().startsWith('how many') && line.length > 20) {
+        // Collect the full multi-line question
+        let fullQuestion = line;
+        let questionEndIndex = i;
+        
+        // Look ahead to find where the question ends (with '?')
+        for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+          const nextLine = lines[j].trim();
+          
+          // Skip empty lines
+          if (nextLine === '') continue;
+          
+          // If we hit a table header or other structural element, stop
+          if (nextLine.includes('|') || nextLine.toLowerCase().includes('population type') || 
+              nextLine.toLowerCase().includes('uds') || nextLine.toLowerCase().includes('baseline')) {
+            break;
+          }
+          
+          // Append this line to the question
+          fullQuestion += ' ' + nextLine;
+          questionEndIndex = j;
+          
+          // If this line ends with '?', the question is complete
+          if (nextLine.endsWith('?')) {
+            break;
+          }
+          
+          // If this line ends with '.', it might be the end of the question
+          if (nextLine.endsWith('.')) {
+            break;
+          }
+        }
+        
+        // Now look for the answer immediately after the question
+        for (let k = questionEndIndex + 1; k < Math.min(questionEndIndex + 5, lines.length); k++) {
+          const answerLine = lines[k].trim();
+          
+          // Skip empty lines
+          if (answerLine === '') continue;
+          
+          // If we hit a table or structural element, stop
+          if (answerLine.includes('|') || answerLine.toLowerCase().includes('population type')) {
+            break;
+          }
+          
+          // If this looks like a pure number (the answer), capture it
+          if (/^\d+$/.test(answerLine)) {
+            questions.push({
+              question: fullQuestion.trim(),
+              answer: answerLine,
+              lineIndex: i
+            });
+            break;
+          }
+        }
+      }
+    }
+    
+    return questions;
+  };
+  
   // Filter tables to include only form-related tables (reduce from 94 to ~30-40)
   const formKeywords = ['Form', 'Applicant', 'Service Area', 'Patient', 'Visit', 'Organization', 'Business Entity', 'Fiscal Year', 'Application Type', 'Population Type', 'MUA', 'MUP', 'Designation'];
   const relevantTables = applicationData.tables?.filter(t => {
     if (!t.structuredData || t.structuredData.length === 0) return false;
     const tableText = JSON.stringify(t.structuredData).toLowerCase();
     return formKeywords.some(keyword => tableText.includes(keyword.toLowerCase()));
-  }).map(t => ({
-    id: t.id,
-    pageNumber: t.pageNumber,
-    rowCount: t.rowCount,
-    columnCount: t.columnCount,
-    structuredData: t.structuredData
-  })) || [];
+  }).map(t => {
+    // Find the page where this table appears
+    const tablePage = applicationData.pages?.find(p => p.pageNumber === t.pageNumber);
+    const pageText = tablePage?.lines?.map(l => l.content).join('\n') || '';
+    
+    // Extract form questions from the page
+    const formQuestions = extractFormQuestions(pageText);
+    
+    return {
+      id: t.id,
+      pageNumber: t.pageNumber,
+      rowCount: t.rowCount,
+      columnCount: t.columnCount,
+      structuredData: t.structuredData,
+      pageContext: pageText, // Full page text for fallback
+      formQuestions: formQuestions // Structured question-answer pairs
+    };
+  }) || [];
   
   // Include specific pages that commonly have forms (pages 1-50, 125-160)
   const relevantPages = applicationData.pages?.filter(p => 
@@ -332,6 +457,22 @@ ${(() => {
   
   console.log(`📊 Filtered tables: ${relevantTables.length} of ${applicationData.tables?.length || 0} (form-related only)`);
   console.log(`📄 Including pages: ${relevantPages.length} pages (1-50, 125-160)`);
+  
+  // DEBUG: Check if formQuestions were extracted for page 135
+  const table135 = relevantTables.find(t => t.pageNumber === 135);
+  if (table135) {
+    console.log('\n🔍 DEBUG: Table on page 135 (patient table):');
+    console.log('  - Table ID:', table135.id);
+    console.log('  - formQuestions count:', table135.formQuestions?.length || 0);
+    if (table135.formQuestions && table135.formQuestions.length > 0) {
+      console.log('  - First question:', table135.formQuestions[0].question?.substring(0, 100));
+      console.log('  - First answer:', table135.formQuestions[0].answer);
+    } else {
+      console.log('  - ⚠️ NO formQuestions extracted!');
+      console.log('  - pageContext length:', table135.pageContext?.length || 0);
+      console.log('  - pageContext preview:', table135.pageContext?.substring(0, 300));
+    }
+  }
   
   return JSON.stringify({
     sections: applicationData.sections?.slice(0, 30) || [],
@@ -467,6 +608,27 @@ Return results in JSON format with this structure:
     console.log('  - Application tables count:', applicationData.tables?.length || 0)
     console.log('  - First 3 table IDs:', applicationData.tables?.slice(0, 3).map(t => t.id) || [])
     
+    // DEBUG: Check if page 135 data contains the patient question
+    const page135 = applicationData.pages?.find(p => p.pageNumber === 135)
+    if (page135) {
+      const page135Text = page135.lines?.map(l => l.content).join('\n') || ''
+      console.log('\n🔍 DEBUG: Page 135 Content Check:')
+      console.log('  - Page 135 text length:', page135Text.length, 'chars')
+      const hasPatientQuestion = page135Text.includes('How many unduplicated patients')
+      console.log('  - Contains "How many unduplicated patients":', hasPatientQuestion)
+      if (hasPatientQuestion) {
+        const questionIndex = page135Text.indexOf('How many unduplicated patients')
+        console.log('  - Question context (200 chars):')
+        console.log('   ', page135Text.substring(questionIndex, questionIndex + 200))
+      } else {
+        console.log('  - ⚠️ Question text NOT FOUND on page 135')
+        console.log('  - Page 135 content preview (first 500 chars):')
+        console.log('   ', page135Text.substring(0, 500))
+      }
+    } else {
+      console.log('\n⚠️ DEBUG: Page 135 not found in application data')
+    }
+    
     // Log sample of first table to verify data structure
     if (applicationData.tables && applicationData.tables.length > 0) {
       const firstTable = applicationData.tables[0]
@@ -586,20 +748,139 @@ Return results in JSON format with this structure:
     try {
       comparisonResult = JSON.parse(response)
       
-      // Enforce table formatting in all evidence fields
-      if (comparisonResult.sections) {
-        comparisonResult.sections = comparisonResult.sections.map(section => ({
-          ...section,
-          evidence: enforceTableFormat(section.evidence)
-        }));
-        console.log('✅ Table formatting enforced in evidence fields');
-      }
-      
-      console.log('✅ AI response parsed successfully')
-      console.log('📊 Comparison results summary:')
-      console.log('  - Overall compliance:', comparisonResult.overallCompliance)
-      console.log('  - Sections analyzed:', comparisonResult.sections?.length || 0)
-      console.log('  - Critical issues:', comparisonResult.criticalIssues?.length || 0)
+      // POST-PROCESS: Inject formQuestions into evidence when AI fails to include them
+      if (comparisonResult.sections && applicationData.tables) {
+        // Re-extract formQuestions using the same logic that was used when sending to AI
+        const extractFormQuestions = (pageText) => {
+          const questions = [];
+          const lines = pageText.split('\n');
+          
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            if (line.toLowerCase().startsWith('how many') && line.length > 20) {
+              let fullQuestion = line;
+              let questionEndIndex = i;
+              
+              for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+                const nextLine = lines[j].trim();
+                if (nextLine === '') continue;
+                if (nextLine.includes('|') || nextLine.toLowerCase().includes('population type') || 
+                    nextLine.toLowerCase().includes('uds') || nextLine.toLowerCase().includes('baseline')) {
+                  break;
+                }
+                fullQuestion += ' ' + nextLine;
+                questionEndIndex = j;
+                if (nextLine.endsWith('?') || nextLine.endsWith('.')) break;
+              }
+              
+              for (let k = questionEndIndex + 1; k < Math.min(questionEndIndex + 5, lines.length); k++) {
+                const answerLine = lines[k].trim();
+                if (answerLine === '') continue;
+                if (answerLine.includes('|') || answerLine.toLowerCase().includes('population type')) break;
+                if (/^\d+$/.test(answerLine)) {
+                  questions.push({
+                    question: fullQuestion.trim(),
+                    answer: answerLine
+                  });
+                  break;
+                }
+              }
+            }
+          }
+          return questions;
+        };
+        
+        let injectionCount = 0;
+        comparisonResult.sections = comparisonResult.sections.map(section => {
+          let evidence = section.evidence || '';
+          let requirement = section.requirement || '';
+          
+          // GENERIC FIX: Move any form questions from requirement to evidence
+          // Check if requirement contains form questions (questions ending with ? followed by numbers)
+          const questionInRequirement = requirement.match(/^[^?]*\?\s*[\d,]+/m);
+          if (questionInRequirement) {
+            console.log('🔧 GENERIC FIX: Moving form question from requirement to evidence');
+            console.log('  - Original requirement:', requirement.substring(0, 100));
+            
+            // Extract the question-answer pair
+            const questionAnswer = requirement.match(/^[^?]*\?\s*[\d,]+/m)[0];
+            
+            // Remove from requirement
+            requirement = requirement.replace(/^[^?]*\?\s*[\d,]+\s*/m, '').trim();
+            
+            // Add to evidence at the beginning
+            evidence = `${questionAnswer}\n\n${evidence}`;
+            
+            console.log('  - Moved to evidence:', questionAnswer);
+            console.log('  - New requirement:', requirement.substring(0, 100));
+            
+            // If requirement is now empty, provide a default description
+            if (!requirement.trim()) {
+              requirement = "Complete this section by providing the required patient and visit data for the assessment period.";
+              console.log('  - Added default requirement description');
+            }
+          }
+          
+          // For section 3.1.1.5 (Patients and Visits), check if formQuestions are missing
+          if (section.checklistSection?.includes('3.1.1.5') || 
+              section.checklistSection?.includes('2c. Patients and Visits')) {
+            
+            console.log('🔍 POST-PROCESS DEBUG: Found section 3.1.1.5:', section.checklistSection);
+            console.log('  - Evidence length before injection:', evidence?.length);
+            console.log('  - Evidence preview (first 200 chars):', evidence?.substring(0, 200));
+            
+            // Find page 135 and extract formQuestions from it
+            const page135 = applicationData.pages?.find(p => p.pageNumber === 135);
+            if (page135) {
+              const pageText = page135.lines?.map(l => l.content).join('\n') || '';
+              const formQuestions = extractFormQuestions(pageText);
+              
+              console.log('  - Page 135 found:', true);
+              console.log('  - formQuestions extracted:', formQuestions.length);
+              if (formQuestions.length > 0) {
+                console.log('  - First question preview:', formQuestions[0].question.substring(0, 50));
+                console.log('  - First answer:', formQuestions[0].answer);
+                console.log('  - Full question:', formQuestions[0].question);
+                
+                // Check if evidence already contains the question
+                const searchString = formQuestions[0].question.substring(0, 30);
+                const hasQuestion = evidence.includes(searchString);
+                
+                console.log('  - Searching for:', searchString);
+                console.log('  - Evidence already has question:', hasQuestion);
+                console.log('  - Evidence full content:', evidence);
+                
+                if (!hasQuestion) {
+                  console.log('🔧 POST-PROCESS: Injecting missing formQuestions into section 3.1.1.5');
+                  // Prepend formQuestions to evidence
+                  const questionsText = formQuestions
+                    .map(fq => `${fq.question}: ${fq.answer}`)
+                    .join('\n\n');
+                  evidence = `${questionsText}\n\n${evidence}`;
+                  injectionCount++;
+                  console.log('  - Evidence length after injection:', evidence.length);
+                  console.log('  - Injected text preview:', questionsText.substring(0, 100));
+                }
+              } else {
+                console.log('  - ⚠️ NO formQuestions extracted from page 135');
+              }
+            } else {
+              console.log('  - ⚠️ Page 135 not found in applicationData.pages');
+            }
+          }
+          
+          return {
+            ...section,
+            evidence,
+            requirement
+          };
+        });
+        
+        console.log('📊 Comparison results summary:')
+        console.log('  - Overall compliance:', comparisonResult.overallCompliance)
+        console.log('  - Sections analyzed:', comparisonResult.sections?.length || 0)
+        console.log('  - Critical issues:', comparisonResult.criticalIssues?.length || 0)
       
       if (comparisonResult.sections?.length > 0) {
         console.log('📑 Sections in AI response (first 5):')
@@ -611,6 +892,26 @@ Return results in JSON format with this structure:
         comparisonResult.sections.forEach((section, idx) => {
           console.log(`  ${idx + 1}. ${section.checklistSection} - ${section.status}`)
         })
+        
+        // DEBUG: Log section 3.1.1.5 evidence in detail
+        const section3115 = comparisonResult.sections.find(s => 
+          s.checklistSection?.includes('3.1.1.5') || 
+          s.checklistSection?.includes('2c. Patients and Visits')
+        )
+        if (section3115) {
+          console.log('\n🔍 DEBUG: Section 3.1.1.5 Evidence Detail:')
+          console.log('  - Checklist Section:', section3115.checklistSection)
+          console.log('  - Evidence Length:', section3115.evidence?.length, 'chars')
+          console.log('  - Evidence Preview (first 500 chars):')
+          console.log(section3115.evidence?.substring(0, 500))
+          console.log('  - Evidence Full (if < 1000 chars):')
+          if (section3115.evidence?.length < 1000) {
+            console.log(section3115.evidence)
+          }
+        } else {
+          console.log('\n⚠️ DEBUG: Section 3.1.1.5 NOT FOUND in AI response')
+        }
+      }
       }
     } catch (parseError) {
       console.error('❌ Failed to parse AI response as JSON:', parseError)

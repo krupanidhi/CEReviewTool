@@ -489,33 +489,49 @@ export default function CategorizedComplianceReport({ comparisonData }) {
                                   const result = [];
                                   let i = 0;
                                   
-                                  // Detect table patterns (Population Type tables)
+                                  // Detect table patterns - GENERIC for ANY pipe-delimited table
                                   const detectTable = (startIdx) => {
-                                    // Look for pipe-delimited data row (not header text)
-                                    // Must have exactly 4 pipes (5 columns) and contain numbers
                                     const line = lines[startIdx]?.trim();
-                                    if (line && line.includes('|')) {
-                                      const parts = line.split('|');
-                                      // Check if this looks like a data row: 5 parts, at least one contains a number
-                                      if (parts.length === 5 && parts.some(p => /\d/.test(p))) {
-                                        // Found start of table data, collect all pipe-delimited rows
-                                        const tableLines = [];
-                                        let j = startIdx;
-                                        
-                                        // Collect consecutive pipe-delimited lines
-                                        while (j < lines.length && lines[j]?.trim() && lines[j].includes('|')) {
-                                          const rowParts = lines[j].split('|');
-                                          if (rowParts.length === 5) {
-                                            tableLines.push(lines[j]);
-                                          }
-                                          j++;
-                                        }
-                                        
-                                        if (tableLines.length > 0) {
-                                          return { isTable: true, lines: tableLines, endIdx: j };
-                                        }
+                                    if (!line || !line.includes('|')) return { isTable: false };
+                                    
+                                    const parts = line.split('|').map(p => p.trim());
+                                    
+                                    // Must have at least 2 columns
+                                    if (parts.length < 2) return { isTable: false };
+                                    
+                                    // Check if this looks like table data (contains numbers or is a header row)
+                                    const hasNumbers = parts.some(p => /\d/.test(p));
+                                    const looksLikeHeader = parts.every(p => p.length > 0 && !/^\d+$/.test(p));
+                                    
+                                    if (!hasNumbers && !looksLikeHeader) return { isTable: false };
+                                    
+                                    // Collect all consecutive pipe-delimited rows with same column count
+                                    const tableLines = [];
+                                    const columnCount = parts.length;
+                                    let j = startIdx;
+                                    let headers = null;
+                                    
+                                    // First row might be headers (all text, no pure numbers)
+                                    if (looksLikeHeader && !hasNumbers) {
+                                      headers = parts;
+                                      j++;
+                                    }
+                                    
+                                    // Collect data rows
+                                    while (j < lines.length && lines[j]?.trim() && lines[j].includes('|')) {
+                                      const rowParts = lines[j].split('|').map(p => p.trim());
+                                      if (rowParts.length === columnCount) {
+                                        tableLines.push(lines[j]);
+                                        j++;
+                                      } else {
+                                        break;
                                       }
                                     }
+                                    
+                                    if (tableLines.length > 0) {
+                                      return { isTable: true, lines: tableLines, headers, columnCount, endIdx: j };
+                                    }
+                                    
                                     return { isTable: false };
                                   };
                                   
@@ -524,46 +540,44 @@ export default function CategorizedComplianceReport({ comparisonData }) {
                                     const tableCheck = detectTable(i);
                                     
                                     if (tableCheck.isTable) {
-                                      // Render as table
-                                      const tableLines = tableCheck.lines;
+                                      // Render as GENERIC table - works for ANY column count
+                                      const { lines: tableLines, headers, columnCount } = tableCheck;
+                                      
                                       result.push(
                                         <div key={i} className="overflow-x-auto my-4">
                                           <table className="min-w-full border border-slate-600 text-xs">
-                                            <thead className="bg-slate-700">
-                                              <tr>
-                                                <th className="border border-slate-600 px-3 py-2 text-left text-blue-300">Population Type</th>
-                                                <th className="border border-slate-600 px-3 py-2 text-center text-blue-300" colSpan="2">UDS / Baseline Value</th>
-                                                <th className="border border-slate-600 px-3 py-2 text-center text-blue-300" colSpan="2">Projected (Jan 1 - Dec 31)</th>
-                                              </tr>
-                                              <tr>
-                                                <th className="border border-slate-600 px-3 py-2 text-left text-gray-400"></th>
-                                                <th className="border border-slate-600 px-3 py-2 text-center text-gray-400">Patients</th>
-                                                <th className="border border-slate-600 px-3 py-2 text-center text-gray-400">Visits</th>
-                                                <th className="border border-slate-600 px-3 py-2 text-center text-gray-400">Patients</th>
-                                                <th className="border border-slate-600 px-3 py-2 text-center text-gray-400">Visits</th>
-                                              </tr>
-                                            </thead>
+                                            {headers && (
+                                              <thead className="bg-slate-700">
+                                                <tr>
+                                                  {headers.map((header, idx) => (
+                                                    <th key={idx} className="border border-slate-600 px-3 py-2 text-center text-blue-300">
+                                                      {header}
+                                                    </th>
+                                                  ))}
+                                                </tr>
+                                              </thead>
+                                            )}
                                             <tbody className="bg-slate-800">
-                                              {(() => {
-                                                // Parse pipe-delimited table data rows
-                                                const rows = [];
-                                                tableLines.forEach((rowLine, k) => {
-                                                  const cells = rowLine.split('|').map(c => c.trim());
-                                                  if (cells.length === 5) {
-                                                    // Format: PopType | UDS Patients | UDS Visits | Projected Patients | Projected Visits
-                                                    rows.push(
-                                                      <tr key={k} className="hover:bg-slate-700/50">
-                                                        <td className="border border-slate-600 px-3 py-2 text-gray-300">{cells[0]}</td>
-                                                        <td className="border border-slate-600 px-3 py-2 text-center text-white">{cells[1]}</td>
-                                                        <td className="border border-slate-600 px-3 py-2 text-center text-white">{cells[2]}</td>
-                                                        <td className="border border-slate-600 px-3 py-2 text-center text-white">{cells[3]}</td>
-                                                        <td className="border border-slate-600 px-3 py-2 text-center text-white">{cells[4]}</td>
-                                                      </tr>
-                                                    );
-                                                  }
-                                                });
-                                                return rows;
-                                              })()}
+                                              {tableLines.map((rowLine, k) => {
+                                                const cells = rowLine.split('|').map(c => c.trim());
+                                                if (cells.length === columnCount) {
+                                                  return (
+                                                    <tr key={k} className="hover:bg-slate-700/50">
+                                                      {cells.map((cell, cellIdx) => (
+                                                        <td 
+                                                          key={cellIdx} 
+                                                          className={`border border-slate-600 px-3 py-2 ${
+                                                            cellIdx === 0 ? 'text-left text-gray-300' : 'text-center text-white'
+                                                          }`}
+                                                        >
+                                                          {cell}
+                                                        </td>
+                                                      ))}
+                                                    </tr>
+                                                  );
+                                                }
+                                                return null;
+                                              })}
                                             </tbody>
                                           </table>
                                         </div>
