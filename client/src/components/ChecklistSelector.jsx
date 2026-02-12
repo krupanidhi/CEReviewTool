@@ -51,10 +51,34 @@ export default function ChecklistSelector({ checklists, onSelectionChange }) {
       setChecklistSections(sections)
       
       const initialExpanded = {}
-      Object.keys(sections).forEach(id => {
-        initialExpanded[id] = true
+      const initialSelected = {}
+      Object.entries(sections).forEach(([checklistId, data]) => {
+        initialExpanded[checklistId] = true
+        // Default: select ALL sections
+        data.sections.forEach(section => {
+          initialSelected[`${checklistId}_${section.id}`] = true
+        })
       })
       setExpandedChecklists(initialExpanded)
+      setSelectedSections(initialSelected)
+
+      // Notify parent of default selection
+      const selected = Object.entries(initialSelected)
+        .filter(([_, isSelected]) => isSelected)
+        .map(([k, _]) => {
+          const [cId, sId] = k.split('_section_')
+          const section = sections[cId]?.sections.find(s => s.id === `section_${sId}`)
+          return {
+            checklistId: cId,
+            checklistName: sections[cId]?.name,
+            sectionId: `section_${sId}`,
+            sectionTitle: section?.title,
+            pageNumber: section?.pageNumber
+          }
+        })
+      if (onSelectionChange) {
+        onSelectionChange(selected)
+      }
     }
   }, [checklists])
 

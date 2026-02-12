@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "batch": "node scripts/batchProcess.js"
   },
   "dependencies": {
     "@azure/ai-form-recognizer": "^5.0.0",

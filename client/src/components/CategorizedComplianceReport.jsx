@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
-import { CheckCircle, XCircle, AlertTriangle, Download, ChevronDown, ChevronUp, ExternalLink, FileText } from 'lucide-react'
+import { CheckCircle, XCircle, AlertTriangle, Download, ChevronDown, ChevronUp, ExternalLink, FileText, MinusCircle } from 'lucide-react'
 
-export default function CategorizedComplianceReport({ comparisonData }) {
+export default function CategorizedComplianceReport({ comparisonData, onOpenPageViewer }) {
   const [expandedSections, setExpandedSections] = useState({})
   const [activeMainSection, setActiveMainSection] = useState(null)
 
@@ -15,7 +15,7 @@ export default function CategorizedComplianceReport({ comparisonData }) {
     )
   }
 
-  const { results, applications, checklists, selectedSections } = comparisonData
+  const { results, applications, checklists, selectedSections = [] } = comparisonData
   const primaryResult = results[0]
   const comparison = primaryResult.comparison
   const sections = comparison.sections || []
@@ -29,22 +29,32 @@ export default function CategorizedComplianceReport({ comparisonData }) {
     sections.forEach((section, idx) => {
       const sectionTitle = section.checklistSection || `Section ${idx + 1}`
       
-      // Extract section number pattern
+      // Extract section number pattern — try multiple formats
       const match = sectionTitle.match(/^(\d+(?:\.\d+)*)/)
-      if (!match) return
       
-      const sectionNumber = match[1]
-      const parts = sectionNumber.split('.')
-      
-      // Skip main section headers (e.g., "3." with only one part)
-      // These are organizational headers, not actual requirements
-      if (parts.length === 1) {
-        return // Skip "3.", "2.", etc.
+      let mainSection
+      if (match) {
+        const sectionNumber = match[1]
+        const parts = sectionNumber.split('.')
+        
+        // Group by first two levels (e.g., "3.1", "3.2", "3.3")
+        // For single-number sections (e.g., "4 Submission"), group under X.0
+        if (parts.length === 1) {
+          mainSection = `${parts[0]}.0`
+        } else {
+          mainSection = `${parts[0]}.${parts[1]}`
+        }
+      } else {
+        // No number prefix — try to extract from section title keywords
+        // or group under 'other' so nothing is silently dropped
+        const numInTitle = sectionTitle.match(/Section\s+(\d+)/i)
+        if (numInTitle) {
+          mainSection = `${numInTitle[1]}.0`
+        } else {
+          mainSection = '0.0'
+        }
+        console.warn(`⚠️ Section "${sectionTitle}" has no standard number prefix, grouped under ${mainSection}`)
       }
-      
-      // Group by first two levels (e.g., "3.1", "3.2", "3.3")
-      // This creates meaningful categories like "General Information", "Budget Information", etc.
-      const mainSection = `${parts[0]}.${parts[1]}`
       
       if (!categories[mainSection]) {
         categories[mainSection] = {
@@ -53,8 +63,9 @@ export default function CategorizedComplianceReport({ comparisonData }) {
           metCount: 0,
           partialCount: 0,
           notMetCount: 0,
-          criticalIssues: [], // Add critical issues array for this section
-          recommendations: [] // Add recommendations array for this section
+          naCount: 0,
+          criticalIssues: [],
+          recommendations: []
         }
       }
       
@@ -64,6 +75,7 @@ export default function CategorizedComplianceReport({ comparisonData }) {
       if (section.status === 'met') categories[mainSection].metCount++
       else if (section.status === 'partial') categories[mainSection].partialCount++
       else if (section.status === 'not_met') categories[mainSection].notMetCount++
+      else if (section.status === 'not_applicable') categories[mainSection].naCount++
     })
     
     // Group critical issues by section
@@ -156,9 +168,9 @@ export default function CategorizedComplianceReport({ comparisonData }) {
   const downloadReport = () => {
     const reportData = {
       generatedAt: new Date().toISOString(),
-      applications: applications.map(a => a.originalName),
-      checklists: checklists.map(c => c.originalName),
-      selectedSections: selectedSections.map(s => s.sectionTitle),
+      applications: applications.map(a => a.originalName || a.name),
+      checklists: checklists.map(c => c.originalName || c.name),
+      selectedSections: (selectedSections || []).map(s => s.sectionTitle),
       overallCompliance: comparison.overallCompliance,
       summary: comparison.summary,
       sections: sections,
@@ -178,6 +190,51 @@ export default function CategorizedComplianceReport({ comparisonData }) {
     URL.revokeObjectURL(url)
   }
 
+  // Section description mapping for quick recognition on tiles
+  const sectionDescriptions = {
+    '1.0': 'Application Overview',
+    '1.1': 'Application Overview',
+    '1.2': 'Eligibility Requirements',
+    '2.0': 'Narrative & Abstract',
+    '2.1': 'Project Abstract',
+    '2.2': 'Project Narrative',
+    '2.3': 'Budget Narrative',
+    '3.0': 'Application Forms',
+    '3.1': 'General Information (Form 1A, 1C)',
+    '3.2': 'Budget Information (Form 2, 3)',
+    '3.3': 'Sites & Services (Form 5A, 5B, 5C)',
+    '3.4': 'Other Forms (Form 6A, 6B, 8, 12)',
+    '3.5': 'Other Information (Summary Page)',
+    '4.0': 'Submission & Review',
+    '4.1': 'Submission Requirements',
+    '4.2': 'Review Process',
+    '4.3': 'Award Information',
+    '0.0': 'Other / Uncategorized',
+  }
+
+  const getSectionDescription = (sectionKey) => {
+    if (sectionDescriptions[sectionKey]) return sectionDescriptions[sectionKey]
+    // Try to extract description from the first section's checklistSection title
+    const category = categorizedSections.find(c => c.key === sectionKey)
+    if (category && category.sections.length > 0) {
+      const firstTitle = category.sections[0].checklistSection || ''
+      // Extract the descriptive part after the section number
+      const descMatch = firstTitle.match(/^\d+(?:\.\d+)*\s+(.+)/)
+      if (descMatch) return descMatch[1].substring(0, 50)
+    }
+    return ''
+  }
+
+  // Normalize page references from mixed AI output formats into clean numbers
+  const normalizePageRef = (page) => {
+    if (typeof page === 'number') return page
+    if (typeof page === 'string') {
+      const num = parseInt(page.replace(/[^0-9]/g, ''))
+      return isNaN(num) ? null : num
+    }
+    return null
+  }
+
   const getStatusIcon = (status) => {
     switch (status) {
       case 'met':
@@ -186,6 +243,8 @@ export default function CategorizedComplianceReport({ comparisonData }) {
         return <AlertTriangle className="w-5 h-5 text-yellow-500" />
       case 'not_met':
         return <XCircle className="w-5 h-5 text-red-500" />
+      case 'not_applicable':
+        return <MinusCircle className="w-5 h-5 text-gray-500" />
       default:
         return <AlertTriangle className="w-5 h-5 text-gray-500" />
     }
@@ -199,6 +258,8 @@ export default function CategorizedComplianceReport({ comparisonData }) {
         return 'bg-yellow-900/30 border-yellow-700/50'
       case 'not_met':
         return 'bg-red-900/30 border-red-700/50'
+      case 'not_applicable':
+        return 'bg-slate-800/50 border-slate-600/50 opacity-60'
       default:
         return 'bg-slate-800 border-slate-600'
     }
@@ -212,6 +273,8 @@ export default function CategorizedComplianceReport({ comparisonData }) {
         return 'text-yellow-400'
       case 'not_met':
         return 'text-red-400'
+      case 'not_applicable':
+        return 'text-gray-500'
       default:
         return 'text-gray-400'
     }
@@ -220,6 +283,7 @@ export default function CategorizedComplianceReport({ comparisonData }) {
   const metCount = sections.filter(s => s.status === 'met').length
   const partialCount = sections.filter(s => s.status === 'partial').length
   const notMetCount = sections.filter(s => s.status === 'not_met').length
+  const naCount = sections.filter(s => s.status === 'not_applicable').length
 
   return (
     <div className="space-y-6">
@@ -229,22 +293,45 @@ export default function CategorizedComplianceReport({ comparisonData }) {
           <div>
             <h2 className="text-2xl font-bold text-white mb-3">Compliance Validation Report</h2>
             <div className="space-y-1 text-sm text-gray-400">
-              <div>Application(s): {applications.map(a => a.originalName).join(', ')}</div>
-              <div>Checklist(s): {checklists.map(c => c.originalName).join(', ')}</div>
-              <div>Sections Validated: {selectedSections.length}</div>
+              <div>Application(s): {applications.map(a => a.originalName || a.name).join(', ')}</div>
+              <div>Checklist(s): {checklists.map(c => c.originalName || c.name).join(', ')}</div>
+              <div>Sections Validated: {selectedSections?.length || sections.length}</div>
             </div>
           </div>
-          <button
-            onClick={downloadReport}
-            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            <span>Download Report</span>
-          </button>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={downloadReport}
+              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download Report</span>
+            </button>
+          </div>
         </div>
 
+        {/* Application Info */}
+        {comparison.applicationInfo && (
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            {comparison.applicationInfo.applicationType && (
+              <span className="px-3 py-1 bg-blue-500/10 text-blue-300 text-xs font-medium rounded-full border border-blue-500/20">
+                Type: {comparison.applicationInfo.applicationType}
+              </span>
+            )}
+            {comparison.applicationInfo.applicantName && (
+              <span className="px-3 py-1 bg-slate-700 text-gray-300 text-xs rounded-full">
+                {comparison.applicationInfo.applicantName}
+              </span>
+            )}
+            {comparison.applicationInfo.grantNumber && comparison.applicationInfo.grantNumber !== 'N/A' && (
+              <span className="px-3 py-1 bg-slate-700 text-gray-300 text-xs rounded-full">
+                Grant: {comparison.applicationInfo.grantNumber}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Overall Compliance */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-slate-900 rounded-lg p-4 border border-slate-600">
             <div className="text-3xl font-bold text-blue-400 mb-1">
               {comparison.overallCompliance}%
@@ -262,6 +349,10 @@ export default function CategorizedComplianceReport({ comparisonData }) {
           <div className="bg-slate-900 rounded-lg p-4 border border-slate-600">
             <div className="text-3xl font-bold text-red-400 mb-1">{notMetCount}</div>
             <div className="text-sm text-gray-400">Not Met</div>
+          </div>
+          <div className="bg-slate-900 rounded-lg p-4 border border-slate-600">
+            <div className="text-3xl font-bold text-gray-500 mb-1">{naCount}</div>
+            <div className="text-sm text-gray-400">Not Applicable</div>
           </div>
         </div>
 
@@ -285,8 +376,9 @@ export default function CategorizedComplianceReport({ comparisonData }) {
           <div className="flex flex-wrap gap-2">
             {categorizedSections.map((category) => {
               const isActive = activeMainSection === category.key
-              const compliance = category.sections.length > 0
-                ? Math.round((category.metCount / category.sections.length) * 100)
+              const applicableSections = category.sections.length - (category.naCount || 0)
+              const compliance = applicableSections > 0
+                ? Math.round((category.metCount / applicableSections) * 100)
                 : 0
               
               return (
@@ -303,6 +395,9 @@ export default function CategorizedComplianceReport({ comparisonData }) {
                     <FileText className="w-4 h-4" />
                     <div className="text-left">
                       <div className="font-semibold text-sm">Section {category.key}</div>
+                      {getSectionDescription(category.key) && (
+                        <div className="text-xs opacity-70 mb-0.5">{getSectionDescription(category.key)}</div>
+                      )}
                       <div className="text-xs opacity-80">
                         {category.sections.length} items • {compliance}% compliant
                       </div>
@@ -321,6 +416,11 @@ export default function CategorizedComplianceReport({ comparisonData }) {
                       {category.notMetCount > 0 && (
                         <span className="bg-red-500/20 text-red-400 text-xs px-2 py-0.5 rounded">
                           {category.notMetCount}
+                        </span>
+                      )}
+                      {(category.naCount || 0) > 0 && (
+                        <span className="bg-gray-500/20 text-gray-400 text-xs px-2 py-0.5 rounded">
+                          {category.naCount} N/A
                         </span>
                       )}
                     </div>
@@ -354,6 +454,12 @@ export default function CategorizedComplianceReport({ comparisonData }) {
                   <XCircle className="w-4 h-4 text-red-500" />
                   <span className="text-gray-300">{activeCategory.notMetCount}</span>
                 </div>
+                {(activeCategory.naCount || 0) > 0 && (
+                  <div className="flex items-center space-x-1 text-sm">
+                    <MinusCircle className="w-4 h-4 text-gray-500" />
+                    <span className="text-gray-400">{activeCategory.naCount}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -443,16 +549,25 @@ export default function CategorizedComplianceReport({ comparisonData }) {
                               Page References (PDF Pages)
                             </h4>
                             <div className="flex flex-wrap gap-2">
-                              {section.pageReferences.map((page, pageIdx) => (
-                                <span
-                                  key={pageIdx}
-                                  className="px-3 py-1 bg-blue-600/30 text-blue-300 text-sm rounded border border-blue-500/40 flex items-center space-x-1"
-                                  title={`Actual PDF page ${page}`}
-                                >
-                                  <FileText className="w-3 h-3" />
-                                  <span>Page {page}</span>
-                                </span>
-                              ))}
+                              {(() => {
+                                const sectionPages = section.pageReferences
+                                  .map(normalizePageRef)
+                                  .filter(p => p !== null)
+                                return sectionPages.map((pageNum, pageIdx) => (
+                                  <button
+                                    key={pageIdx}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      if (onOpenPageViewer) onOpenPageViewer(pageNum, sectionPages, section.checklistSection)
+                                    }}
+                                    className="px-3 py-1 bg-blue-600/30 text-blue-300 text-sm rounded border border-blue-500/40 flex items-center space-x-1 hover:bg-blue-600/50 hover:border-blue-400 transition-colors cursor-pointer"
+                                    title={`View PDF page ${pageNum}`}
+                                  >
+                                    <FileText className="w-3 h-3" />
+                                    <span>Page {pageNum}</span>
+                                  </button>
+                                ))
+                              })()}
                             </div>
                           </div>
                         )}

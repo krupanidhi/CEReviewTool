@@ -6,6 +6,7 @@ import fs from 'fs/promises'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { analyzeDocumentEnhanced } from '../services/enhancedDocumentIntelligence.js'
+import { transformToStructured } from '../services/structuredDocumentTransformer.js'
 import cacheService from '../services/cacheService.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -89,6 +90,13 @@ router.post('/', upload.single('file'), async (req, res) => {
     await fs.writeFile(extractionPath, JSON.stringify(analysisResult.data, null, 2))
     console.log(`💾 Extraction saved to: ${extractionPath}`)
 
+    // Generate and save structured JSON (clean key/value pair format)
+    const structuredData = transformToStructured(analysisResult.data)
+    const structuredFileName = `${timestamp}_${sanitizedName}_structured.json`
+    const structuredPath = join(extractionsDir, structuredFileName)
+    await fs.writeFile(structuredPath, JSON.stringify(structuredData, null, 2))
+    console.log(`📋 Structured JSON saved to: ${structuredPath}`)
+
     // Cache key-value pairs for internal reference
     if (analysisResult.data.keyValuePairs && analysisResult.data.keyValuePairs.length > 0) {
       await cacheService.cacheKeyValuePairs(
@@ -108,6 +116,7 @@ router.post('/', upload.single('file'), async (req, res) => {
       size: req.file.size,
       uploadedAt: new Date().toISOString(),
       extractionFilePath: extractionPath, // Reference to saved extraction JSON
+      structuredFilePath: structuredPath, // Reference to structured JSON
       analysis: analysisResult
     }
 
@@ -125,7 +134,8 @@ router.post('/', upload.single('file'), async (req, res) => {
       size: metadata.size,
       uploadedAt: metadata.uploadedAt,
       analysis: analysisResult,
-      data: analysisResult.data
+      data: analysisResult.data,
+      structuredData: structuredData
     })
   } catch (error) {
     console.error('❌ Upload error:', error)

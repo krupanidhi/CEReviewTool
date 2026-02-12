@@ -123,11 +123,13 @@ export async function analyzeDocumentEnhanced(fileBuffer, mimeType) {
         spans: para.spans
       }))
 
-      // Extract TOC by searching pages 2-5 for section titles
+      // Extract TOC by searching early pages for top-level section titles
+      // Fully dynamic — detects any numbered section (1., 2., 3., 4., 5., etc.)
       const sectionMap = new Map()
       
-      // Search pages 2-5 for TOC content
-      for (let pageNum = 2; pageNum <= 5 && pageNum <= extractedData.pages.length; pageNum++) {
+      // Search pages 2-10 for TOC content (some documents have longer front matter)
+      const maxTocPage = Math.min(10, extractedData.pages.length)
+      for (let pageNum = 2; pageNum <= maxTocPage; pageNum++) {
         const tocPage = extractedData.pages.find(p => p.pageNumber === pageNum)
         if (!tocPage) continue
         
@@ -137,8 +139,9 @@ export async function analyzeDocumentEnhanced(fileBuffer, mimeType) {
         while (i < lines.length) {
           const text = lines[i].content || ''
           
-          // Look for lines starting with 1., 2., 3., or 4.
-          const match = text.match(/^([1-4])\.\s+(.+)$/)
+          // Look for lines starting with any single number followed by dot and space
+          // e.g., "1. Introduction", "4. Submission and Review"
+          const match = text.match(/^(\d+)\.\s+(.+)$/)
           if (match && !/\d+\.\d+/.test(text)) {
             const sectionNum = match[1]
             
@@ -152,11 +155,11 @@ export async function analyzeDocumentEnhanced(fileBuffer, mimeType) {
             
             // Collect continuation lines
             let j = i + 1
-            while (j < lines.length && j < i + 5) { // Max 5 continuation lines
+            while (j < lines.length && j < i + 5) {
               const nextLine = lines[j].content || ''
               
               // Stop conditions
-              if (/^[1-4]\.\s/.test(nextLine)) break // Next numbered section
+              if (/^\d+\.\s/.test(nextLine)) break // Next numbered section
               if (/^\d+$/.test(nextLine)) break // Page number
               if (/^\.{3,}/.test(nextLine)) break // Dots
               if (nextLine.trim().length < 3) break // Empty/short line
@@ -169,7 +172,7 @@ export async function analyzeDocumentEnhanced(fileBuffer, mimeType) {
             // Clean up title and validate
             fullTitle = fullTitle.replace(/\s+/g, ' ').trim()
             
-            if (fullTitle.length >= 20 && fullTitle.length <= 150) {
+            if (fullTitle.length >= 10 && fullTitle.length <= 200) {
               sectionMap.set(sectionNum, {
                 id: `section_${sectionNum}`,
                 title: fullTitle,
@@ -184,13 +187,12 @@ export async function analyzeDocumentEnhanced(fileBuffer, mimeType) {
           }
         }
         
-        // If we found all 4 sections, stop searching
-        if (sectionMap.size === 4) break
+        // Continue searching all early pages — don't break early
       }
       
-      // Convert map to sorted array (1, 2, 3, 4)
-      const sortedTOC = ['1', '2', '3', '4']
-        .filter(num => sectionMap.has(num))
+      // Convert map to sorted array by section number (numerically)
+      const sortedTOC = [...sectionMap.keys()]
+        .sort((a, b) => parseInt(a) - parseInt(b))
         .map(num => sectionMap.get(num))
       
       console.log(`📑 TOC extracted: ${sortedTOC.length} main sections`)

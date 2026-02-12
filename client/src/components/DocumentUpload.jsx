@@ -1,12 +1,14 @@
 import { useState, useRef } from 'react'
-import { Upload, FileText, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
-import { uploadDocument } from '../services/api'
+import { Upload, FileText, Loader2, CheckCircle, AlertCircle, Download } from 'lucide-react'
+import { uploadDocument, downloadStructuredJSON } from '../services/api'
 
 export default function DocumentUpload({ onUploadSuccess }) {
   const [file, setFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState(null)
   const [dragActive, setDragActive] = useState(false)
+  const [lastUploadResult, setLastUploadResult] = useState(null)
+  const [downloading, setDownloading] = useState(false)
   const fileInputRef = useRef(null)
 
   const handleDrag = (e) => {
@@ -42,10 +44,12 @@ export default function DocumentUpload({ onUploadSuccess }) {
 
     setUploading(true)
     setUploadStatus(null)
+    setLastUploadResult(null)
 
     try {
       const result = await uploadDocument(file)
       setUploadStatus({ type: 'success', message: 'Document uploaded and analyzed successfully!' })
+      setLastUploadResult(result)
       setFile(null)
       
       if (onUploadSuccess) {
@@ -58,6 +62,39 @@ export default function DocumentUpload({ onUploadSuccess }) {
       })
     } finally {
       setUploading(false)
+    }
+  }
+
+  const handleDownloadJSON = async () => {
+    if (!lastUploadResult?.id) return
+    
+    setDownloading(true)
+    try {
+      // Try to use the structuredData already in the upload result
+      let jsonData = lastUploadResult.structuredData
+      
+      // If not available, fetch from the server
+      if (!jsonData) {
+        jsonData = await downloadStructuredJSON(lastUploadResult.id)
+      }
+      
+      // Create and trigger download
+      const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${lastUploadResult.originalName?.replace(/\.[^.]+$/, '') || 'document'}_structured.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setUploadStatus({ 
+        type: 'error', 
+        message: error.message || 'Failed to download structured JSON.' 
+      })
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -182,6 +219,25 @@ export default function DocumentUpload({ onUploadSuccess }) {
               >
                 {uploadStatus.message}
               </p>
+              {uploadStatus.type === 'success' && lastUploadResult?.id && (
+                <button
+                  onClick={handleDownloadJSON}
+                  disabled={downloading}
+                  className="mt-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
+                >
+                  {downloading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span>Download Structured JSON</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         )}

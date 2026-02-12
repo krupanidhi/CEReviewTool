@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import Dashboard from './components/Dashboard'
-import DocumentUpload from './components/DocumentUpload'
 import ChatInterface from './components/ChatInterface'
 import ComparisonWorkflow from './components/ComparisonWorkflow'
 import CategorizedComplianceReport from './components/CategorizedComplianceReport'
+import ChecklistComparison from './components/ChecklistComparison'
 import Settings from './components/Settings'
-import { FileText, MessageSquare, GitCompare, Settings as SettingsIcon, LayoutDashboard, Upload } from 'lucide-react'
+import ApplicationPageViewer from './components/ApplicationPageViewer'
+import LogViewer from './components/LogViewer'
+import { FileText, MessageSquare, GitCompare, Settings as SettingsIcon, LayoutDashboard, ClipboardCheck, BookOpen, Terminal } from 'lucide-react'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -16,10 +18,29 @@ function App() {
   const [chatDocuments, setChatDocuments] = useState({ application: null, checklist: null })
   const [chatWidth, setChatWidth] = useState(384) // 96 * 4 = 384px (w-96)
   const [isResizing, setIsResizing] = useState(false)
+  const [pageViewerOpen, setPageViewerOpen] = useState(false)
+  const [pageViewerContext, setPageViewerContext] = useState(null) // { page, sectionPages, sectionName }
+  const [logViewerOpen, setLogViewerOpen] = useState(false)
+  const [processingLogs, setProcessingLogs] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ce_review_logs')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
 
-  const handleDocumentUpload = (doc) => {
-    setSelectedDocument(doc)
+  const handleLog = (entry) => {
+    setProcessingLogs(prev => {
+      const updated = [...prev, entry]
+      try { localStorage.setItem('ce_review_logs', JSON.stringify(updated.slice(-500))) } catch {}
+      return updated
+    })
   }
+
+  const handleClearLogs = () => {
+    setProcessingLogs([])
+    try { localStorage.removeItem('ce_review_logs') } catch {}
+  }
+
 
   const handleComparisonComplete = (result) => {
     setComparisonResult(result)
@@ -27,8 +48,43 @@ function App() {
   }
 
   const handleViewResultsFromDashboard = (app) => {
-    setComparisonResult(app.data)
-    setActiveTab('report')
+    // Data from processed applications service contains the full comparison response
+    // Structure: { success, comparison, usage, metadata }
+    const data = app.data
+    if (data) {
+      const appName = app.name || 'Application'
+      const checklistName = data.metadata?.checklistName || app.checklistName || 'Checklist'
+      const applicationId = data.metadata?.applicationId || app.applicationId || null
+      
+      // Use persisted selectedSections from metadata if available, otherwise reconstruct
+      let selectedSections = data.metadata?.selectedSections
+      if (!selectedSections || selectedSections.length === 0) {
+        const comparisonSections = data.comparison?.sections || []
+        const sectionTitles = [...new Set(comparisonSections.map(s => {
+          const match = (s.checklistSection || '').match(/^(\d+)\./)
+          return match ? `${match[1]}.` : null
+        }).filter(Boolean))]
+        selectedSections = sectionTitles.map(title => ({
+          sectionTitle: title,
+          checklistId: 'cached',
+          checklistName: checklistName
+        }))
+      }
+
+      // Build a result structure compatible with what ComparisonWorkflow produces
+      const result = {
+        results: [{
+          ...data,
+          applicationDoc: { id: applicationId, name: appName, originalName: appName },
+          checklistDoc: { name: checklistName, originalName: checklistName }
+        }],
+        applications: [{ id: applicationId, name: appName, originalName: appName }],
+        checklists: [{ name: checklistName, originalName: checklistName }],
+        selectedSections
+      }
+      setComparisonResult(result)
+      setActiveTab('report')
+    }
   }
 
   const handleDocumentsUploaded = (docs) => {
@@ -120,17 +176,6 @@ function App() {
               <span>Dashboard</span>
             </button>
             <button
-              onClick={() => setActiveTab('upload')}
-              className={`flex items-center space-x-2 px-4 py-4 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'upload'
-                  ? 'border-blue-500 text-blue-400'
-                  : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
-              }`}
-            >
-              <Upload className="w-4 h-4" />
-              <span>Upload Document</span>
-            </button>
-            <button
               onClick={() => setActiveTab('compare')}
               className={`flex items-center space-x-2 px-4 py-4 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'compare'
@@ -154,6 +199,19 @@ function App() {
                 <span>Compliance Report</span>
               </button>
             )}
+            {comparisonResult && (
+              <button
+                onClick={() => setActiveTab('qa-comparison')}
+                className={`flex items-center space-x-2 px-4 py-4 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'qa-comparison'
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                }`}
+              >
+                <ClipboardCheck className="w-4 h-4" />
+                <span>Checklist Comparison</span>
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('settings')}
               className={`flex items-center space-x-2 px-4 py-4 border-b-2 font-medium text-sm transition-colors ${
@@ -174,34 +232,79 @@ function App() {
         {activeTab === 'dashboard' && (
           <Dashboard onViewResults={handleViewResultsFromDashboard} />
         )}
-        {activeTab === 'upload' && (
-          <DocumentUpload onUploadSuccess={handleDocumentUpload} />
-        )}
         {activeTab === 'compare' && (
           <ComparisonWorkflow 
             onComparisonComplete={handleComparisonComplete}
             cachedDocs={cachedUploadedDocs}
             onDocumentsUploaded={handleDocumentsUploaded}
+            onLog={handleLog}
           />
         )}
         {activeTab === 'report' && (
-          <CategorizedComplianceReport comparisonData={comparisonResult} />
+          <CategorizedComplianceReport comparisonData={comparisonResult} onOpenPageViewer={(page, sectionPages, sectionName) => { setPageViewerContext({ page, sectionPages: sectionPages || [page], sectionName: sectionName || '' }); setPageViewerOpen(true); window.__pageViewerGoTo = page; }} />
+        )}
+        {activeTab === 'qa-comparison' && (
+          <ChecklistComparison comparisonData={comparisonResult} />
         )}
         {activeTab === 'settings' && (
           <Settings />
         )}
       </main>
 
-      {/* Floating Chat Icon */}
-      {!chatOpen && (
-        <button
-          onClick={() => setChatOpen(true)}
-          className="fixed bottom-6 right-6 bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-full shadow-lg transition-all hover:scale-110 z-50"
-          title="Chat with AI"
-        >
-          <MessageSquare className="w-6 h-6" />
-        </button>
-      )}
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-6 right-6 flex flex-col space-y-3 z-50">
+        {/* Log Viewer Button */}
+        {processingLogs.length > 0 && !logViewerOpen && !chatOpen && (
+          <button
+            onClick={() => setLogViewerOpen(true)}
+            className="bg-green-600 hover:bg-green-700 text-white p-3.5 rounded-full shadow-lg transition-all hover:scale-110 relative"
+            title="View Processing Logs"
+          >
+            <Terminal className="w-5 h-5" />
+            {processingLogs.filter(l => l.level === 'error').length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
+                {processingLogs.filter(l => l.level === 'error').length}
+              </span>
+            )}
+          </button>
+        )}
+        {/* Page Viewer Button - only show when comparison result exists */}
+        {comparisonResult && !pageViewerOpen && !chatOpen && (
+          <button
+            onClick={() => setPageViewerOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white p-3.5 rounded-full shadow-lg transition-all hover:scale-110"
+            title="View Application Pages"
+          >
+            <BookOpen className="w-5 h-5" />
+          </button>
+        )}
+        {/* Chat Button */}
+        {!chatOpen && (
+          <button
+            onClick={() => setChatOpen(true)}
+            className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-full shadow-lg transition-all hover:scale-110"
+            title="Chat with AI"
+          >
+            <MessageSquare className="w-6 h-6" />
+          </button>
+        )}
+      </div>
+
+      {/* Slide-out Log Viewer */}
+      <LogViewer
+        logs={processingLogs}
+        isOpen={logViewerOpen}
+        onClose={() => setLogViewerOpen(false)}
+        onClear={handleClearLogs}
+      />
+
+      {/* Slide-out Application Page Viewer */}
+      <ApplicationPageViewer
+        comparisonData={comparisonResult}
+        isOpen={pageViewerOpen}
+        onClose={() => { setPageViewerOpen(false); setPageViewerContext(null); }}
+        sectionContext={pageViewerContext}
+      />
 
       {/* Slide-out Chat Panel */}
       {chatOpen && (

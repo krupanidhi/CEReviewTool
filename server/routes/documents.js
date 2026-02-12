@@ -2,6 +2,7 @@ import express from 'express'
 import { promises as fs } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { transformToStructured } from '../services/structuredDocumentTransformer.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -91,6 +92,128 @@ router.get('/:id', async (req, res) => {
     console.error('❌ Error retrieving document:', error)
     res.status(500).json({
       error: 'Failed to retrieve document',
+      message: error.message
+    })
+  }
+})
+
+/**
+ * GET /api/documents/:id/file
+ * Serve the original uploaded file (PDF, etc.) for viewing
+ */
+router.get('/:id/file', async (req, res) => {
+  try {
+    const { id } = req.params
+    const documentsDir = join(__dirname, '../../documents')
+    
+    const files = await fs.readdir(documentsDir)
+    const metadataFile = files.find(f => f.startsWith(id) && f.endsWith('.json'))
+    
+    if (!metadataFile) {
+      return res.status(404).json({ error: 'Document not found' })
+    }
+    
+    const content = await fs.readFile(join(documentsDir, metadataFile), 'utf-8')
+    const metadata = JSON.parse(content)
+    
+    if (!metadata.filePath) {
+      return res.status(404).json({ error: 'Original file not found' })
+    }
+    
+    // Check file exists
+    try {
+      await fs.access(metadata.filePath)
+    } catch {
+      return res.status(404).json({ error: 'Original file has been removed' })
+    }
+    
+    res.setHeader('Content-Type', metadata.mimeType || 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="${metadata.originalName}"`)
+    
+    const fileBuffer = await fs.readFile(metadata.filePath)
+    res.send(fileBuffer)
+  } catch (error) {
+    console.error('❌ Error serving document file:', error)
+    res.status(500).json({
+      error: 'Failed to serve document file',
+      message: error.message
+    })
+  }
+})
+
+/**
+ * GET /api/documents/:id/structured
+ * Download structured JSON (clean key/value pair format) for a document
+ */
+router.get('/:id/structured', async (req, res) => {
+  try {
+    const { id } = req.params
+    const documentsDir = join(__dirname, '../../documents')
+    
+    const files = await fs.readdir(documentsDir)
+    const metadataFile = files.find(f => f.startsWith(id) && f.endsWith('.json'))
+    
+    if (!metadataFile) {
+      return res.status(404).json({ error: 'Document not found' })
+    }
+    
+    const content = await fs.readFile(join(documentsDir, metadataFile), 'utf-8')
+    const metadata = JSON.parse(content)
+    
+    // Try to read pre-generated structured file
+    if (metadata.structuredFilePath) {
+      try {
+        const structuredContent = await fs.readFile(metadata.structuredFilePath, 'utf-8')
+        const structuredData = JSON.parse(structuredContent)
+        
+        res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Content-Disposition', `attachment; filename="${metadata.originalName.replace(/\.[^.]+$/, '')}_structured.json"`)
+        return res.json(structuredData)
+      } catch (fileErr) {
+        console.log('Structured file not found, generating on-the-fly...')
+      }
+    }
+    
+    // Fallback: generate on-the-fly from raw extraction
+    const extractionPath = metadata.extractionFilePath
+    if (extractionPath) {
+      try {
+        const rawContent = await fs.readFile(extractionPath, 'utf-8')
+        const rawData = JSON.parse(rawContent)
+        const structuredData = transformToStructured(rawData)
+        
+        // Save for future use
+        const extractionsDir = join(__dirname, '../../extractions')
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+        const sanitizedName = metadata.originalName.replace(/[^a-zA-Z0-9.-]/g, '_')
+        const structuredPath = join(extractionsDir, `${timestamp}_${sanitizedName}_structured.json`)
+        await fs.writeFile(structuredPath, JSON.stringify(structuredData, null, 2))
+        
+        // Update metadata with new path
+        metadata.structuredFilePath = structuredPath
+        await fs.writeFile(join(documentsDir, metadataFile), JSON.stringify(metadata, null, 2))
+        
+        res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Content-Disposition', `attachment; filename="${metadata.originalName.replace(/\.[^.]+$/, '')}_structured.json"`)
+        return res.json(structuredData)
+      } catch (genErr) {
+        console.error('Failed to generate structured data:', genErr)
+      }
+    }
+    
+    // Last fallback: transform from analysis data in metadata
+    if (metadata.analysis?.data) {
+      const structuredData = transformToStructured(metadata.analysis.data)
+      res.setHeader('Content-Type', 'application/json')
+      res.setHeader('Content-Disposition', `attachment; filename="${metadata.originalName.replace(/\.[^.]+$/, '')}_structured.json"`)
+      return res.json(structuredData)
+    }
+    
+    return res.status(404).json({ error: 'No extraction data available for this document' })
+  } catch (error) {
+    console.error('❌ Error generating structured JSON:', error)
+    res.status(500).json({
+      error: 'Failed to generate structured JSON',
       message: error.message
     })
   }

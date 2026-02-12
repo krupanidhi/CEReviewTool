@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, Trash2, Database, ToggleLeft, ToggleRight, Save, RefreshCw } from 'lucide-react'
-import { getSettings, updateSettings, clearCache, getCacheData } from '../services/api'
+import { Settings as SettingsIcon, Trash2, Database, ToggleLeft, ToggleRight, Save, RefreshCw, FileText, CheckCircle, AlertCircle, Clock } from 'lucide-react'
+import { getSettings, updateSettings, clearCache, getCacheData, getProcessedApplications, deleteProcessedApplication } from '../services/api'
 
 export default function Settings() {
   const [settings, setSettings] = useState({
@@ -18,6 +18,7 @@ export default function Settings() {
     cacheEnabled: true
   })
   const [cacheData, setCacheData] = useState({ analysis: [], keyvalue: [] })
+  const [processedApps, setProcessedApps] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState(null)
@@ -25,6 +26,7 @@ export default function Settings() {
   useEffect(() => {
     loadSettings()
     loadCacheData()
+    loadProcessedApps()
   }, [])
 
   const loadSettings = async () => {
@@ -45,6 +47,27 @@ export default function Settings() {
       setCacheData(result.cache)
     } catch (error) {
       console.error('Failed to load cache data:', error)
+    }
+  }
+
+  const loadProcessedApps = async () => {
+    try {
+      const result = await getProcessedApplications()
+      setProcessedApps(result.applications || [])
+    } catch (error) {
+      console.error('Failed to load processed apps:', error)
+    }
+  }
+
+  const handleDeleteProcessedApp = async (id) => {
+    if (!confirm('Delete this processed application? Reports will be regenerated on next comparison.')) return
+    try {
+      await deleteProcessedApplication(id)
+      setProcessedApps(prev => prev.filter(a => a.id !== id))
+      setMessage({ type: 'success', text: 'Processed application cache deleted' })
+      setTimeout(() => setMessage(null), 3000)
+    } catch (error) {
+      setMessage({ type: 'error', text: `Failed to delete: ${error.message}` })
     }
   }
 
@@ -70,6 +93,7 @@ export default function Settings() {
       await clearCache(type)
       await loadSettings()
       await loadCacheData()
+      await loadProcessedApps()
       setMessage({ type: 'success', text: `${type} cache cleared successfully` })
       setTimeout(() => setMessage(null), 3000)
     } catch (error) {
@@ -293,6 +317,76 @@ export default function Settings() {
           </div>
         </div>
       )}
+
+      {/* Processed Applications Cache */}
+      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <div className="bg-green-500/10 p-2 rounded-lg">
+              <FileText className="w-6 h-6 text-green-500" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold text-white">Processed Applications Cache</h3>
+              <p className="text-sm text-gray-400">
+                Manage cached application results. Deleting an entry will cause reports to regenerate on next comparison.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={loadProcessedApps}
+            className="bg-slate-700 hover:bg-slate-600 text-gray-300 p-2 rounded-lg transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
+
+        {processedApps.length === 0 ? (
+          <div className="bg-slate-900 rounded-lg p-6 text-center border border-slate-600">
+            <p className="text-gray-400 text-sm">No processed applications cached.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {processedApps.map((app) => (
+              <div key={app.id} className="bg-slate-900 rounded-lg p-4 border border-slate-600">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-white truncate">{app.name}</span>
+                      {app.status === 'completed' && (
+                        <span className="flex items-center gap-1 text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full flex-shrink-0">
+                          <CheckCircle className="w-3 h-3" /> {app.complianceScore}%
+                        </span>
+                      )}
+                      {app.status === 'processing' && (
+                        <span className="flex items-center gap-1 text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full flex-shrink-0">
+                          <Clock className="w-3 h-3" /> Processing
+                        </span>
+                      )}
+                      {app.status === 'error' && (
+                        <span className="flex items-center gap-1 text-xs text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full flex-shrink-0">
+                          <AlertCircle className="w-3 h-3" /> Error
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {app.checklistName && <span>{app.checklistName} • </span>}
+                      {app.processedAt ? formatDate(app.processedAt) : formatDate(app.createdAt)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteProcessedApp(app.id)}
+                    className="ml-3 text-gray-500 hover:text-red-400 transition-colors p-2 flex-shrink-0"
+                    title="Delete cached results"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

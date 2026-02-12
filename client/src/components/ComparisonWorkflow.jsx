@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { ArrowRight, GitCompare, Loader2 } from 'lucide-react'
 import EnhancedComparisonUpload from './EnhancedComparisonUpload'
 import ChecklistSelector from './ChecklistSelector'
-import { compareDocuments } from '../services/api'
+import { compareDocuments, saveProcessedApplication, runStandardComparison, runQAComparison, saveLogsToServer } from '../services/api'
 
-export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, onDocumentsUploaded }) {
+export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, onDocumentsUploaded, onLog }) {
   const [step, setStep] = useState(cachedDocs ? 2 : 1)
   const [uploadedDocs, setUploadedDocs] = useState(cachedDocs)
   const [selectedSections, setSelectedSections] = useState([])
@@ -30,115 +30,273 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
     setSelectedSections(sections)
   }, [])
 
+  const [progress, setProgress] = useState({ current: 0, total: 0, currentSection: '' })
+
+  const workflowLogsRef = useRef([])
+
+  const log = useCallback((level, message, data = null) => {
+    const entry = { timestamp: new Date().toISOString(), level, message, data }
+    console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](`[${level.toUpperCase()}] ${message}`, data || '')
+    workflowLogsRef.current.push(entry)
+    if (onLog) onLog(entry)
+  }, [onLog])
+
   const handleCompare = async () => {
     setComparing(true)
     setError(null)
+    workflowLogsRef.current = []
+    const workflowStart = performance.now()
 
     try {
       const applications = uploadedDocs.applications
       const checklists = uploadedDocs.checklists
 
-      console.log('🔍 ===== COMPARISON DEBUG START =====')
-      console.log('📋 Selected sections:', selectedSections)
+      log('info', '===== COMPLIANCE COMPARISON START =====')
+      log('info', `Selected sections: ${selectedSections.length}`, selectedSections.map(s => s.sectionTitle))
 
       const results = []
 
       for (const application of applications) {
         const applicationData = application.analysis?.data || application.data
-        console.log(`📄 Application: ${application.name}`)
+        log('info', `Application: ${application.originalName || application.name}`)
 
         for (const checklist of checklists) {
           const checklistData = checklist.analysis?.data || checklist.data
-          console.log(`📗 Checklist: ${checklist.name}`)
+          log('info', `Checklist: ${checklist.name}`)
 
           // Filter to only selected main sections
           const selectedTitles = selectedSections
             .filter(s => s.checklistId === checklist.id)
             .map(s => s.sectionTitle)
-          
-          console.log('✅ Selected section titles:', selectedTitles)
 
-          // Extract section numbers from selected titles (e.g., "3" from "3. Completing...")
+          // Extract section numbers from selected titles (e.g., "3" from "3. Completing..." or "4 Submission")
           const selectedSectionNumbers = selectedTitles.map(title => {
-            const match = title.match(/^(\d+)\./);
+            const match = title.match(/^(\d+)/)
             return match ? match[1] : null
           }).filter(Boolean)
-          
-          console.log('🔢 Extracted section numbers:', selectedSectionNumbers)
 
-          // Filter sections to include main sections AND all subsections at any nesting level
-          const filteredSections = checklistData.sections?.filter(section => {
+          log('info', `Extracted section numbers: ${selectedSectionNumbers.join(', ')}`)
+
+          // ---- SMART CHUNKED PROCESSING ----
+          const allChunkSections = []
+          let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+
+          // Step 1: Collect ALL sections under selected main numbers
+          // Also match sections like "4 Submission" (space after number, no dot)
+          const allSelectedSections = checklistData.sections?.filter(section => {
             const sectionTitle = section.title || ''
-            
-            // Check if this section matches any selected main section
-            const isMainSection = selectedTitles.some(title => 
-              sectionTitle === title || sectionTitle.startsWith(title.substring(0, 10))
-            )
-            
-            // Check if this is a subsection of a selected main section at ANY nesting level
-            // Matches: 3.1, 3.1.1, 3.1.1.1, 3.2.2.1, etc.
-            const isSubsection = selectedSectionNumbers.some(num => {
-              // Pattern matches section number followed by dot and at least one digit
-              // e.g., for num=3: matches 3.1, 3.2, 3.3, 3.1.1, 3.1.1.1, 3.2.1, 3.3.1, etc.
-              const subsectionPattern = new RegExp(`^${num}\\.(\\d+)`)
-              return subsectionPattern.test(sectionTitle)
+            return selectedSectionNumbers.some(num => {
+              return sectionTitle.startsWith(`${num}.`) || sectionTitle.startsWith(`${num} `) || sectionTitle === `${num}`
             })
-            
-            return isMainSection || isSubsection
           }) || []
-          
-          console.log(`📑 Filtered sections count: ${filteredSections.length}`)
-          console.log('📑 Filtered section titles (first 10):', filteredSections.map(s => s.title).slice(0, 10))
-          console.log('📑 ALL filtered section titles:', filteredSections.map(s => s.title))
 
-          // Filter TOC to only selected main sections
-          const filteredTOC = checklistData.tableOfContents?.filter(toc => 
-            selectedTitles.some(title => toc.title === title)
-          ) || []
-
-          // Get page ranges for selected sections to extract full content
-          const pageRanges = filteredTOC.map(toc => toc.pageNumber).filter(p => p && p > 0)
-          const minPage = pageRanges.length > 0 ? Math.min(...pageRanges) : 1
-          const maxPage = pageRanges.length > 0 ? Math.max(...pageRanges) : 1
-          
-          console.log(`📄 Page range for selected sections: ${minPage} to ${maxPage + 30}`)
-          
-          // Extract full content from sections (not pages, as page.content doesn't exist)
-          const sectionsContent = filteredSections
-            .map(section => {
-              const sectionText = section.content?.map(c => c.text).join('\n') || ''
-              return `\n=== ${section.title} ===\n${sectionText}`
+          // Step 2: Identify LEAF sections — sections that have no children
+          const allTitles = allSelectedSections.map(s => s.title || '')
+          const leafSections = allSelectedSections.filter(section => {
+            const title = section.title || ''
+            const match = title.match(/^(\d+(?:\.\d+)*)/)
+            if (!match) return true
+            const sectionNum = match[1]
+            const hasChildren = allTitles.some(t => {
+              if (t === title) return false
+              const tMatch = t.match(/^(\d+(?:\.\d+)*)/)
+              if (!tMatch) return false
+              return tMatch[1].startsWith(sectionNum + '.')
             })
-            .join('\n\n')
-          
-          console.log(`📄 Extracted sections content length: ${sectionsContent.length} chars`)
-          console.log(`📄 Number of sections included: ${filteredSections.length}`)
+            return !hasChildren
+          })
 
-          // Create filtered checklist data with only selected sections
-          const filteredChecklistData = {
-            ...checklistData,
-            sections: filteredSections,
-            tableOfContents: filteredTOC,
-            content: sectionsContent,
-            selectedSectionNumbers: selectedSectionNumbers // Add this for AI to validate
+          log('info', `Total sections: ${allSelectedSections.length}, Leaf sections: ${leafSections.length} (skipping ${allSelectedSections.length - leafSections.length} parent/informational)`)
+
+          // Step 3: Group leaf sections by second-level parent (3.1, 3.2, etc.)
+          const chunks = []
+          const chunkGroups = {}
+          leafSections.forEach(section => {
+            const title = section.title || ''
+            const match = title.match(/^(\d+)\.(\d+)/)
+            const groupKey = match ? `${match[1]}.${match[2]}` : title.match(/^(\d+)/) ? title.match(/^(\d+)/)[1] : 'other'
+            if (!chunkGroups[groupKey]) chunkGroups[groupKey] = []
+            chunkGroups[groupKey].push(section)
+          })
+
+          // Sort chunk keys numerically so processing follows proper sequence (3.1, 3.2, ..., 4)
+          const sortedKeys = Object.keys(chunkGroups).sort((a, b) => {
+            const aParts = a.split('.').map(Number)
+            const bParts = b.split('.').map(Number)
+            for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+              const aVal = aParts[i] || 0
+              const bVal = bParts[i] || 0
+              if (aVal !== bVal) return aVal - bVal
+            }
+            return 0
+          })
+
+          for (const groupKey of sortedKeys) {
+            chunks.push({ label: `Section ${groupKey}`, specificSections: chunkGroups[groupKey], subKey: groupKey })
           }
-          
-          console.log('📦 Filtered checklist data summary:')
-          console.log('  - Sections:', filteredChecklistData.sections?.length || 0)
-          console.log('  - TOC entries:', filteredChecklistData.tableOfContents?.length || 0)
-          console.log('  - Content length:', filteredChecklistData.content?.length || 0)
-          console.log('🔍 ===== COMPARISON DEBUG END =====')
 
-          const result = await compareDocuments(applicationData, filteredChecklistData)
+          const totalChunks = chunks.length
+          setProgress({ current: 0, total: totalChunks, currentSection: '' })
+          log('info', `Processing ${totalChunks} section chunks sequentially`)
+
+          for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
+            const chunk = chunks[chunkIdx]
+            const chunkStart = performance.now()
+            setProgress({ current: chunkIdx + 1, total: totalChunks, currentSection: chunk.label })
+            log('info', `Chunk ${chunkIdx + 1}/${totalChunks}: ${chunk.label} (${chunk.specificSections.length} subsections)`)
+
+            const chunkChecklistData = {
+              ...checklistData,
+              sections: chunk.specificSections,
+              tableOfContents: checklistData.tableOfContents?.filter(toc => {
+                const tocTitle = toc.title || ''
+                return tocTitle.startsWith(chunk.subKey)
+              }) || [],
+              content: chunk.specificSections
+                .map(section => {
+                  const sectionText = section.content?.map(c => c.text).join('\n') || ''
+                  return `\n=== ${section.title} ===\n${sectionText}`
+                })
+                .join('\n\n'),
+              selectedSectionNumbers: [chunk.subKey]
+            }
+
+            const MAX_RETRIES = 3
+            let lastError = null
+            let chunkResult = null
+
+            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+              try {
+                log('info', `  Attempt ${attempt}/${MAX_RETRIES} for ${chunk.label}`)
+                chunkResult = await compareDocuments(applicationData, chunkChecklistData)
+                const chunkElapsed = ((performance.now() - chunkStart) / 1000).toFixed(1)
+                log('info', `  ✅ ${chunk.label} completed: ${chunkResult.comparison?.sections?.length || 0} sections in ${chunkElapsed}s`)
+                break
+              } catch (err) {
+                lastError = err
+                log('warn', `  ⚠️ Attempt ${attempt} failed for ${chunk.label}: ${err.message}`)
+                if (attempt < MAX_RETRIES) {
+                  const delay = Math.min(1000 * Math.pow(2, attempt), 30000)
+                  log('info', `  Retrying in ${delay / 1000}s...`)
+                  await new Promise(resolve => setTimeout(resolve, delay))
+                }
+              }
+            }
+
+            if (chunkResult && chunkResult.comparison?.sections) {
+              allChunkSections.push(...chunkResult.comparison.sections)
+              if (chunkResult.usage) {
+                totalUsage.promptTokens += chunkResult.usage.promptTokens || 0
+                totalUsage.completionTokens += chunkResult.usage.completionTokens || 0
+                totalUsage.totalTokens += chunkResult.usage.totalTokens || 0
+              }
+            } else {
+              log('error', `  ❌ All ${MAX_RETRIES} attempts failed for ${chunk.label}: ${lastError?.message}`)
+              allChunkSections.push({
+                checklistSection: chunk.label,
+                requirement: 'Processing failed for this section group',
+                status: 'not_met',
+                applicationSection: '',
+                pageReferences: [],
+                evidence: '',
+                explanation: `Failed after ${MAX_RETRIES} attempts: ${lastError?.message || 'Unknown error'}. You can re-run this section individually.`,
+                recommendation: 'Re-run comparison for this section group individually.',
+                missingFields: []
+              })
+            }
+          }
+
+          // Deduplicate sections by checklistSection title — AI sometimes returns duplicates
+          const seenSections = new Map()
+          allChunkSections.forEach(section => {
+            const key = (section.checklistSection || '').trim().toLowerCase()
+            if (!key) return
+            const existing = seenSections.get(key)
+            if (!existing || (section.evidence || '').length > (existing.evidence || '').length) {
+              seenSections.set(key, section)
+            }
+          })
+          const dedupedSections = [...seenSections.values()]
+          if (dedupedSections.length < allChunkSections.length) {
+            log('warn', `Deduplicated: ${allChunkSections.length} → ${dedupedSections.length} sections (removed ${allChunkSections.length - dedupedSections.length} duplicates)`)
+          }
+
+          // Merge all chunk results
+          const complianceElapsed = ((performance.now() - workflowStart) / 1000).toFixed(1)
+          const applicableSections = dedupedSections.filter(s => s.status !== 'not_applicable')
+          const metSections = applicableSections.filter(s => s.status === 'met')
+          const overallCompliance = applicableSections.length > 0
+            ? Math.round((metSections.length / applicableSections.length) * 100)
+            : 0
+
+          log('info', `✅ Compliance complete: ${allChunkSections.length} sections, ${overallCompliance}% compliance in ${complianceElapsed}s`)
+          log('info', `Token usage — prompt: ${totalUsage.promptTokens}, completion: ${totalUsage.completionTokens}, total: ${totalUsage.totalTokens}`)
+
+          // ---- AUTO-RUN CHECKLIST COMPARISON ----
+          let checklistComparisonResults = null
+          try {
+            setProgress({ current: 0, total: 2, currentSection: 'Checklist Comparison (Standard)' })
+            log('info', '===== AUTO-RUN CHECKLIST COMPARISON =====')
+            const qaStart = performance.now()
+
+            const [stdResult, psqResult] = await Promise.all([
+              runStandardComparison(applicationData).catch(err => {
+                log('warn', `Standard comparison failed: ${err.message}`)
+                return null
+              }),
+              runQAComparison(applicationData).catch(err => {
+                log('warn', `Program-specific comparison failed: ${err.message}`)
+                return null
+              })
+            ])
+
+            const qaElapsed = ((performance.now() - qaStart) / 1000).toFixed(1)
+            log('info', `✅ Checklist comparison complete in ${qaElapsed}s`)
+            if (stdResult) log('info', `  Standard: ${stdResult.summary?.agreementRate || 0}% agreement`)
+            if (psqResult) log('info', `  Program-specific: ${psqResult.summary?.agreementRate || 0}% agreement`)
+
+            checklistComparisonResults = { standard: stdResult, programSpecific: psqResult }
+          } catch (qaErr) {
+            log('error', `Checklist comparison error: ${qaErr.message}`)
+          }
+
+          const mergedResult = {
+            success: true,
+            comparison: {
+              overallCompliance,
+              applicationInfo: dedupedSections[0]?.applicationInfo || {},
+              summary: `Compliance analysis completed across ${chunks.length} section groups with ${dedupedSections.length} total validation entries.`,
+              sections: dedupedSections,
+              criticalIssues: dedupedSections
+                .filter(s => s.status === 'not_met')
+                .map(s => `${s.checklistSection}: ${s.requirement}`),
+              recommendations: dedupedSections
+                .filter(s => s.recommendation && s.status !== 'met')
+                .map(s => s.recommendation)
+            },
+            checklistComparison: checklistComparisonResults,
+            usage: totalUsage,
+            metadata: {
+              model: 'chunked-processing',
+              comparedAt: new Date().toISOString(),
+              chunksProcessed: chunks.length,
+              totalSections: dedupedSections.length,
+              rawSections: allChunkSections.length,
+              duplicatesRemoved: allChunkSections.length - dedupedSections.length
+            }
+          }
 
           results.push({
-            ...result,
+            ...mergedResult,
             applicationDoc: application,
             checklistDoc: checklist,
             selectedSections: selectedSections.filter(s => s.checklistId === checklist.id)
           })
         }
       }
+
+      const totalElapsed = ((performance.now() - workflowStart) / 1000).toFixed(1)
+      log('info', `===== WORKFLOW COMPLETE in ${totalElapsed}s =====`)
 
       if (onComparisonComplete) {
         onComparisonComplete({
@@ -149,11 +307,33 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
         })
       }
 
+      // Save completed results to processed-applications for dashboard caching
+      try {
+        const checklist = uploadedDocs.checklists[0]
+        const checklistName = checklist.originalName || checklist.name
+        for (let i = 0; i < results.length; i++) {
+          const appObj = uploadedDocs.applications[i]
+          const appName = appObj?.originalName || appObj?.name || `Application ${i + 1}`
+          const applicationId = appObj?.id || null
+          const { applicationDoc, checklistDoc, selectedSections: selSections, ...cleanResult } = results[i]
+          await saveProcessedApplication(appName, checklistName, cleanResult, selectedSections, applicationId)
+        }
+        log('info', 'Results cached to dashboard')
+      } catch (saveErr) {
+        log('warn', `Could not save to dashboard cache: ${saveErr.message}`)
+      }
+
       setStep(3)
     } catch (err) {
+      log('error', `Comparison failed: ${err.message}`)
       setError(`Comparison failed: ${err.message}`)
     } finally {
       setComparing(false)
+      setProgress({ current: 0, total: 0, currentSection: '' })
+      // Save logs to server as text file
+      if (workflowLogsRef.current.length > 0) {
+        saveLogsToServer(workflowLogsRef.current, new Date().toISOString().replace(/[:.]/g, '-')).catch(() => {})
+      }
     }
   }
 
@@ -210,6 +390,28 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
             </div>
           )}
 
+          {comparing && progress.total > 0 && (
+            <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-300">
+                  Processing {progress.currentSection}
+                </span>
+                <span className="text-sm text-gray-400">
+                  {progress.current} / {progress.total} section groups
+                </span>
+              </div>
+              <div className="w-full bg-slate-700 rounded-full h-2.5">
+                <div
+                  className="bg-purple-600 h-2.5 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Each section group is processed separately with automatic retry to ensure 100% completion.
+              </p>
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <button
               onClick={() => setStep(1)}
@@ -225,7 +427,11 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
               {comparing ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Comparing...</span>
+                  <span>
+                    {progress.total > 0
+                      ? `Processing ${progress.currentSection} (${progress.current}/${progress.total})`
+                      : 'Preparing...'}
+                  </span>
                 </>
               ) : (
                 <>

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { Upload, FileText, Loader2, CheckCircle, AlertCircle, GitCompare, X, Plus } from 'lucide-react'
-import { uploadDocument, getSettings } from '../services/api'
+import { Upload, FileText, Loader2, CheckCircle, AlertCircle, GitCompare, X, Plus, Database, Trash2, RefreshCw } from 'lucide-react'
+import { uploadDocument, getSettings, getStoredChecklists, loadStoredChecklist, saveStoredChecklist, deleteStoredChecklist } from '../services/api'
 
 export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
   const [applicationFiles, setApplicationFiles] = useState([])
@@ -9,12 +9,17 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
   const [status, setStatus] = useState(null)
   const [uploadedDocs, setUploadedDocs] = useState({ applications: [], checklists: [] })
   const [settings, setSettings] = useState({ multipleApplications: false, multipleChecklists: true })
+  const [checklistMode, setChecklistMode] = useState('upload') // 'upload' or 'stored'
+  const [storedChecklists, setStoredChecklists] = useState([])
+  const [selectedStoredChecklist, setSelectedStoredChecklist] = useState(null)
+  const [loadingStored, setLoadingStored] = useState(false)
   
   const applicationInputRef = useRef(null)
   const checklistInputRef = useRef(null)
 
   useEffect(() => {
     loadSettings()
+    loadStoredChecklistsList()
   }, [])
 
   const loadSettings = async () => {
@@ -23,6 +28,50 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
       setSettings(result.settings)
     } catch (error) {
       console.error('Failed to load settings:', error)
+    }
+  }
+
+  const loadStoredChecklistsList = async () => {
+    try {
+      const result = await getStoredChecklists()
+      setStoredChecklists(result.checklists || [])
+      // Auto-switch to stored mode if checklists exist and auto-select first
+      if (result.checklists && result.checklists.length > 0) {
+        setChecklistMode('stored')
+        // Auto-select the first stored checklist so Upload button is enabled
+        if (!selectedStoredChecklist) {
+          handleSelectStoredChecklist(result.checklists[0].id)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load stored checklists:', error)
+    }
+  }
+
+  const handleSelectStoredChecklist = async (id) => {
+    setLoadingStored(true)
+    try {
+      const result = await loadStoredChecklist(id)
+      setSelectedStoredChecklist(result)
+      setChecklistFiles([]) // Clear any file uploads
+      setStatus({ type: 'success', message: `Loaded stored checklist: ${result.displayName}` })
+    } catch (error) {
+      setStatus({ type: 'error', message: `Failed to load checklist: ${error.message}` })
+    } finally {
+      setLoadingStored(false)
+    }
+  }
+
+  const handleDeleteStoredChecklist = async (id, e) => {
+    e.stopPropagation()
+    try {
+      await deleteStoredChecklist(id)
+      setStoredChecklists(prev => prev.filter(c => c.id !== id))
+      if (selectedStoredChecklist?.id === id) {
+        setSelectedStoredChecklist(null)
+      }
+    } catch (error) {
+      setStatus({ type: 'error', message: `Failed to delete: ${error.message}` })
     }
   }
 
@@ -54,8 +103,10 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
   }
 
   const handleUploadAll = async () => {
-    if (applicationFiles.length === 0 || checklistFiles.length === 0) {
-      setStatus({ type: 'error', message: 'Please select at least one application and one checklist file' })
+    const hasChecklist = checklistMode === 'stored' ? !!selectedStoredChecklist : checklistFiles.length > 0
+    
+    if (applicationFiles.length === 0 || !hasChecklist) {
+      setStatus({ type: 'error', message: 'Please select at least one application and one checklist (upload or stored)' })
       return
     }
 
@@ -72,14 +123,45 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
         applications.push(result)
       }
 
-      setStatus({ type: 'info', message: `Uploading ${checklistFiles.length} checklist(s)...` })
-      for (const file of checklistFiles) {
-        const result = await uploadDocument(file)
-        checklists.push(result)
+      if (checklistMode === 'stored' && selectedStoredChecklist) {
+        // Use stored checklist — no re-upload, no re-extraction
+        setStatus({ type: 'info', message: `Using stored checklist: ${selectedStoredChecklist.displayName}` })
+        checklists.push({
+          id: selectedStoredChecklist.id,
+          originalName: selectedStoredChecklist.originalName,
+          name: selectedStoredChecklist.displayName,
+          analysis: selectedStoredChecklist.analysis,
+          data: selectedStoredChecklist.data,
+          structuredData: selectedStoredChecklist.structuredData,
+          fromStore: true
+        })
+      } else {
+        // Upload new checklist(s) via Azure Doc Intelligence
+        setStatus({ type: 'info', message: `Uploading ${checklistFiles.length} checklist(s)...` })
+        for (const file of checklistFiles) {
+          const result = await uploadDocument(file)
+          checklists.push(result)
+
+          // Auto-save to store for future reuse
+          try {
+            const saveResult = await saveStoredChecklist(
+              result.originalName,
+              result.data,
+              result.structuredData
+            )
+            if (!saveResult.alreadyExists) {
+              console.log('📋 Checklist auto-saved for future reuse:', saveResult.checklist?.displayName)
+            }
+            // Refresh the stored list
+            loadStoredChecklistsList()
+          } catch (saveError) {
+            console.warn('Could not auto-save checklist:', saveError.message)
+          }
+        }
       }
 
       setUploadedDocs({ applications, checklists })
-      setStatus({ type: 'success', message: 'All documents uploaded successfully! Ready to proceed.' })
+      setStatus({ type: 'success', message: 'All documents processed successfully! Ready to proceed.' })
       
       if (onDocumentsUploaded) {
         onDocumentsUploaded({ applications, checklists })
@@ -175,7 +257,7 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
             )}
           </div>
 
-          {/* Checklist Upload */}
+          {/* Checklist Upload / Stored Selection */}
           <div className="border-4 border-dashed border-green-500 rounded-lg p-6 bg-green-900/10">
             <input
               ref={checklistInputRef}
@@ -190,29 +272,121 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
               <div className="bg-green-600 text-white px-4 py-2 rounded-lg mb-4 font-bold text-xl">
                 ✅ CHECKLIST/REQUIREMENTS GUIDE
               </div>
-              <FileText className="w-16 h-16 mx-auto mb-3 text-green-400" />
-              <h3 className="text-2xl font-bold text-green-300 mb-3">
-                Checklist/Guide{settings.multipleChecklists ? 's' : ''}
-              </h3>
-              <div className="bg-green-800/50 border-2 border-green-500 rounded-lg p-3 mb-4">
-                <p className="text-sm text-green-200 font-semibold mb-2">
-                  ⚠️ UPLOAD REQUIREMENTS CHECKLIST HERE
-                </p>
-                <p className="text-xs text-gray-300">
-                  Example: FY26 SAC Application User Guide.pdf<br/>
-                  This is the document with VALIDATION REQUIREMENTS
-                </p>
+
+              {/* Mode Toggle */}
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <button
+                  onClick={() => { setChecklistMode('stored'); setSelectedStoredChecklist(null) }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                    checklistMode === 'stored'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-slate-700 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  Use Stored ({storedChecklists.length})
+                </button>
+                <button
+                  onClick={() => { setChecklistMode('upload'); setSelectedStoredChecklist(null) }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                    checklistMode === 'upload'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-slate-700 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Upload New
+                </button>
               </div>
-              <button
-                onClick={() => checklistInputRef.current?.click()}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 mx-auto"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Checklist{settings.multipleChecklists ? 's' : ''}</span>
-              </button>
+
+              {/* STORED MODE */}
+              {checklistMode === 'stored' && (
+                <div>
+                  {storedChecklists.length === 0 ? (
+                    <div className="bg-slate-900/50 border border-slate-600 rounded-lg p-4 mb-4">
+                      <p className="text-sm text-gray-400 mb-2">No stored checklists yet.</p>
+                      <p className="text-xs text-gray-500">Upload a checklist once and it will be saved automatically for future use.</p>
+                      <button
+                        onClick={() => setChecklistMode('upload')}
+                        className="mt-3 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                      >
+                        Upload First Checklist
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-56 overflow-y-auto mb-4">
+                      {storedChecklists.map((cl) => (
+                        <div
+                          key={cl.id}
+                          onClick={() => handleSelectStoredChecklist(cl.id)}
+                          className={`bg-slate-900 rounded-lg p-3 flex items-center justify-between border cursor-pointer transition-all ${
+                            selectedStoredChecklist?.id === cl.id
+                              ? 'border-green-500 bg-green-900/20 ring-1 ring-green-500/50'
+                              : 'border-slate-600 hover:border-green-400/50'
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0 text-left">
+                            <p className="text-sm text-gray-200 font-medium truncate">{cl.displayName}</p>
+                            <p className="text-xs text-gray-500">
+                              {cl.metadata.sectionCount} sections • {cl.metadata.pageCount} pages • {new Date(cl.savedAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 ml-2">
+                            {selectedStoredChecklist?.id === cl.id && (
+                              <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                            )}
+                            <button
+                              onClick={(e) => handleDeleteStoredChecklist(cl.id, e)}
+                              className="text-gray-500 hover:text-red-400 transition-colors p-1"
+                              title="Delete stored checklist"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {loadingStored && (
+                    <div className="flex items-center justify-center gap-2 text-green-400 text-sm">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Loading checklist data...</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* UPLOAD MODE */}
+              {checklistMode === 'upload' && (
+                <div>
+                  <FileText className="w-16 h-16 mx-auto mb-3 text-green-400" />
+                  <h3 className="text-2xl font-bold text-green-300 mb-3">
+                    Checklist/Guide{settings.multipleChecklists ? 's' : ''}
+                  </h3>
+                  <div className="bg-green-800/50 border-2 border-green-500 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-green-200 font-semibold mb-2">
+                      ⚠️ UPLOAD REQUIREMENTS CHECKLIST HERE
+                    </p>
+                    <p className="text-xs text-gray-300">
+                      Example: FY26 SAC Application User Guide.pdf<br/>
+                      This is the document with VALIDATION REQUIREMENTS
+                    </p>
+                    <p className="text-xs text-green-300 mt-2 font-medium">
+                      ✨ Uploaded checklists are auto-saved for future reuse
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => checklistInputRef.current?.click()}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 mx-auto"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Checklist{settings.multipleChecklists ? 's' : ''}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
-            {checklistFiles.length > 0 && (
+            {checklistFiles.length > 0 && checklistMode === 'upload' && (
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {checklistFiles.map((file, idx) => (
                   <div key={idx} className="bg-slate-900 rounded p-3 flex items-center justify-between border border-slate-600">
@@ -237,7 +411,7 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
         <div className="flex items-center justify-center">
           <button
             onClick={handleUploadAll}
-            disabled={applicationFiles.length === 0 || checklistFiles.length === 0 || uploading}
+            disabled={applicationFiles.length === 0 || (checklistMode === 'upload' ? checklistFiles.length === 0 : !selectedStoredChecklist) || uploading}
             className="bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 text-white px-8 py-3 rounded-lg font-medium transition-colors flex items-center space-x-2"
           >
             {uploading ? (
@@ -287,11 +461,11 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
         )}
 
         {/* Summary */}
-        {(applicationFiles.length > 0 || checklistFiles.length > 0) && (
+        {(applicationFiles.length > 0 || checklistFiles.length > 0 || selectedStoredChecklist) && (
           <div className="mt-4 p-4 bg-slate-900 rounded-lg border border-slate-600">
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-400">
-                {applicationFiles.length} application(s) • {checklistFiles.length} checklist(s) selected
+                {applicationFiles.length} application(s) • {checklistMode === 'stored' && selectedStoredChecklist ? `1 stored checklist (${selectedStoredChecklist.displayName})` : `${checklistFiles.length} checklist(s)`} selected
               </span>
               {uploadedDocs.applications.length > 0 && (
                 <span className="text-green-400">

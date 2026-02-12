@@ -1,0 +1,1180 @@
+{
+  "success": true,
+  "comparison": {
+    "overallCompliance": 98,
+    "applicationInfo": {},
+    "summary": "Compliance analysis completed across 10 section groups with 62 total validation entries.",
+    "sections": [
+      {
+        "checklistSection": "3.1 Completing the General Information Section",
+        "requirement": "Complete the General Information Section, including all required fields and subsections.",
+        "status": "met",
+        "applicationSection": "Form 1A - General Information Worksheet",
+        "pageReferences": [
+          135
+        ],
+        "evidence": "How many unduplicated patients do you project to serve in the assessment period? For a 4-year period of performance, the assessment period is CY 2028: 15617\n\n00242645: FAMILY PRACTICE | Announcement Number: | & COUNSELING SERVICES NETWORK INC | HRSA-26-004 Announcement Name: Service Area Competition | Due Date: 11/05/2025 (Due In: 11 Days): Application Type: New\n00242645: FAMILY PRACTICE | Grant Number: Not Available | & COUNSELING SERVICES NETWORK INC | Target Population: Residents of Public Housing | Due Date: 11/05/2025 (Due In: 11 Days): Target Audience: Not Available\n00242645: FAMILY PRACTICE | Resources :selected: | & COUNSELING SERVICES NETWORK INC | | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | | & COUNSELING SERVICES NETWORK INC | | Due Date: 11/05/2025 (Due In: 11 Days): As of 10/24/2025 05:10:46 PM OMB Number: 0915-0285 OMB Expiration Date: 4/30/2026\n00242645: FAMILY PRACTICE | ₹1. Applicant Information | & COUNSELING SERVICES NETWORK INC | | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | Applicant Name | & COUNSELING SERVICES NETWORK INC | FAMILY PRACTICE & COUNSELING SERVICES NETWORK INC | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | Fiscal Year End Date | & COUNSELING SERVICES NETWORK INC | June 30 | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | Application Type | & COUNSELING SERVICES NETWORK INC | New | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | Grant Number | & COUNSELING SERVICES NETWORK INC | N/A | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | Business Entity (Select one option that aligns with the type entered in SAM.gov) | & COUNSELING SERVICES NETWORK INC | [_] Tribal\n:unselected:\n[ _ ] Urban Indian\n:unselected:\n[ X ] Private, non-profit (non-Tribal or Urban Indian)\n:selected:\n[_] Public (non-Tribal or Urban Indian)\n:unselected: | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | Organization Type (Select all that apply) | & COUNSELING SERVICES NETWORK INC | [ _] Faith based\n:unselected:\n[ _] Hospital\n:unselected:\n[ _ ] State government\n:unselected:\n[_] City/County/Local Government or Municipality\n:unselected:\n[_] University\n:unselected:\n[ X ] Community based organization [_] Other\n:selected:\n:unselected: | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | | & COUNSELING SERVICES NETWORK INC | If 'Other' please specify: | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | 2. Proposed Service Area | & COUNSELING SERVICES NETWORK INC | | Due Date: 11/05/2025 (Due In: 11 Days): ",
+        "explanation": "All required fields in the General Information Section are present and filled with actual data. Applicant Name, Fiscal Year End Date, Application Type, Grant Number, Business Entity, and Organization Type are all completed.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.1.1 Completing Form 1A - General Information Worksheet",
+        "requirement": "Complete all required fields in Form 1A, including applicant information, service area designation, service area type, and patient/visit projections.",
+        "status": "met",
+        "applicationSection": "Form 1A - General Information Worksheet",
+        "pageReferences": [
+          135
+        ],
+        "evidence": "How many unduplicated patients do you project to serve in the assessment period? For a 4-year period of performance, the assessment period is CY 2028: 15617\n\nApplicant Name: FAMILY PRACTICE & COUNSELING SERVICES NETWORK INC\nFiscal Year End Date: June 30\nApplication Type: New\nGrant Number: N/A\nBusiness Entity (Select one option that aligns with the type entered in SAM.gov): [_] Tribal [ _ ] Urban Indian [ X ] Private, non-profit (non-Tribal or Urban Indian) [_] Public (non-Tribal or Urban Indian)\nOrganization Type (Select all that apply): [ _] Faith based [ _] Hospital [ _ ] State government [_] City/County/Local Government or Municipality [_] University [ X ] Community based organization [_] Other\nIf 'Other' please specify:\n2. Proposed Service Area\n2a. Service Area Designation\nSelect MUA/MUP\n(Each ID must be 5 to 12 digits. Use commas to separate multiple IDs, without spaces)\nFind an MUA/MUP\n[ X ] Medically Underserved Area (MUA) ID # 02920,02947,02951,04060\n[_] Medically Underserved Population (MUP) ID #\n[_] Medically Underserved Area Application Pending ID #\n[_] Medically Underserved Population Application Pending ID #\n2b. Service Area Type\n* Choose Service Area Type\n[ X ] Urban\n[ _] Rural\nIf your selection differs from what is listed on the SAAT, explain why using publicly available data\n2c. Patients and Visits\nUnduplicated Patients and Visits by Population Type\nHow many unduplicated patients do you project to serve in the assessment period?\nFor a 4-year period of performance, the assessment period is CY 2028.\n15617\nPopulation Type\nUDS / Baseline Value\nProjected in the assessment period (January 1 - December 31)\nPatients\nVisits\nPatients\nVisits\nTotal\n15617\n89085\n15617\n88181\nMedically Underserved Populations (CHC) (Include all patients/visits not reported in the rows below)\n0\n0\n0\n0\nMigratory and Seasonal Agricultural Workers (MSAW)\n0\n0\n0\n0\nResidents of Public Housing (RPH)\n15617\n89085\n15617\n88181\nHomeless Population (HP)\n0\n0\n0\n0",
+        "explanation": "All required fields in Form 1A are present and filled with actual data. The applicant information, service area designation, service area type, and patient/visit projections are complete.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.1.1.1 Completing the Applicant Information Section",
+        "requirement": "Provide complete applicant information, including Applicant Name, Fiscal Year End Date, Application Type, Grant Number, Business Entity, and Organization Type.",
+        "status": "met",
+        "applicationSection": "Form 1A - General Information Worksheet",
+        "pageReferences": [
+          135
+        ],
+        "evidence": "00242645: FAMILY PRACTICE | Applicant Name | & COUNSELING SERVICES NETWORK INC | FAMILY PRACTICE & COUNSELING SERVICES NETWORK INC | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | Fiscal Year End Date | & COUNSELING SERVICES NETWORK INC | June 30 | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | Application Type | & COUNSELING SERVICES NETWORK INC | New | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | Grant Number | & COUNSELING SERVICES NETWORK INC | N/A | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | Business Entity (Select one option that aligns with the type entered in SAM.gov) | & COUNSELING SERVICES NETWORK INC | [ X ] Private, non-profit (non-Tribal or Urban Indian)\n:selected: | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | Organization Type (Select all that apply) | & COUNSELING SERVICES NETWORK INC | [ X ] Community based organization [_] Other\n:selected:\n:unselected: | Due Date: 11/05/2025 (Due In: 11 Days): ",
+        "explanation": "All required applicant information fields are present and filled.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.1.1.2 Completing the Proposed Service Area Section",
+        "requirement": "Complete the Proposed Service Area section, including 2a, 2b, and 2c.",
+        "status": "met",
+        "applicationSection": "Form 1A - General Information Worksheet",
+        "pageReferences": [
+          135
+        ],
+        "evidence": "00242645: FAMILY PRACTICE | 2. Proposed Service Area | & COUNSELING SERVICES NETWORK INC | | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | 2a. Service Area Designation | & COUNSELING SERVICES NETWORK INC | Select MUA/MUP\n(Each ID must be 5 to 12 digits. Use commas to separate multiple IDs, without spaces)\nFind an MUA/MUP\n[ X ] Medically Underserved Area (MUA) ID # 02920,02947,02951,04060\n[_] Medically Underserved Population (MUP) ID #\n[_] Medically Underserved Area Application Pending ID #\n[_] Medically Underserved Population Application Pending ID # | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | 2b. Service Area Type | & COUNSELING SERVICES NETWORK INC | * Choose Service Area Type\n[ X ] Urban\n[ _] Rural | Due Date: 11/05/2025 (Due In: 11 Days): \n00242645: FAMILY PRACTICE | 2c. Patients and Visits | & COUNSELING SERVICES NETWORK INC | Unduplicated Patients and Visits by Population Type\nHow many unduplicated patients do you project to serve in the assessment period?\nFor a 4-year period of performance, the assessment period is CY 2028.\n15617 | Due Date: 11/05/2025 (Due In: 11 Days): ",
+        "explanation": "All required fields for the Proposed Service Area section are present and filled.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.1.1.3 Completing 2a. Service Area Designation",
+        "requirement": "Select and provide the Service Area Designation (MUA/MUP) and corresponding ID numbers.",
+        "status": "met",
+        "applicationSection": "Form 1A - General Information Worksheet",
+        "pageReferences": [
+          135
+        ],
+        "evidence": "00242645: FAMILY PRACTICE | 2a. Service Area Designation | & COUNSELING SERVICES NETWORK INC | Select MUA/MUP\n(Each ID must be 5 to 12 digits. Use commas to separate multiple IDs, without spaces)\nFind an MUA/MUP\n[ X ] Medically Underserved Area (MUA) ID # 02920,02947,02951,04060\n[_] Medically Underserved Population (MUP) ID #\n[_] Medically Underserved Area Application Pending ID #\n[_] Medically Underserved Population Application Pending ID # | Due Date: 11/05/2025 (Due In: 11 Days): ",
+        "explanation": "Service Area Designation is selected as Medically Underserved Area (MUA) with valid ID numbers provided.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.1.1.4 Completing 2b. Service Area Type",
+        "requirement": "Select and provide the Service Area Type (Urban or Rural).",
+        "status": "met",
+        "applicationSection": "Form 1A - General Information Worksheet",
+        "pageReferences": [
+          135
+        ],
+        "evidence": "00242645: FAMILY PRACTICE | 2b. Service Area Type | & COUNSELING SERVICES NETWORK INC | * Choose Service Area Type\n[ X ] Urban\n[ _] Rural | Due Date: 11/05/2025 (Due In: 11 Days): ",
+        "explanation": "Service Area Type is selected as Urban.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.1.1.5 Completing 2c. Patients and Visits",
+        "requirement": "Provide projected unduplicated patients and visits by population type for the assessment period.",
+        "status": "partial",
+        "applicationSection": "Form 1A - General Information Worksheet, 2c. Patients and Visits",
+        "pageReferences": [
+          135
+        ],
+        "evidence": "How many unduplicated patients do you project to serve in the assessment period? For a 4-year period of performance, the assessment period is CY 2028.: 15617\n\nPopulation Type | UDS Patients | UDS Visits | Projected Patients | Projected Visits\nTotal | 15617 | 89085 | 15617 | 88181\nMedically Underserved Populations (CHC) | 0 | 0 | 0 | 0\nMigratory and Seasonal Agricultural Workers (MSAW) | 0 | 0 | 0 | 0\nResidents of Public Housing (RPH) | 15617 | 89085 | 15617 | 88181\nHomeless Population (HP) | 0 | 0 | 0 | 0",
+        "explanation": "Projected patient and visit data are present and complete. However, full validation requires cross-referencing with SAAT data to confirm the 75% threshold. SAAT integration needed for full validation.",
+        "recommendation": "Cross-verify patient projections with SAAT data to confirm compliance with the 75% threshold."
+      },
+      {
+        "checklistSection": "3.1.2 Completing Form 1C - Documents on File",
+        "requirement": "Form 1C - Documents on File page displays a list of documents to be maintained by an organization. To complete Form 1C, provide the date of the last review/revision for each item listed. Select N/A if an item is not applicable, where available (Figure 18, 1, 2, 3). Click the Save and Continue button to proceed to the next form.",
+        "status": "met",
+        "applicationSection": "Form 1C - Documents On File",
+        "pageReferences": [
+          137
+        ],
+        "evidence": "Personnel policies, including selection and dismissal procedures, salary and benefit scales, employee grievance procedures, and equal opportunity practices.: 09/24/2025\nPolicies/procedures consistent with E.O. 14273 and terms of awards to make insulin and injectable epinephrine available at or below the discounted price paid by the health center awardee or sub-awardee under the 340B Drug Pricing Program (plus a minimal administration fee) to individuals with low incomes who: (a) have a high cost-sharing requirement for either insulin or injectable epinephrine; (b) have a high unmet deductible; or (c) have no health care insurance. For this purpose, \"a low-income individual\" means an individual living in a household with an income level at or below 200 percent of the Federal Poverty Guidelines.: 08/27/2025\nProcurement procedures.: 09/24/2025\nStandards of Conduct/Conflict of Interest policies/procedures.: 08/27/2025\nFinancial Management/Accounting and Internal Control policies and/or procedures to ensure awarded Health Center Program federal funds are not expended for restricted activities.: 09/24/2025\nFinancial Management/Accounting and Internal Control policies/procedures related to restrictions on the use of federal funds for the purchase of sterile needles or syringes for the hypodermic injection of any illegal drug.1 (Only applicable if your organization provides syringe exchange services or is otherwise engaged in syringe service programs; otherwise, indicate as N/A.): [X]\nFinancial Management/Accounting and Internal Control policies/procedures related to restrictions on the use of federal funds to provide abortion services, except in cases of rape or incest or where there is a threat to the life of the mother.2 (Only applicable if your organization provides abortion services; otherwise, indicate as N/A.): [X]\nBilling and Collections policies/procedures, including those regarding waivers or fee reductions and refusal to pay.: 09/24/2025\nCredentialing/Privileging operating procedures.: 09/24/2025\nCoverage for Medical Emergencies During and After Hours operating procedures.: 09/02/2025\nContinuity of Care/Hospital Admitting operating procedures.: 08/28/2025\nSliding Fee Discount Program policies, operating procedures, and sliding fee schedule.: 09/24/2025\nQuality Improvement/Assurance Program policies and operating procedures that address clinical services and management, patient safety, and confidentiality of patient records.: 08/27/2025\nGoverning Board Bylaws.: 04/16/2025\nCo-Applicant Agreement (Only applicable to public agency health centers; otherwise, indicate as N/A.): [X]\nEvidence of Nonprofit or Public Agency Status.: 01/29/2025",
+        "explanation": "Form 1C is completed with all required documents listed and dates of last review/revision provided. N/A is selected where appropriate.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.2 Completing the Budget Information Section",
+        "requirement": "Complete the Budget Information section, including all required fields in Forms 2 and 3.",
+        "status": "met",
+        "applicationSection": "Form 2 - Staffing Profile; Form 3 - Income Analysis",
+        "pageReferences": [
+          139,
+          142
+        ],
+        "evidence": "Form 2 - Staffing Profile (Page 139)\nStaffing Positions by Major Service Category | Direct Hire FTEs | Contract/Agreement FTEs\nProject Director/Chief Executive Officer (CEO) | 1.00 | N/A\nFinance Director/Chief Financial Officer (CFO) | 1.00 |\nChief Operations Officer (COO) | 1.00 |\nChief Information Officer (CIO) | 0.00 | YES\nClinical Director/Chief Medical Officer (CMO) | 1.00 |\nOther Management and Support Personnel | 14.20 |\n\nForm 3 - Income Analysis (Page 142)\nPayer Category | Patients By Primary Medical Insurance (a) | Billable Visits (b) | Income Per Visit (c) | Projected Income (d) | Prior FY Income (e)\n1. Medicaid | 7,206 | 50,442 | $275.80 | $13,911,903.60 | $15,223,241.00\n2. Medicare | 795 | 5,562 | $161.22 | $896,705.64 | $1,203,493.00\n3. Other Public | 0 | 0 | $0.00 | $0.00 | $0.00\n4. Private | 3,151 | 12,604 | $73.72 | $929,166.88 | $1,149,427.00\n5. Self Pay | 4,465 | 12,198 | $44.25 | $539,761.50 | $466,351.00\n6. Total (Lines 1 to 5) | 15617 | 80806 | N/A | $16,277,537.62 | $18,042,512.00",
+        "explanation": "All required fields in Forms 2 and 3 are present and filled with actual data.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.2.1 Completing Form 2 - Staffing Profile",
+        "requirement": "Form 2 - Staffing Profile reports personnel supported by the total budget (federal and non-federal funds) for the first budget year (12 months) of the proposed project for all sites included on Form 5B: Service Sites.",
+        "status": "met",
+        "applicationSection": "Form 2 - Staffing Profile",
+        "pageReferences": [
+          139,
+          140
+        ],
+        "evidence": "Staffing Positions by Major Service Category | Direct Hire FTEs | Contract/Agreement FTEs\nProject Director/Chief Executive Officer (CEO) | 1.00 | N/A\nFinance Director/Chief Financial Officer (CFO) | 1.00 | \nChief Operations Officer (COO) | 1.00 | \nChief Information Officer (CIO) | 0.00 | YES\nClinical Director/Chief Medical Officer (CMO) | 1.00 | \nOther Management and Support Personnel | 14.20 | \nFiscal and Billing Personnel | 18.13 | \nIT Personnel | 5.80 | \nFacility Personnel | 1.00 | \nPatient Support Personnel | 24.00 | \nFamily Physicians | 0.00 | YES\nGeneral Practitioners | 0.00 | \nInternists | 0.00 | \nObstetrician/Gynecologists | 0.00 | \nPediatricians | 0.00 | \nOther Specialty Physicians | 0.00 | YES\nNurse Practitioners | 19.15 | YES\nPhysician Assistants | 0.00 | \nCertified Nurse Midwives | 0.00 | YES\nNurses | 7.70 | \nOther Medical Personnel (e.g. Medical Assistants, Nurse Aides) - Medical Assistants | 14.80 | \nLaboratory Personnel | 0.00 | \nX-Ray Personnel | 0.00 | \nDentists | 4.00 | \nDental Hygienists | 3.80 | \nDental Therapists | 0.00 | \nOther Dental Personnel - Dental Assistants, EFDAs | 10.00 | \nPsychiatrists | 0.00 | YES\nLicensed Clinical Psychologists | 1.55 | YES\nLicensed Clinical Social Workers | 21.00 | \nOther Licensed Mental Health Providers - Psychiatric Nurse Practitioners | 5.80 | \nOther Mental Health Personnel | 0.00 | \nSubstance Use Disorder Providers | 0.00 | \nOther Professional Health Services Personnel - Mind/Body Preactitioners | 7.40 | YES\nOphthalmologists | 0.00 | \nOptometrists | 0.00 | \nOther Vision Care Personnel | 0.00 | \nPharmacy Personnel | 0.00 | \nCase Managers | 11.00 | \nPatient and Community Education Specialists | 3.00 | \nOutreach Workers | 6.00 | \nTransportation Workers | 0.00 | \nEligibility Assistance Workers | 1.00 | \nInterpretation Personnel | 0.00 | \nCommunity Health Workers | 1.00 | \nOther Enabling Services Personnel | 0.00 | \nQuality Improvement Personnel | 2.00 | \nOther Programs and Services Personnel - Call Center Personnel | 5.00 | \nTotals | 191.33 | N/A",
+        "explanation": "All required staffing categories are reported with FTEs for both direct hire and contract/agreement, for all sites included on Form 5B. No missing fields.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.2.2 Completing Form 3 - Income Analysis",
+        "requirement": "Form 3 - Income Analysis must be completed for the first budget year, including all payer categories and projected income for all sites included on Form 5B: Service Sites.",
+        "status": "met",
+        "applicationSection": "Form 3 - Income Analysis",
+        "pageReferences": [
+          142
+        ],
+        "evidence": "Payer Category | Patients By Primary Medical Insurance (a) | Billable Visits (b) | Income Per Visit (c) | Projected Income (d) | Prior FY Income (e)\n1. Medicaid | 7,206 | 50,442 | $275.80 | $13,911,903.60 | $15,223,241.00\n2. Medicare | 795 | 5,562 | $161.22 | $896,705.64 | $1,203,493.00\n3. Other Public | 0 | 0 | $0.00 | $0.00 | $0.00\n4. Private | 3,151 | 12,604 | $73.72 | $929,166.88 | $1,149,427.00\n5. Self Pay | 4,465 | 12,198 | $44.25 | $539,761.50 | $466,351.00\n6. Total (Lines 1 to 5) | 15617 | 80806 | N/A | $16,277,537.62 | $18,042,512.00\n7. Other Federal | N/A | N/A | N/A | $218,000.00 | $307,077.00\n8. State Government | N/A | N/A | N/A | $125,000.00 | $160,408.00\n9. Local Government | N/A | N/A | N/A | $0.00 | $0.00\n10. Private Grants/Contracts | N/A | N/A | N/A | $160,000.00 | $123,320.00\n11. Contributions | N/A | N/A | N/A | $0.00 | $0.00\n12. Other | N/A | N/A | N/A | $13,770,000.00 | $11,937,027.00\n13. Applicant (Retained Earnings) | N/A | N/A | N/A | $0.00 | $0.00\n14. Total Other (Lines 7 to 13) | N/A | N/A | N/A | $14,273,000.00 | $12,527,832.00\n15. Total Non-Federal (Lines 6+14) | N/A | N/A | N/A | $30,550,537.62 | $30,570,344.00",
+        "explanation": "All payer categories are completed with projected income for the first budget year for all sites. No missing fields.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.2.2.1 Completing the Payer Categories Section",
+        "requirement": "Provide the number of patients by primary medical insurance for each payer category in Part 1 of Form 3.",
+        "status": "met",
+        "applicationSection": "Form 3 - Income Analysis",
+        "pageReferences": [
+          142
+        ],
+        "evidence": "Payer Category | Patients By Primary Medical Insurance (a)\n1. Medicaid | 7,206\n2. Medicare | 795\n3. Other Public | 0\n4. Private | 3,151\n5. Self Pay | 4,465\n6. Total (Lines 1 to 5) | 15617",
+        "explanation": "Patient counts by primary medical insurance are provided for each payer category.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.2.2.2 Completing the Comments/Explanatory Notes Section",
+        "requirement": "Provide any comments or explanatory notes in the designated section of Form 3, if applicable.",
+        "status": "met",
+        "applicationSection": "Form 3 - Income Analysis",
+        "pageReferences": [
+          142
+        ],
+        "evidence": "Comments/Explanatory Notes (if applicable)",
+        "explanation": "The comments/explanatory notes section is present. No additional comments were required or provided.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3 Completing the Sites and Services Section",
+        "requirement": "Complete the Sites and Services section, including all required fields in Forms 5A, 5B, and 5C.",
+        "status": "met",
+        "applicationSection": "Form 5A - Required Services Provided; Form 5B - Service Sites; Form 5C - Other Activities/Locations",
+        "pageReferences": [
+          143,
+          146,
+          150
+        ],
+        "evidence": "Form 5A - Required Services Provided (Page 143)\nService Type | Column I - Direct (Health Center Pays) | Column II - Formal Written Contract/Agreement (Health Center Pays) | Column III - Formal Written Referral Arrangement (Health Center DOES NOT Pay)\nGeneral Primary Medical Care | [X] | [X] | [_]\nDiagnostic Laboratory | [X] | [X] | [X]\nDiagnostic Radiology | [_] | [_] | [X]\nScreenings | [X] | [X] | [_]\nCoverage for Emergencies During and After Hours | [X] | [X] | [X]\nVoluntary Family Planning | [X] | [X] | [_]\nImmunizations | [X] | [_] | [_]\nWell Child Services | [X] | [_] | [_]\nGynecological Care | [X] | [X] | [_]\nObstetrical Care | | |\nPrenatal Care | [X] | [X] | [_]\nIntrapartum Care (Labor & Delivery) | [_] | [X] | [_]\nPostpartum Care | [X] | [X] | [_]\nPreventive Dental | [X] | [_] | [_]\nPharmaceutical Services | [X] | [X] | [_]\nHP Required Substance Use Disorder Services | [_] | [_] | [_]\nCase Management | [X] | [_] | [_]\nEligibility Assistance | [X] | [X] | [_]\nHealth Education | [X] | [X] | [_]\nOutreach | [X] | [_] | [_]\nTransportation | [_] | [X] | [_]\nTranslation | [X] | [X] | [_]\n\nForm 5B - Service Sites (Page 146)\nSite Name | Site(s) | Site Physical Street Address | Service Site Type | Location Type | Service Area Zip Code(s)\nAbbottsford Falls Health Center | New Site | 4700 Wissahickon Ave, Suite 118, Philadelphia, PA 19144-4248 | Administrative/Service Delivery Site | Permanent | 19119, 19120, 19124, ...\nHealth Annex | New Site | 6120-B Woodland Avenue FL 2, Philadelphia, PA 19142-3200 | Service Delivery Site | Permanent | 19050, 19131, ...\nStephen and Sandra Sheller 11th St Family Health Services | New Site | 850 N 11th St, Philadelphia, PA 19123-1957 | Service Delivery Site | Permanent | 19123, 19132, ...\nFPCSN at CB School | New Site | 4101 Freeland Ave, Philadelphia, PA 19128-3509 | Service Delivery Site | Seasonal | 19128, 19142, ...\nFPCSN at Building 21 High School | New Site | 6501 Limekiln Pike, Philadelphia, PA 19138-3102 | Service Delivery Site | Seasonal | 19138, 19133, ...\nFPCSN at Bartram High School | New Site | 2401 S 67th St, Philadelphia, PA 19142-2298 | Service Delivery Site | Seasonal | 19142, 19143, 19153\nFPCSN at Philadelphia High School for Girls | New Site | 1400 W Olney Ave, Philadelphia, PA 19141-2316 | Service Delivery Site | Seasonal | 19141\nFPCSN at Belmont Charter High School | New Site | 311 North 19th Street, Philadelphia, PA 19103 | Service Delivery Site | Seasonal | 19103, 19131, ...\nFPCSN at Belmont Inquiry Charter School | New Site | 1301 Belmont Ave, Philadelphia, PA 19104-1044 | Service Delivery Site | Seasonal | 19131, 19142, ...\n\nForm 5C - Other Activities/Locations (Page 150)\nType of Activity | Frequency of Activity | Description of Activity | Type of Location(s) where Activity is Conducted\nPortable Clinical Care | Periodically | The health center sometimes provides testing and/or immunizations (Flu, HIV, Covid, etc) in the community. | Community organizations throughout the area\nHealth Education | Daily | Provide helpful health information to patients, families and community members. | Health center and community locations\nImmunizations | All hours of operation | Immunizations are provided for all ages according to recognized regulatory bodies. | Community locations\nHealth Fairs | Annually and periodically | Health center staff respond to information from community organizations to attend health fairs and the health center conduct health fairs on health center site grounds to provide health screenings, health education, and outreach. | Health center grounds and community locations\nMedical Rounds | When patients served by contract obstetric providers deliver | When patients served by contract obstetric providers deliver, they are admitted to the hospital where the providers practice. The providers will conduct medical rounds while patients are in the hospital. | Area hospitals\nHospital Admitting | When patients served by contract obstetric providers deliver | When patients served by contract obstetric providers deliver, they are admitted to the hospital where the providers practice. | Area hospitals",
+        "explanation": "All required fields in Forms 5A, 5B, and 5C are present and filled.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.1 Completing Form 5A - Services Provided",
+        "requirement": "Complete all required fields in Form 5A, indicating which services are provided directly, by contract, or by referral.",
+        "status": "met",
+        "applicationSection": "Form 5A - Required Services Provided",
+        "pageReferences": [
+          143
+        ],
+        "evidence": "Service Type | Column I - Direct (Health Center Pays) | Column II - Formal Written Contract/Agreement (Health Center Pays) | Column III - Formal Written Referral Arrangement (Health Center DOES NOT Pay)\nGeneral Primary Medical Care | [X] | [X] | [_]\nDiagnostic Laboratory | [X] | [X] | [X]\nDiagnostic Radiology | [_] | [_] | [X]\nScreenings | [X] | [X] | [_]\nCoverage for Emergencies During and After Hours | [X] | [X] | [X]\nVoluntary Family Planning | [X] | [X] | [_]\nImmunizations | [X] | [_] | [_]\nWell Child Services | [X] | [_] | [_]\nGynecological Care | [X] | [X] | [_]\nObstetrical Care | | |\nPrenatal Care | [X] | [X] | [_]\nIntrapartum Care (Labor & Delivery) | [_] | [X] | [_]\nPostpartum Care | [X] | [X] | [_]\nPreventive Dental | [X] | [_] | [_]\nPharmaceutical Services | [X] | [X] | [_]\nHP Required Substance Use Disorder Services | [_] | [_] | [_]\nCase Management | [X] | [_] | [_]\nEligibility Assistance | [X] | [X] | [_]\nHealth Education | [X] | [X] | [_]\nOutreach | [X] | [_] | [_]\nTransportation | [_] | [X] | [_]\nTranslation | [X] | [X] | [_]",
+        "explanation": "All required services are indicated as provided directly, by contract, or by referral as appropriate.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.1.1 General Primary Medical Care",
+        "requirement": "Indicate how General Primary Medical Care is provided (direct, contract, referral).",
+        "status": "met",
+        "applicationSection": "Form 5A - Required Services Provided",
+        "pageReferences": [
+          143
+        ],
+        "evidence": "General Primary Medical Care | [X] | [X] | [_]",
+        "explanation": "General Primary Medical Care is provided both directly and by contract.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.1.2 Diagnostic Laboratory",
+        "requirement": "Indicate how Diagnostic Laboratory services are provided (direct, contract, referral).",
+        "status": "met",
+        "applicationSection": "Form 5A - Required Services Provided",
+        "pageReferences": [
+          143
+        ],
+        "evidence": "Diagnostic Laboratory | [X] | [X] | [X]",
+        "explanation": "Diagnostic Laboratory services are provided directly, by contract, and by referral.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.1.3 Diagnostic Radiology",
+        "requirement": "Indicate how Diagnostic Radiology services are provided (direct, contract, referral).",
+        "status": "met",
+        "applicationSection": "Form 5A - Required Services Provided",
+        "pageReferences": [
+          143
+        ],
+        "evidence": "Diagnostic Radiology | [_] | [_] | [X]",
+        "explanation": "Diagnostic Radiology services are provided by referral.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.1.4 Screenings",
+        "requirement": "Indicate how Screening services are provided (direct, contract, referral).",
+        "status": "met",
+        "applicationSection": "Form 5A - Required Services Provided",
+        "pageReferences": [
+          143
+        ],
+        "evidence": "Screenings | [X] | [X] | [_]",
+        "explanation": "Screenings are provided directly and by contract.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.1.5 Coverage for Emergencies During and After Hours",
+        "requirement": "Indicate how coverage for emergencies during and after hours is provided (direct, contract, referral).",
+        "status": "met",
+        "applicationSection": "Form 5A - Required Services Provided",
+        "pageReferences": [
+          143
+        ],
+        "evidence": "Coverage for Emergencies During and After Hours | [X] | [X] | [X]",
+        "explanation": "Coverage for emergencies during and after hours is provided directly, by contract, and by referral.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.1.6 Voluntary Family Planning",
+        "requirement": "Indicate how Voluntary Family Planning services are provided (direct, contract, referral).",
+        "status": "met",
+        "applicationSection": "Form 5A - Required Services Provided",
+        "pageReferences": [
+          143
+        ],
+        "evidence": "Voluntary Family Planning | [X] | [X] | [_]",
+        "explanation": "Voluntary Family Planning services are provided directly and by contract.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.2 Completing Form 5B - Service Sites",
+        "requirement": "Complete Form 5B: Service Sites, listing all proposed service delivery and administrative/service delivery sites.",
+        "status": "met",
+        "applicationSection": "Form 5B - Service Sites",
+        "pageReferences": [
+          146,
+          147,
+          148,
+          149
+        ],
+        "evidence": "Site Name | Site(s) | Site Physical Street Address | Service Site Type | Location Type | Service Area Zip Code(s)\nAbbottsford Falls Health Center | New Site | 4700 Wissahickon Ave, Suite 118, Philadelphia, PA 19144-4248 | Administrative/Service Delivery Site | Permanent | 19119, 19120, 19124, 19126, 19129, 19132, 19133, 19138, 19140, 19144, 19118, 19127, 19128, 19121\nHealth Annex | New Site | 6120-B Woodland Avenue FL 2, Philadelphia, PA 19142-3200 | Service Delivery Site | Permanent | 19050, 19131, 19153, 19082, 19023, 19139, 19079, 19151\nStephen and Sandra Sheller 11th St Family Health Services | New Site | 850 N 11th St, Philadelphia, PA 19123-1957 | Service Delivery Site | Permanent | 19123, 19132, 19124, 19125, 19121, 19133, 19134, 19122, 19140, 19143\nFPCSN at CB School | New Site | 4101 Freeland Ave, Philadelphia, PA 19128-3509 | Service Delivery Site | Seasonal | 19128, 19142, 19133, 19134, 19121, 19120, 19129, 19131, 19139, 19140, 19132, 19138, 19104, 19123, 19153, 19143, 19144, 19118, 19127, 19119, 19151, 19122, 19125, 19141, 19124\nFPCSN at Building 21 High School | New Site | 6501 Limekiln Pike, Philadelphia, PA 19138-3102 | Service Delivery Site | Seasonal | 19138, 19133, 19120, 19119, 19144, 19129, 19121, 19141, 19122, 19140, 19132, 19123\nFPCSN at Bartram High School | New Site | 2401 S 67th St, Philadelphia, PA 19142-2298 | Service Delivery Site | Seasonal | 19142, 19143, 19153\nFPCSN at Philadelphia High School for Girls | New Site | 1400 W Olney Ave, Philadelphia, PA 19141-2316 | Service Delivery Site | Seasonal | 19141\nFPCSN at Belmont Charter High School | New Site | 311 North 19th Street, Philadelphia, PA 19103 | Service Delivery Site | Seasonal | 19103, 19131, 19142, 19104, 19139, 19151, 19143, 19122, 19123, 19121\nFPCSN at Belmont Inquiry Charter School | New Site | 1301 Belmont Ave, Philadelphia, PA 19104-1044 | Service Delivery Site | Seasonal | 19131, 19142, 19104, 19139, 19151, 19143, 19122, 19123, 19121",
+        "explanation": "All required service sites are listed with complete addresses, site types, location types, and service area zip codes.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.2.1 Site Name and Address",
+        "requirement": "Provide the site name and physical street address for each service site.",
+        "status": "met",
+        "applicationSection": "Form 5B - Service Sites",
+        "pageReferences": [
+          146
+        ],
+        "evidence": "Site Name | Site Physical Street Address\nAbbottsford Falls Health Center | 4700 Wissahickon Ave, Suite 118, Philadelphia, PA 19144-4248\nHealth Annex | 6120-B Woodland Avenue FL 2, Philadelphia, PA 19142-3200\nStephen and Sandra Sheller 11th St Family Health Services | 850 N 11th St, Philadelphia, PA 19123-1957\nFPCSN at CB School | 4101 Freeland Ave, Philadelphia, PA 19128-3509\nFPCSN at Building 21 High School | 6501 Limekiln Pike, Philadelphia, PA 19138-3102\nFPCSN at Bartram High School | 2401 S 67th St, Philadelphia, PA 19142-2298\nFPCSN at Philadelphia High School for Girls | 1400 W Olney Ave, Philadelphia, PA 19141-2316\nFPCSN at Belmont Charter High School | 311 North 19th Street, Philadelphia, PA 19103\nFPCSN at Belmont Inquiry Charter School | 1301 Belmont Ave, Philadelphia, PA 19104-1044",
+        "explanation": "Site names and physical street addresses are provided for each service site.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.2.2 Service Site Type and Location Type",
+        "requirement": "Indicate the service site type and location type for each service site.",
+        "status": "met",
+        "applicationSection": "Form 5B - Service Sites",
+        "pageReferences": [
+          146
+        ],
+        "evidence": "Site Name | Service Site Type | Location Type\nAbbottsford Falls Health Center | Administrative/Service Delivery Site | Permanent\nHealth Annex | Service Delivery Site | Permanent\nStephen and Sandra Sheller 11th St Family Health Services | Service Delivery Site | Permanent\nFPCSN at CB School | Service Delivery Site | Seasonal\nFPCSN at Building 21 High School | Service Delivery Site | Seasonal\nFPCSN at Bartram High School | Service Delivery Site | Seasonal\nFPCSN at Philadelphia High School for Girls | Service Delivery Site | Seasonal\nFPCSN at Belmont Charter High School | Service Delivery Site | Seasonal\nFPCSN at Belmont Inquiry Charter School | Service Delivery Site | Seasonal",
+        "explanation": "Service site type and location type are indicated for each service site.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.2.3 Service Area Zip Codes",
+        "requirement": "List all service area zip codes for each service site.",
+        "status": "met",
+        "applicationSection": "Form 5B - Service Sites",
+        "pageReferences": [
+          146
+        ],
+        "evidence": "Site Name | Service Area Zip Code(s)\nAbbottsford Falls Health Center | 19119, 19120, 19124, 19126, 19129, 19132, 19133, 19138, 19140, 19144, 19118, 19127, 19128, 19121\nHealth Annex | 19050, 19131, 19153, 19082, 19023, 19139, 19079, 19151\nStephen and Sandra Sheller 11th St Family Health Services | 19123, 19132, 19124, 19125, 19121, 19133, 19134, 19122, 19140, 19143\nFPCSN at CB School | 19128, 19142, 19133, 19134, 19121, 19120, 19129, 19131, 19139, 19140, 19132, 19138, 19104, 19123, 19153, 19143, 19144, 19118, 19127, 19119, 19151, 19122, 19125, 19141, 19124\nFPCSN at Building 21 High School | 19138, 19133, 19120, 19119, 19144, 19129, 19121, 19141, 19122, 19140, 19132, 19123\nFPCSN at Bartram High School | 19142, 19143, 19153\nFPCSN at Philadelphia High School for Girls | 19141\nFPCSN at Belmont Charter High School | 19103, 19131, 19142, 19104, 19139, 19151, 19143, 19122, 19123, 19121\nFPCSN at Belmont Inquiry Charter School | 19131, 19142, 19104, 19139, 19151, 19143, 19122, 19123, 19121",
+        "explanation": "Service area zip codes are listed for each service site.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.2.4 Site Hours and Operational Status",
+        "requirement": "Provide the total hours of operation and operational status for each service site.",
+        "status": "met",
+        "applicationSection": "Form 5B - Service Sites",
+        "pageReferences": [
+          146
+        ],
+        "evidence": "Site Name | Total Hours of Operation\nAbbottsford Falls Health Center | 48\nHealth Annex | 52\nStephen and Sandra Sheller 11th St Family Health Services | 48.5\nFPCSN at CB School | 47.5\nFPCSN at Building 21 High School | 47.5\nFPCSN at Bartram High School | 47.5\nFPCSN at Philadelphia High School for Girls | 47.5\nFPCSN at Belmont Charter High School | 47.5\nFPCSN at Belmont Inquiry Charter School | 47.5",
+        "explanation": "Total hours of operation are provided for each service site.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.3 Completing Form 5C - Other Activities / Locations",
+        "requirement": "Form 5C - Other Activities/Locations identifies other activities or locations associated with your organization.",
+        "status": "met",
+        "applicationSection": "Form 5C - Other Activities/Locations",
+        "pageReferences": [
+          150,
+          151
+        ],
+        "evidence": "Activity/Location Information | Type of Activity | Frequency of Activity | Description of Activity | Type of Location(s) where Activity is Conducted\nPortable Clinical Care | Periodically | The health center sometimes provides testing and/or immunizations (Flu, HIV, Covid, etc) in the community. | Community organizations throughout the area\nHealth Education | Daily | Provide helpful health information to patients, families and community members. | Health center and community locations\nImmunizations | All hours of operation | Immunizations are provided for all ages according to recognized regulatory bodies. | Community locations\nHealth Fairs | Annually and periodically | Health center staff respond to information from community organizations to attend health fairs and the health center conduct health fairs on health center site grounds to provide health screenings, health education, and outreach. | Health center grounds and community locations\nMedical Rounds | When patients served by contract obstetric providers deliver | When patients served by contract obstetric providers deliver, they are admitted to the hospital where the providers practice. The providers will conduct medical rounds while patients are in the hospital. | Area hospitals\nHospital Admitting | When patients served by contract obstetric providers deliver | When patients served by contract obstetric providers deliver, they are admitted to the hospital where the providers practice. | Area hospitals\nNon-Clinical Outreach | Daily | Inform community about health center services at coalition meetings and events and with other community organizations. | Community organizations throughout the area\nHome Visits | Occasionally | Assess medical status/provide immunizations or injections | Patients' homes",
+        "explanation": "Form 5C is complete and lists all required activities and locations.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.4 Completing the Other Forms Section",
+        "requirement": "Complete all required fields in Forms 6A, 6B, 8, and 12.",
+        "status": "met",
+        "applicationSection": "Form 6A - Current Board Member Characteristics; Form 6B - Request for Waiver of Board Member Requirements; Form 8 - Health Center Agreements; Form 12 - Organization Contacts",
+        "pageReferences": [
+          152,
+          153,
+          154,
+          155
+        ],
+        "evidence": "Form 6A - Current Board Member Characteristics (Page 152)\nName | Current Board Office Position Held | Area of Expertise | >10% of Income from Health Industry | Health Center Patient | Live or Work in Service Area\nAlia Logan | Member | Community Engagement Public Housing | No | Yes | Live, Work\nMelissa Weiler Gerber | Member | Legal | No | No | Work\nElise Cannon | Member | Community Engagement Public Housing | No | Yes | Live, Work\nTayannah Scott | Member | Community Engagement | No | No | Live\nTeresa Duncan | Member | Community Engagement | Yes | Yes | Live, Work\nVera Mosley | Member | Healthcare Operations and Strategy | Yes | Yes | Live\nKyle Morris Sol | Member | Education | Yes | Yes | Live, Work\nDarrien Johnson | Member | Public Relations | Yes | Yes | Live, Work\nTasha Hannah | Member | Social Work Public Housing | No | No | Live, Work\nRonnessa Edwards | Chairperson | Behavioral Health | Yes | No | Work\nSean McCormick | Member | Public Health | No | No |\nColleen Farrell Felici | Member | Human Resources | Yes | No |\nIf the applicant is a public organization/center, do the board members listed above represent a co-applicant board? [_]YES [_]NO [X]N/A\n\nForm 6B - Request for Waiver of Board Member Requirements (Page 153)\nAre you requesting a new waiver of the 51% patient majority governance requirement? [ ] Yes [X] No\nDo you currently have a waiver of the 51% patient majority governance requirement? [ ] Yes [X] No\nAre you requesting the patient majority waiver to be continued? [ ] Yes [ ] No [ ] Not Applicable\n\nForm 8 - Health Center Agreements (Page 154)\n* 1. Does your organization have a parent, affiliate, or subsidiary organization? [ ] Yes [X] No\nTotal Number of Parent, Affiliate, or Subsidiary Organizations: 0\n2. Do you currently have, or plan to utilize:\na) Contract(s) with another organization to perform substantive programmatic work within the proposed scope of project? [ ] Yes [X] No\n2c. Total number of contracts for substantive programmatic work and/or subawards: 0\n\nForm 12 - Organization Contacts (Page 155)\nChief Executive Officer\nName: Ms. Emily Nichols\nHighest Degree: MPH\nEmail: enichols@fpcn.com\nPhone Number: (267) 597-3604\nChief Medical Officer\nName: Dr. Jennifer Cohn\nHighest Degree: M.D.\nEmail: Jennifer.Cohn2@pennmedicine.upenn.edu\nPhone Number: (856) 305-7533",
+        "explanation": "All required fields in Forms 6A, 6B, 8, and 12 are present and filled.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.4.1 Completing Form 6A - Current Board Member Characteristics",
+        "requirement": "Form 6A - Current Board Member Characteristics provides information about your organization's current board members.",
+        "status": "met",
+        "applicationSection": "Form 6A - Current Board Member Characteristics",
+        "pageReferences": [
+          151
+        ],
+        "evidence": "List of All Board Member(s): Name | Current Board Office Position Held | Area of Expertise | >10% of Income from Health Industry | Health Center Patient | Live or Work in Service Area\nAlia Logan | Member | Community Engagement Public Housing | No | Yes | Live, Work\nMelissa Weiler Gerber | Member | Legal | No | No | Work\nElise Cannon | Member | Community Engagement Public Housing | No | Yes | Live, Work\nTayannah Scott | Member | Community Engagement | No | No | Live\nTeresa Duncan | Member | Community Engagement | Yes | Yes | Live, Work\nVera Mosley | Member | Healthcare Operations and Strategy | Yes | Yes | Live\nKyle Morris Sol | Member | Education | Yes | Yes | Live, Work\nDarrien Johnson | Member | Public Relations | Yes | Yes | Live, Work\nTasha Hannah | Member | Social Work Public Housing | No | No | Live, Work\nRonnessa Edwards | Chairperson | Behavioral Health | Yes | No | Work\nSean McCormick | Member | Public Health | No | No |\nColleen Farrell Felici | Member | Human Resources | Yes | No |\nIf the applicant is a public organization/center, do the board members listed above represent a co-applicant board? [_]YES [_]NO [X]N/A\nPage Number: 151",
+        "explanation": "All required board member information is present, including names, positions, expertise, patient status, and service area connection.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.4.2 Completing Form 6B - Request for Waiver of Board Member Requirements",
+        "requirement": "Complete Form 6B if applicable, indicating whether a waiver of the 51% patient majority governance requirement is requested.",
+        "status": "met",
+        "applicationSection": "Form 6B - Request for Waiver of Board Member Requirements",
+        "pageReferences": [
+          152,
+          153
+        ],
+        "evidence": "Request for Waiver\nName of Organization: FAMILY PRACTICE & COUNSELING SERVICES NETWORK INC\n1. New Waiver Request\nAre you requesting a new waiver of the 51% patient majority governance requirement?\n[ ] Yes [X] No\n2. For Applicants With Previous Waiver\n2a. Do you currently have a waiver of the 51% patient majority governance requirement?\n[ ] Yes [X] No\n2b. Are you requesting the patient majority waiver to be continued? (This question is required if you answered Yes to question 2a.)\n[ ] Yes [ ] No [ ] Not Applicable\n3. Demonstration of Good Cause for Waiver (Demonstrate good cause for the waiver request by addressing the following areas)\n3a. Provide a description of the population to be served and the characteristics of the population/service area that would necessitate a waiver. (This question is required if you answered Yes to question 1 and/or question 2b.)\n3b. Provide a description of the health center's attempts to meet the requirement to date and explain why these attempts have not been successful. (This question is required if you answered Yes to question 1 and/or question 2b.)\n4. Alternative Mechanism Plan for Addressing Patient Representation\nPresent a plan for complying with the intent of the statute via an alternative mechanism that ensures patient input and participation in the organization, as well as direction and ongoing governance of the health center. (This question is required if you answered Yes to question 1 and/or question 2b.)\nPage Number: 152",
+        "explanation": "Form 6B is present and completed. The applicant is not requesting a waiver, and all required fields are appropriately marked.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.4.2.1 New Waiver Request",
+        "requirement": "Indicate whether a new waiver of the 51% patient majority governance requirement is requested.",
+        "status": "met",
+        "applicationSection": "Form 6B - Request for Waiver of Board Member Requirements",
+        "pageReferences": [
+          153
+        ],
+        "evidence": "Are you requesting a new waiver of the 51% patient majority governance requirement? [ ] Yes [X] No",
+        "explanation": "No new waiver is requested.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.4.2.2 For Applicants With Previous Waiver",
+        "requirement": "Indicate whether a previous waiver exists and if continuation is requested.",
+        "status": "met",
+        "applicationSection": "Form 6B - Request for Waiver of Board Member Requirements",
+        "pageReferences": [
+          153
+        ],
+        "evidence": "Do you currently have a waiver of the 51% patient majority governance requirement? [ ] Yes [X] No\nAre you requesting the patient majority waiver to be continued? [ ] Yes [ ] No [ ] Not Applicable",
+        "explanation": "No previous waiver exists and no continuation is requested.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.4.3 Completing Form 8 - Health Center Agreements",
+        "requirement": "Complete Form 8 - Health Center Agreements, indicating whether your organization has a parent, affiliate, or subsidiary organization, and whether you utilize contracts or subawards for substantive programmatic work.",
+        "status": "met",
+        "applicationSection": "Form 8 - Health Center Agreements",
+        "pageReferences": [
+          153,
+          154
+        ],
+        "evidence": "PART I: Health Center Agreements\n* 1. Does your organization have a parent, affiliate, or subsidiary organization?\n[ ] Yes [X] No\n1a. Number of Parent Organizations\n1b. Number of Affiliate Organizations\n1c. Number of Subsidiary Organizations\nTotal Number of Parent, Affiliate, or Subsidiary Organizations\n0\n2. Do you currently have, or plan to utilize:\na) Contract(s) with another organization to perform substantive programmatic work within the proposed scope of project?\n[ ] Yes [X] No\nOr\nb) Subawards to carry out a portion of the proposed scope of project.\n2a. Number of contracts with another organization to perform substantive programmatic work within the proposed scope of project.\n2b. Number of subawards made to subrecipients to carry out a portion of the proposed scope of project.\n2c. Total number of contracts for substantive programmatic work and/or subawards.\n0\nPage Number: 153",
+        "explanation": "Form 8 is present and all required fields are completed. The applicant does not have a parent, affiliate, or subsidiary organization, and does not utilize contracts or subawards for substantive programmatic work.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.4.3.1 Parent, Affiliate, or Subsidiary Organization",
+        "requirement": "Indicate whether the organization has a parent, affiliate, or subsidiary organization.",
+        "status": "met",
+        "applicationSection": "Form 8 - Health Center Agreements",
+        "pageReferences": [
+          154
+        ],
+        "evidence": "* 1. Does your organization have a parent, affiliate, or subsidiary organization? [ ] Yes [X] No",
+        "explanation": "No parent, affiliate, or subsidiary organization is indicated.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.4.3.2 Contracts for Substantive Programmatic Work",
+        "requirement": "Indicate whether there are contracts for substantive programmatic work within the proposed scope of project.",
+        "status": "met",
+        "applicationSection": "Form 8 - Health Center Agreements",
+        "pageReferences": [
+          154
+        ],
+        "evidence": "a) Contract(s) with another organization to perform substantive programmatic work within the proposed scope of project? [ ] Yes [X] No\n2c. Total number of contracts for substantive programmatic work and/or subawards: 0",
+        "explanation": "No contracts for substantive programmatic work are indicated.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.4.4 Completing Form 12 - Organization Contacts",
+        "requirement": "Use Form 12 - Organization Contacts to provide contact information for the proposed project. New applicants must provide the requested contact information.",
+        "status": "met",
+        "applicationSection": "Form 12 - Organization Contacts",
+        "pageReferences": [
+          154
+        ],
+        "evidence": "Contact Information\nChief Executive Officer\nName\nHighest Degree\nEmail\nPhone Number\nChief Executive Officer\nMs. Emily Nichols\nMPH\nenichols@fpcn.com\n(267) 597-3604\nContact Person\nName\nChief Executive Officer\nMs. Emily Nichols\nHighest Degree\nMPH\nEmail\nenichols@fpcn.com\nPhone Number\n(267) 597-3604\nChief Medical Officer\nName\nHighest Degree\nEmail\nPhone Number\nChief Medical Officer\nDr. Jennifer Cohn\nM.D.\nJennifer.Cohn2@pennmedicine.upenn.edu\n(856) 305-7533\nDental Director\nName\nHighest Degree\nEmail\nPhone Number\nBehavioral Health Director\nName\nHighest Degree\nEmail\nPhone Number\nPage Number: 154",
+        "explanation": "Form 12 is present and all required contact information for CEO, Contact Person, and Chief Medical Officer is provided. Dental Director and Behavioral Health Director fields are present but not filled, which is acceptable if not applicable.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.5 Completing Other Information",
+        "requirement": "Complete the Summary Page, ensuring all required fields are filled, including Service Area Announcement Table (SAAT) identifying information, patient projections, site listings, and certifications.",
+        "status": "met",
+        "applicationSection": "Summary Page",
+        "pageReferences": [
+          156,
+          157,
+          158
+        ],
+        "evidence": "Service Area\n1. What is the Service Area Announcement Table (SAAT) identifying information for the service area that you are proposing to serve?\nService Area ID #: 154\nService Area City: Philadelphia\nState: Pennsylvania (PA)\n\nPatient Projection\n2. What is the total unduplicated patient projection for the assessment period?\n15617\n3. What is the Patient Target from the Service Area Announcement Table (SAAT) for the proposed service area?\n15617\n4. Percent of the service area Patient Target proposed to be served in the assessment period.\nNote: This value must be at least 75 percent for the application to be considered eligible for funding.\n5. [ X ] By checking this box, I acknowledge that HRSA will track progress toward meeting the total unduplicated patient projection (see item 2 above), which may include projections from other funded applications awarded within my period of performance.\n\nFederal Request for Health Center Program Funding\n6. I am requesting the following types of Health Center funding:\nFunding Type | Funding Requested\nCommunity Health Center - CHC-330(e) | $0.00\nMigratory and Seasonal Agricultural Workers - MSAW-330(g) | $0.00\nHomeless Population - HP-330(h) | $0.00\nResidents of Public Housing - RPH-330(i) | $4,341,273.00\nTotal | $4,341,273.00\n\nScope of Project: Sites and Services\n7. I am proposing the following site(s): (New applicants and competing supplement applicants only)\nSite Name | Site(s) | Site Physical Street Address | Service Site Type | Location Type | Service Area Zip Code(s)\nAbbottsford Falls Health Center | New Site | 4700 Wissahickon Ave, Suite 118, Philadelphia, PA 19144-4248 | Administrative/Service Delivery Site | Permanent | 19119, 19120, 19124, 19126, 19129, 19132, 19133, 19138, 19140, 19144, 19118, 19127, 19128, 19121, 19142, 19143, 19104\nHealth Annex | New Site | 6120-B Woodland Avenue FL 2, Philadelphia, PA 19142-3200 | Service Delivery Site | Permanent | 19050, 19131, 19153, 19082, 19023, 19139, 19079, 19151\nStephen and Sandra Sheller 11th St Family Health Services | New Site | 850 N 11th St, Philadelphia, PA 19123-1957 | Service Delivery Site | Permanent | 19123, 19132, 19124, 19125, 19121, 19133, 19134, 19122, 19140, 19143\nFPCSN at CB School | New Site | 4101 Freeland Ave, Philadelphia, PA 19128-3509 | Service Delivery Site | Seasonal | 19128, 19142, 19133, 19134, 19121, 19120, 19129, 19131, 19139, 19140, 19132, 19138, 19104, 19123, 19153, 19143, 19144, 19118, 19127, 19119, 19151, 19122, 19125, 19141, 19124\nFPCSN at Building 21 High School | New Site | 6501 Limekiln Pike, Philadelphia, PA 19138-3102 | Service Delivery Site | Seasonal | 19138, 19133, 19120, 19119, 19144, 19129, 19121, 19141, 19122, 19140, 19132, 19123\nFPCSN at Bartram High School | New Site | 2401 S 67th St, Philadelphia, PA 19142-2298 | Service Delivery Site | Seasonal | 19142, 19143, 19153\nFPCSN at Philadelphia High School for Girls | New Site | 1400 W Olney Ave, Philadelphia, PA 19141-2316 | Service Delivery Site | Seasonal | 19141\nFPCSN at Belmont Charter High School | New Site | 311 North 19th Street, Philadelphia, PA 19103 | Service Delivery Site | Seasonal | 19103, 19131, 19142, 19104, 19139, 19151, 19143, 19122, 19123, 19121\nFPCSN at Belmont Inquiry Charter School | New Site | 1301 Belmont Ave, Philadelphia, PA 19104-1044 | Service Delivery Site | Seasonal | 19131, 19142, 19104, 19139, 19151, 19143, 19122, 19123, 19121\n\n8. Sites Certification (New and competing supplement applicants only)\n[ X ] By checking this box, I certify that all sites described in my application are included on Form 5B L (as summarized above) and that all sites included on Form 5B L (as summarized above) will be open and operational within 120 days of release of the Notice of Award (NoA).\n\n11. 120 Day Compliance Achievement Plan Certification\n[ X ] By checking this box, I certify that if my organization is noncompliant with any Health Center Program requirements, in accordance with Section 330(e)(1)(B), I will submit for HRSA's approval within 120 days of release of the Notice of Award (NoA) a Compliance Achievement Plan to come into compliance. I acknowledge that areas of noncompliance will be documented through the carryover of any unresolved, existing condition(s) from the current period of performance and/or the placement of new condition(s) on the award based on the review of this application. I also acknowledge that all conditions on my award must be addressed within the timeframes and by the due dates specified on my Health Center Program NoA(s) and that the Compliance Achievement Plan I submit must align with such timelines.\n\n12. Uniform Data System (UDS) Report Certification\n[ X ] By checking this box, I certify that I have reviewed the UDS Resources, including the most recent UDS Manual and understand that my organization will be required to report data on patients, services, staffing, and financing annually. I also acknowledge that failure to submit a complete report by the specified deadline may result in conditions or restrictions being placed on the Health Center Program award.\n\n13. Applicants for HP and RPH Funding: Supplement and Not Supplant Certification (New and competing supplement applicants only)\n[ X ] By checking this box, I certify that my organization will use HP and/or RPH grant funding to supplement and not supplant, the expenditures of the health center and the value of in-kind contributions for the delivery of services to these populations.\nDescribe, with specific examples, how you will use the requested federal funds to add new or expand existing services to the homeless population and/or residents of public housing within your service area, as well as how this is an increase or expansion of the services your organization was providing previously for these populations. (maximum 1,000 characters)\nThe health center has been providing health care services to residents of public housing and the surrounding communities in the service area for 33 years. Because the previous awardee changed ownership and relinquished the grant on 6/30/25, the FPCSN health center has established a new non-profit corporation and is applying as a new applicant for the area it has served for many years. In order to limit disruption in services to its patients, FPCSN has been able to keep all main sites open while providing the required services. However, in the last twelve months, because of the upheaval and uncertainty of the separation from the awardee and loss of FQHC status, many providers and other staff have left to seek positions elsewhere. Therefore, the requested federal funds will be used to add clinical provider staff to expand existing services so FPCSN can serve more patients with the service area.",
+        "explanation": "The Summary Page is complete and includes all required fields: SAAT identifying information, patient projections, site listings, and all required certifications. All fields are filled with actual data, and the information is consistent with the rest of the application. No required fields are missing or left blank.",
+        "recommendation": "No action needed. All requirements are met."
+      },
+      {
+        "checklistSection": "3.5.1 Completing the Summary Page",
+        "requirement": "Ensure the Summary Page is fully completed, including all required certifications, patient projections, site listings, and funding requests. All fields must be filled with actual data.",
+        "status": "met",
+        "applicationSection": "Summary Page",
+        "pageReferences": [
+          156,
+          157,
+          158
+        ],
+        "evidence": "Service Area\n1. What is the Service Area Announcement Table (SAAT) identifying information for the service area that you are proposing to serve?\nService Area ID #: 154\nService Area City: Philadelphia\nState: Pennsylvania (PA)\n\nPatient Projection\n2. What is the total unduplicated patient projection for the assessment period?\n15617\n3. What is the Patient Target from the Service Area Announcement Table (SAAT) for the proposed service area?\n15617\n4. Percent of the service area Patient Target proposed to be served in the assessment period.\nNote: This value must be at least 75 percent for the application to be considered eligible for funding.\n5. [ X ] By checking this box, I acknowledge that HRSA will track progress toward meeting the total unduplicated patient projection (see item 2 above), which may include projections from other funded applications awarded within my period of performance.\n\nFederal Request for Health Center Program Funding\n6. I am requesting the following types of Health Center funding:\nFunding Type | Funding Requested\nCommunity Health Center - CHC-330(e) | $0.00\nMigratory and Seasonal Agricultural Workers - MSAW-330(g) | $0.00\nHomeless Population - HP-330(h) | $0.00\nResidents of Public Housing - RPH-330(i) | $4,341,273.00\nTotal | $4,341,273.00\n\nScope of Project: Sites and Services\n7. I am proposing the following site(s): (New applicants and competing supplement applicants only)\nSite Name | Site(s) | Site Physical Street Address | Service Site Type | Location Type | Service Area Zip Code(s)\nAbbottsford Falls Health Center | New Site | 4700 Wissahickon Ave, Suite 118, Philadelphia, PA 19144-4248 | Administrative/Service Delivery Site | Permanent | 19119, 19120, 19124, 19126, 19129, 19132, 19133, 19138, 19140, 19144, 19118, 19127, 19128, 19121, 19142, 19143, 19104\nHealth Annex | New Site | 6120-B Woodland Avenue FL 2, Philadelphia, PA 19142-3200 | Service Delivery Site | Permanent | 19050, 19131, 19153, 19082, 19023, 19139, 19079, 19151\nStephen and Sandra Sheller 11th St Family Health Services | New Site | 850 N 11th St, Philadelphia, PA 19123-1957 | Service Delivery Site | Permanent | 19123, 19132, 19124, 19125, 19121, 19133, 19134, 19122, 19140, 19143\nFPCSN at CB School | New Site | 4101 Freeland Ave, Philadelphia, PA 19128-3509 | Service Delivery Site | Seasonal | 19128, 19142, 19133, 19134, 19121, 19120, 19129, 19131, 19139, 19140, 19132, 19138, 19104, 19123, 19153, 19143, 19144, 19118, 19127, 19119, 19151, 19122, 19125, 19141, 19124\nFPCSN at Building 21 High School | New Site | 6501 Limekiln Pike, Philadelphia, PA 19138-3102 | Service Delivery Site | Seasonal | 19138, 19133, 19120, 19119, 19144, 19129, 19121, 19141, 19122, 19140, 19132, 19123\nFPCSN at Bartram High School | New Site | 2401 S 67th St, Philadelphia, PA 19142-2298 | Service Delivery Site | Seasonal | 19142, 19143, 19153\nFPCSN at Philadelphia High School for Girls | New Site | 1400 W Olney Ave, Philadelphia, PA 19141-2316 | Service Delivery Site | Seasonal | 19141\nFPCSN at Belmont Charter High School | New Site | 311 North 19th Street, Philadelphia, PA 19103 | Service Delivery Site | Seasonal | 19103, 19131, 19142, 19104, 19139, 19151, 19143, 19122, 19123, 19121\nFPCSN at Belmont Inquiry Charter School | New Site | 1301 Belmont Ave, Philadelphia, PA 19104-1044 | Service Delivery Site | Seasonal | 19131, 19142, 19104, 19139, 19151, 19143, 19122, 19123, 19121\n\n8. Sites Certification (New and competing supplement applicants only)\n[ X ] By checking this box, I certify that all sites described in my application are included on Form 5B L (as summarized above) and that all sites included on Form 5B L (as summarized above) will be open and operational within 120 days of release of the Notice of Award (NoA).\n\n11. 120 Day Compliance Achievement Plan Certification\n[ X ] By checking this box, I certify that if my organization is noncompliant with any Health Center Program requirements, in accordance with Section 330(e)(1)(B), I will submit for HRSA's approval within 120 days of release of the Notice of Award (NoA) a Compliance Achievement Plan to come into compliance. I acknowledge that areas of noncompliance will be documented through the carryover of any unresolved, existing condition(s) from the current period of performance and/or the placement of new condition(s) on the award based on the review of this application. I also acknowledge that all conditions on my award must be addressed within the timeframes and by the due dates specified on my Health Center Program NoA(s) and that the Compliance Achievement Plan I submit must align with such timelines.\n\n12. Uniform Data System (UDS) Report Certification\n[ X ] By checking this box, I certify that I have reviewed the UDS Resources, including the most recent UDS Manual and understand that my organization will be required to report data on patients, services, staffing, and financing annually. I also acknowledge that failure to submit a complete report by the specified deadline may result in conditions or restrictions being placed on the Health Center Program award.\n\n13. Applicants for HP and RPH Funding: Supplement and Not Supplant Certification (New and competing supplement applicants only)\n[ X ] By checking this box, I certify that my organization will use HP and/or RPH grant funding to supplement and not supplant, the expenditures of the health center and the value of in-kind contributions for the delivery of services to these populations.\nDescribe, with specific examples, how you will use the requested federal funds to add new or expand existing services to the homeless population and/or residents of public housing within your service area, as well as how this is an increase or expansion of the services your organization was providing previously for these populations. (maximum 1,000 characters)\nThe health center has been providing health care services to residents of public housing and the surrounding communities in the service area for 33 years. Because the previous awardee changed ownership and relinquished the grant on 6/30/25, the FPCSN health center has established a new non-profit corporation and is applying as a new applicant for the area it has served for many years. In order to limit disruption in services to its patients, FPCSN has been able to keep all main sites open while providing the required services. However, in the last twelve months, because of the upheaval and uncertainty of the separation from the awardee and loss of FQHC status, many providers and other staff have left to seek positions elsewhere. Therefore, the requested federal funds will be used to add clinical provider staff to expand existing services so FPCSN can serve more patients with the service area.",
+        "explanation": "All required fields on the Summary Page are present and filled with actual data. Certifications are checked, patient projections and site listings are complete, and funding requests are specified. The information is consistent with the rest of the application and no required fields are missing.",
+        "recommendation": "No action needed. All requirements are met."
+      },
+      {
+        "checklistSection": "2.1.1 Completing the SF-424 Part 1",
+        "requirement": "This form displays the basic application and applicant organization information.",
+        "status": "met",
+        "applicationSection": "Application for Federal Assistance (SF-424)",
+        "pageReferences": [
+          4
+        ],
+        "evidence": "Application for Federal Assistance SF-424\n* a. Legal Name\nFAMILY PRACTICE & COUNSELING SERVI\n* b. Employer/Taxpayer Identification Number (EIN/TIN):\n33-2957571\nd. Address:\n* Street1:\n4700 Wissahickon Avenue, Suite 118\n* City:\nPhiladelphia\n* State:\nPA\n* Country:\nUS: United States\n* Zip / Postal Code:\n19144-4252\n* Telephone Number:\n(267) 597-3604\n* Email:\nenichols@fpcn.com\n9. Type of Applicant 1:\nM: Nonprofit with 501C3\n* 10. Name of Federal Agency:\nN/A\n11. Catalog of Federal Domestic Assistance Number:\n93.224\nCFDA Title:\nCommunity Health Center\n* 12. Funding Opportunity Number:\nHRSA-26-004\n* Title:\nService Area Competition\n* First Name:\nEmily\n* Last Name:\nNichols\nTitle:\nChief Executive Officer",
+        "explanation": "All required basic application and applicant organization information is present and complete in the SF-424 form on Page 4.",
+        "recommendation": "",
+        "missingFields": []
+      },
+      {
+        "checklistSection": "2.1.2 Completing the SF-424 Part 2",
+        "requirement": "This form displays project information including the project title, period of performance, cities, counties, and Congressional districts affected by the project.",
+        "status": "met",
+        "applicationSection": "Application for Federal Assistance (SF-424)",
+        "pageReferences": [
+          5
+        ],
+        "evidence": "* 15. Descriptive Title of Applicant's Project:\nHealth Center Cluster\nProject Description:\nSee Attachment\n16. Congressional Districts Of:\n* a. Applicant\nPA-03\nAdditional Program/Project Congressional Districts:\nSee Attachment\n17. Proposed Project:\n* a. Start Date:\n4/1/2026\n18. Estimated Funding ($):\n* a. Federal\n$4,341,273.00\n* b. Applicant\n$0.00\n* c. State\n$125,000.00\n* d. Local\n$160,000.00\n* e. Other\n$218,000.00\n* f. Program Income\n$30,047,650.00\n* g. TOTAL\n$34,891,923.00",
+        "explanation": "Project title, period of performance, cities/counties, and Congressional districts are all present and complete in the SF-424 Part 2 on Page 5.",
+        "recommendation": "",
+        "missingFields": []
+      },
+      {
+        "checklistSection": "2.1.3 Completing the Project/Performance Site Location(s)",
+        "requirement": "In the Project/Performance Site Location(s), include at least one performance site that is marked as primary.",
+        "status": "met",
+        "applicationSection": "Project/Performance Site Location(s)",
+        "pageReferences": [
+          9,
+          10,
+          11
+        ],
+        "evidence": "Project/Performance Site Primary Location\nOrganization Name: Family Practice & Counseling Services Network, Inc.\n* Street1:\n4700 Wissahickon Avenue, Suite 118\n* City:\nPhiladelphia\n* State:\nPennsylvania\n* Country\nUnited States\n19144-4252\nProject/Performance Site Location\nOrganization Name:\n* Street1:\n850 N. 11th Street\n* City: Philadelphia\n* State:\nPennsylvania\n* Country\nUnited States\n19123-1957\nProject/Performance Site Location\nOrganization Name:\n* Street1:\n4101 Freeland Avenue\n* City:\nPhiladelphia\n* State:\nPennsylvania\n* Country United States\n19128-3509\n... (additional sites listed on pages 10-11)",
+        "explanation": "At least one performance site is included and marked as primary. Multiple sites are listed with full addresses and details.",
+        "recommendation": "",
+        "missingFields": []
+      },
+      {
+        "checklistSection": "2.1.4 Completing the Project Narrative",
+        "requirement": "In the Project Narrative form, attach the Project Narrative by clicking the Attach File button.",
+        "status": "met",
+        "applicationSection": "Project Narrative",
+        "pageReferences": [
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          125,
+          126,
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134
+        ],
+        "evidence": "Family Practice & Counseling Services Network\n2026 Service Area Competition Application\nIntroduction\nFamily Practice Counseling and Services Network, Inc. (FPCSN or the Network) is submitting\nthis Service Area Competition New application to continue health care services to residents of\npublic housing and surrounding underserved Philadelphia, Pennsylvania communities. ...\n(Full Project Narrative attached and present from pages 12 through 49 and 125 through 134)",
+        "explanation": "The Project Narrative is attached and present in the application, spanning the required pages. The narrative is complete and detailed.",
+        "recommendation": "",
+        "missingFields": []
+      },
+      {
+        "checklistSection": "2.2.1 Completing the Budget Information - Section A - C",
+        "requirement": "The Budget Information - Section A - C form consists of the following three sections:",
+        "status": "met",
+        "applicationSection": "SF-424A: Budget Information - Non-Construction Programs",
+        "pageReferences": [
+          5,
+          53
+        ],
+        "evidence": "* a. Start Date: 4/1/2026\n* a. Federal $4,341,273.00\n* b. Applicant $0.00\n* c. State $125,000.00\n* d. Local $160,000.00\n* e. Other $218,000.00\n* f. Program Income $30,047,650.00\n* g. TOTAL $34,891,923.00\n\nGrant Program Function or Activity | Applicant | State | Other Sources | TOTALS\nResidents of Public Housing | $0.00 | $125,000.00 | $30,425,650.00 | $30,550,650.00\nTotal | $0.00 | $125,000.00 | $30,425,650.00 | $30,550,650.00",
+        "explanation": "All required fields in Sections A-C of the SF-424A are completed with actual data. Federal, state, local, other, and program income amounts are provided. Totals are calculated and match across sections.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "2.2.2 Completing the Budget Information - Section D - F",
+        "requirement": "The Budget Information - Section D-F page consists of the following three sections:",
+        "status": "met",
+        "applicationSection": "SF-424A: Budget Information - Non-Construction Programs",
+        "pageReferences": [
+          54
+        ],
+        "evidence": "SECTION D - FORECASTED CASH NEEDS\nTotal for 1st Year | 1st Quarter | 2nd Quarter | 3rd Quarter | 4th Quarter\nFederal | $4,341,273.00 | $1,085,318.00 | $1,085,318.00 | $1,085,318.00 | $1,085,319.00\nNon-Federal | $0.00 | $0.00 | $0.00 | $0.00 | $0.00\nTotal | $4,341,273.00 | $1,085,318.00 | $1,085,318.00 | $1,085,318.00 | $1,085,319.00\n\nSECTION F - OTHER BUDGET INFORMATION\nDirect Charges | No information added.\nIndirect Charges | No information added.\nRemarks | No information added.",
+        "explanation": "Sections D-F are completed. Forecasted cash needs are provided for each quarter and the total for the first year. Section F notes 'No information added' for direct/indirect charges and remarks, which is acceptable if not applicable.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "2.2.3 Completing the Budget Narrative",
+        "requirement": "Attach the Budget Narrative by clicking the Attach File button. Once completed, click the Save and Continue button to proceed to the Disclosure of Lobbying Form.",
+        "status": "met",
+        "applicationSection": "7. Budget Narrative",
+        "pageReferences": [
+          54,
+          55,
+          56
+        ],
+        "evidence": "FAMILY PRACTICE & COUNSELING SERVICES NETWORK\nBUDGET NARRATIVE\n4/1/2026 - 3/31/2027\nREVENUE\nYear 1: Federal Request | Year 1: Non-Federal Resources | Year 1 Total\nApplicant (Retained Earnings) | $ -\nSAC Grant Request | $ 4,341,273 | $ 4,341,273\nOther Federal | $ 218,000 | $ 218,000\nState Grant | $ 125,000 | $ 125,000\nPrivate Grants/Contracts | $ 160,000 | $ 160,000\nContributions | $ -\n340B Revenue | $ 13,770,000 | $ 13,770,000\nProgram Income | $ 16,277,538 | $ 16,277,538\nTOTAL REVENUE | $ 4,341,273 | $ 30,550,538 | $ 34,891,811\n\nEXPENSES\nPERSONNEL\nYear 1: Federal Request | Year 1: Non-Federal Resources | Year 1 Total\nAdministration | $ - | $ 4,199,781 | $ 4,199,781\nMedical Staff | $ 2,435,443 | $ 1,413,971 | $ 3,849,413\nDental | $ - | $ 1,568,879 | $ 1,568,879\nBehavioral Health Services | $ 1,905,831 | $ 1,160,193 | $ 3,066,023\nEnabling | $ - | $ 1,194,328 | $ 1,194,328\nTOTAL PERSONNEL | $ 4,341,273 | $ 9,537,151 | $ 13,878,424\n\nFRINGE BENEFITS\nYear 1: Federal Request | Year 1: Non-Federal Resources | Year 1 Total\n- FICA @ 7.65% | $ - | $ 1,061,699 | $ 1,061,699\n- Medical @ 11.5% | $ - | $ 1,596,019 | $ 1,596,019\n- Dental @ 1% | $ - | $ 138,784 | $ 138,784\n- Unemployment and Workers Com 2.2% | $ - | $ 305,325 | $ 305,325\n- Disability 0.3% | $ - | $ 41,635 | $ 41,635\nTOTAL FRINGE BENEFITS | $ - | $ 3,143,463 | $ 3,143,463\n\nTRAVEL\nYear 1: Federal Request | Year 1: Non-Federal Resources | Year 1 Total\nStaff travel - includes travel to conferences, seminars and other educational programs; also includes travel to community events and other outreach opportunities. Based on historical trends. | $ 35,000 | $ 35,000\nPatient Travel | $ 13,200 | $ 13,200\nTOTAL TRAVEL | $ - | $ 48,200 | $ 48,200\n\nEQUIPMENT\nYear 1: Federal Request | Year 1: Non-Federal Resources | Year 1 Total\nTOTAL EQUIPMENT | $ - | $ - | $ -\n\nSUPPLIES\nYear 1: Federal Request | Year 1: Non-Federal Resources | Year 1 Total\nMedical Supplies ($3/visit) | $ 123,255 | $ 123,255\nDental Supplies ($17/visit) | $ 139,536 | $ 139,536\nPharmaceuticals | $ 9,914,400 | $ 9,914,400\nOffice Supplies ($5/visit) | $ 404,030 | $ 404,030\nPatient Education/Promotional Materials ($2/visit) | $ 161,612 | $ 161,612\nTOTAL SUPPLIES | $ - | $ 10,742,833 | $ 10,742,833\n\n(Additional details for Contractual, Other, and Indirect Costs are also included in the Budget Narrative on pages 55-56.)",
+        "explanation": "The Budget Narrative is attached and provides detailed breakdowns of revenue, personnel, fringe benefits, travel, equipment, supplies, contractual, and other costs. All required narrative elements are present.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "2.3.1 Completing the Disclosure of Lobbying Activities",
+        "requirement": "Provide all information on the Disclosure of Lobbying Activities form, then click the Save and Continue button to proceed to the Appendices form. If \"No\" is selected in the Certification Regarding Lobbying section, you do not need to complete the remainder of the form. Click the Save and Continue button.",
+        "status": "met",
+        "applicationSection": "8. SF-LLL Disclosure of Lobbying Activities",
+        "pageReferences": [
+          2
+        ],
+        "evidence": "Section 8. SF-LLL Disclosure of Lobbying Activities (Attachment 8 - FPCSN Summary of Contracts-Agreements.pdf)\n\nNo lobbying activities are disclosed in the application. The application includes the required SF-LLL Disclosure of Lobbying Activities section in the Table of Contents (Page 2).",
+        "explanation": "The application includes the SF-LLL Disclosure of Lobbying Activities section as required. There is no indication of lobbying activities, and the section is present in the Table of Contents. This meets the requirement.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "2.3.2 Completing the Appendices",
+        "requirement": "Upload the following attachments, as applicable by application type, by clicking the associated Attach File button for each. After completing the Appendices form, click the Save and Continue button to proceed to the Program Specific Information - Status Overview page. The list of attachments noting requirements by application type is listed below:",
+        "status": "met",
+        "applicationSection": "Attachments 1-13 (see Table of Contents)",
+        "pageReferences": [
+          2,
+          3
+        ],
+        "evidence": "Table Of Contents (Page 2-3):\n9. Attachment 1: Service Area Map and Table (Attachment 1 - FPCSN Map Document.pdf)\n10. Attachment 2: Bylaws (Attachment 2 - FPCSN Board Bylaws signed.pdf)\n11. Attachment 3: Project Organizational Chart (Attachment 3 - FPCSN Organization Chart.pdf)\n12. Attachment 4: Position Descriptions for Key Management Staff (Attachment 4 - FPCSN Management Job Descriptions.pdf)\n13. Attachment 5: Biographical Sketches for Key Management Staff (Attachment 5 - FPCSN Management Biosketches.pdf)\n14. Attachment 7: Summary of Contracts and Agreements (Attachment 7 - FPCSN Summary of Contracts-Agreements.pdf)\n15. Attachment 8: Articles of Incorporation (as applicable) (Attachment 8 - FPCSN Engrossed Articles of Incorporation.pdf)\n16. Attachment 9: Collaboration Documentation (Attachment 9 - FPCSN Support Letters.pdf)\n17. Attachment 10: Sliding Fee Discount Schedule(s) (Attachment 10 - FPCSN Sliding Scale 2025.pdf)\n18. Attachment 11: Evidence of Nonprofit, Public Agency, or Tribal or Urban Indian Organization Status (as applicable) (Attachment 11 - FPCSN Non-Profit IRS Letter.pdf)\n19. Attachment 12: Operational Plan (Attachment 12 - FPCSN Operational Plan.pdf)\n20. Attachment 13: Health Center Program Requirements Compliance (Attachment 13 - FPCSN Compliance.pdf)",
+        "explanation": "All required appendices and attachments are listed in the Table of Contents and are referenced as uploaded. This meets the requirement for uploading the required appendices.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.2.2.1 Completing the Payer Categories Section.",
+        "requirement": "The Payer Category section has the following parts: · Part 1: Patient Service Revenue - Program Income · Part 2: Other Income - Other Federal, State, Local, and Other Income. To complete the Payer Category section, follow the steps below:",
+        "status": "met",
+        "applicationSection": "Form 3 - Income Analysis",
+        "pageReferences": [
+          142
+        ],
+        "evidence": "Payer Category | Patients By Primary Medical Insurance (a) | Billable Visits (b) | Income Per Visit (c) | Projected Income (d) | Prior FY Income (e)\n1. Medicaid | 7,206 | 50,442 | $275.80 | $13,911,903.60 | $15,223,241.00\n2. Medicare | 795 | 5,562 | $161.22 | $896,705.64 | $1,203,493.00\n3. Other Public | 0 | 0 | $0.00 | $0.00 | $0.00\n4. Private | 3,151 | 12,604 | $73.72 | $929,166.88 | $1,149,427.00\n5. Self Pay | 4,465 | 12,198 | $44.25 | $539,761.50 | $466,351.00\n6. Total (Lines 1 to 5) | 15617 | 80806 | N/A | $16,277,537.62 | $18,042,512.00\n7. Other Federal | N/A | N/A | N/A | $218,000.00 | $307,077.00\n8. State Government | N/A | N/A | N/A | $125,000.00 | $160,408.00\n9. Local Government | N/A | N/A | N/A | $0.00 | $0.00\n10. Private Grants/Contracts | N/A | N/A | N/A | $160,000.00 | $123,320.00\n11. Contributions | N/A | N/A | N/A | $0.00 | $0.00\n12. Other | N/A | N/A | N/A | $13,770,000.00 | $11,937,027.00\n13. Applicant (Retained Earnings) | N/A | N/A | N/A | $0.00 | $0.00\n14. Total Other (Lines 7 to 13) | N/A | N/A | N/A | $14,273,000.00 | $12,527,832.00\n15. Total Non-Federal (Lines 6+14) | N/A | N/A | N/A | $30,550,537.62 | $30,570,344.00",
+        "explanation": "Both Part 1 (Patient Service Revenue - Program Income) and Part 2 (Other Income) are fully completed with all required fields for all payer categories.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.1.1 Completing Form 5A in a Competing Continuation Application",
+        "requirement": "If your organization is submitting a competing continuation application, Form 5A: Services Provided is pre-populated with the services in your current Health Center Program scope that HRSA has on file for your organization and is non-editable.",
+        "status": "not_applicable",
+        "applicationSection": "Form 5A",
+        "pageReferences": [
+          142
+        ],
+        "evidence": "",
+        "explanation": "This section applies only to competing continuation applications. The current application is a New application.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.1.2 Completing Form 5A: Required Services Section.",
+        "requirement": "Complete the Required Services section of Form 5A. For competing continuation applicants, this section is read-only and should reflect current approved scope.",
+        "status": "met",
+        "applicationSection": "Form 5A - Required Services Provided",
+        "pageReferences": [
+          142,
+          143
+        ],
+        "evidence": "Service Type | Column I - Direct (Health Center Pays) | Column II - Formal Written Contract/Agreement (Health Center Pays) | Column III - Formal Written Referral Arrangement (Health Center DOES NOT Pay)\nGeneral Primary Medical Care | [X]\n:selected: | [X]\n:selected: | [_]\n:unselected:\nDiagnostic Laboratory | [X]\n:selected: | [X]\n:selected: | [X]\n:selected:\nDiagnostic Radiology | [_]\n:unselected: | [_]\n:unselected: | [X]\n:selected:\nScreenings | [X]\n:selected: | [X]\n:selected: | [_]\n:unselected:\nCoverage for Emergencies During and After Hours | [X]\n:selected: | [X]\n:selected: | [X]\n:selected:\nVoluntary Family Planning | [X]\n:selected: | [X]\n:selected: | [_]\n:unselected:\nImmunizations | [X]\n:selected: | [_]\n:unselected: | [_]\n:unselected:\nWell Child Services | [X]\n:selected: | [_]\n:unselected: | [_]\n:unselected:\nGynecological Care | [X]\n:selected: | [X]\n:selected: | [_]\n:unselected:\nObstetrical Care | | | \nPrenatal Care | [X]\n:selected: | [X]\n:selected: | [_]\n:unselected:\nIntrapartum Care (Labor & Delivery) | [_]\n:unselected: | [X]\n:selected: | [_]\n:unselected:\nPostpartum Care | [X]\n:selected: | [X]\n:selected: | [_]\n:unselected:\nPreventive Dental | [X]\n:selected: | [_]\n:unselected: | [_]\n:unselected:\nPharmaceutical Services | [X]\n:selected: | [X]\n:selected: | [_]\n:unselected:\nHP Required Substance Use Disorder Services | [_]\n:unselected: | [_]\n:unselected: | [_]\n:unselected:\nCase Management | [X]\n:selected: | [_]\n:unselected: | [_]\n:unselected:\nEligibility Assistance | [X]\n:selected: | [X]\n:selected: | [_]\n:unselected:\nHealth Education | [X]\n:selected: | [X]\n:selected: | [_]\n:unselected:\nOutreach | [X]\n:selected: | [_]\n:unselected: | [_]\n:unselected:\nTransportation | [_]\n:unselected: | [X]\n:selected: | [_]\n:unselected:\nTranslation | [X]\n:selected: | [X]\n:selected: | [_]\n:unselected:",
+        "explanation": "All required services are indicated as provided either directly, by contract, or by referral, as appropriate. Checkboxes are filled as required.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.1.3 Completing Form 5A: Additional Services Section",
+        "requirement": "Complete the Additional Services section of Form 5A. For competing continuation applicants, this section is read-only and should reflect current approved scope.",
+        "status": "met",
+        "applicationSection": "Form 5A - Additional Services Provided",
+        "pageReferences": [
+          143,
+          144
+        ],
+        "evidence": "Service Type | Column I - Direct (Health Center Pays) | Column II - Formal Written Contract/Agreement (Health Center Pays) | Column III - Formal Written Referral Arrangement (Health Center DOES NOT Pay)\nAdditional Dental Services | [X]\n:selected: | [_]\n:unselected: | [_]\n:unselected:\nBehavioral Health Services | | | \nMental Health Services | [X]\n:selected: | [X]\n:selected: | [_]\n:unselected:\nSubstance Use Disorder Services | [X]\n:selected: | [_]\n:unselected: | [_]\n:unselected:\nOptometry | [_]\n:unselected: | [_]\n:unselected: | [_]\n:unselected:\nRecuperative Care Program Services | [_]\n:unselected: | [_]\n:unselected: | [_]\n:unselected:\nEnvironmental Health Services | [_]\n:unselected: | [_]\n:unselected: | [_]\n:unselected:\nOccupational Therapy | [_]\n:unselected: | [_]\n:unselected: | [_]\n:unselected:\nPhysical Therapy | [_]\n:unselected: | [_]\n:unselected: | [X]\n:selected:\nSpeech-Language Pathology/Therapy | [_]\n:unselected: | [_]\n:unselected: | [_]\n:unselected:\nNutrition | [X]\n:selected: | [_]\n:unselected: | [_]\n:unselected:\nComplementary and Alternative Medicine | [X]\n:selected: | [_]\n:unselected: | [_]\n:unselected:\nAdditional Enabling/Supportive Services | [_]\n:unselected: | [_]\n:unselected: | [_]\n:unselected:",
+        "explanation": "All additional services are indicated as provided either directly, by contract, or by referral, as appropriate. Checkboxes are filled as required.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.1.4 Completing Form 5A: Specialty Services Section",
+        "requirement": "Complete the Specialty Services section of Form 5A. For competing continuation applicants, this section is read-only and should reflect current approved scope.",
+        "status": "met",
+        "applicationSection": "Form 5A - Specialty Services Provided",
+        "pageReferences": [
+          144,
+          145
+        ],
+        "evidence": "Service Type | Column I - Direct (Health Center Pays) | Column II - Formal Written Contract/Agreement (Health Center Pays) | Column III - Formal Written Referral Arrangement (Health Center DOES NOT Pay)\nNo services added.",
+        "explanation": "No specialty services are proposed, as allowed for a New application. The section is complete.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.1.5 Completing Form 5A in New or Competing Supplement Application",
+        "requirement": "If your organization is submitting either a new or competing supplement application, propose one or more service delivery methods for the following sections listed on this form:",
+        "status": "met",
+        "applicationSection": "Form 5A - Required Services Provided, Form 5A - Additional Services Provided",
+        "pageReferences": [
+          142,
+          143,
+          144
+        ],
+        "evidence": "See above for full Form 5A Required and Additional Services tables.",
+        "explanation": "Service delivery methods (direct, contract, referral) are proposed for all required and additional services as required for a New application.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.1.6 Completing Form 5A: Specialty Services Section",
+        "requirement": "New and competing supplement applicants cannot propose service delivery methods for specialty services in the SAC/SAC-AA application. You will see the message depicted in (Figure 24) when you access the Specialty Services section of Form 5A. Click the Continue button (Figure 24, 1) of this section to proceed to Form 5B: Service Sites.",
+        "status": "met",
+        "applicationSection": "Form 5A - Specialty Services Provided",
+        "pageReferences": [
+          144,
+          145
+        ],
+        "evidence": "Service Type | Column I - Direct (Health Center Pays) | Column II - Formal Written Contract/Agreement (Health Center Pays) | Column III - Formal Written Referral Arrangement (Health Center DOES NOT Pay)\nNo services added.",
+        "explanation": "No specialty services are proposed, as required for a New application. The section is complete.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.2.1 Completing Form 5B in a Competing Continuation Application.",
+        "requirement": "If you are submitting a competing continuation application, Form 5B is pre-populated with the sites in your current Health Center Program scope that HRSA has on file for your organization and is un-editable.",
+        "status": "not_applicable",
+        "applicationSection": "Form 5B",
+        "pageReferences": [
+          146
+        ],
+        "evidence": "",
+        "explanation": "This section applies only to competing continuation applications. The current application is a New application.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.2.2 Complete Form 5B in a New or Competing Supplement",
+        "requirement": "If you are submitting a new or competing supplement application, you are required to propose at least one new Service Delivery or an Administrative/Service Delivery site that is not included in your current Scope.",
+        "status": "met",
+        "applicationSection": "Form 5B - Service Sites",
+        "pageReferences": [
+          146,
+          147,
+          148,
+          149
+        ],
+        "evidence": "See above for full Form 5B Service Sites table.",
+        "explanation": "Multiple new service delivery and administrative/service delivery sites are proposed as required for a New application.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.2.3 Propose a New Site in a New or Competing Supplement.",
+        "requirement": "To propose a new site, follow the steps below: a. Click the Add New Site button (Figure 26, 1) provided above the Proposed Sites section. The system navigates to the Service Site Checklist page. b. Answer the questions displayed on the Services Site Checklist page.",
+        "status": "met",
+        "applicationSection": "Form 5B - Service Sites",
+        "pageReferences": [
+          146,
+          147,
+          148,
+          149
+        ],
+        "evidence": "See above for full Form 5B Service Sites table.",
+        "explanation": "New sites are proposed and all required information is provided for each site.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.3.2.4 Select a Site from Scope (Competing Supplement Applicants)",
+        "requirement": "If you are a competing supplement applicant, after adding a new service delivery site or admin/service delivery site not in your current Health Center Program scope on file with HRSA for your organization, you will also be able to pick sites from your current Health Center Program scope.",
+        "status": "not_applicable",
+        "applicationSection": "Form 5B",
+        "pageReferences": [
+          146
+        ],
+        "evidence": "",
+        "explanation": "This section applies only to competing supplement applicants. The current application is a New application.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.4.2.1 Completing Form 6B When It is Not Applicable",
+        "requirement": "Form 6B is not applicable and you will only see the message depicted if any of these reasons are true: You selected 'Tribal' or 'Urban Indian' as the Business Entity in Form 1A, or you are currently receiving Community Health Center (CHC) funding, or you selected CHC as one of the subprograms in the Budget Information: Section A - Budget Summary form of this application.",
+        "status": "not_applicable",
+        "applicationSection": "Form 6B - Request for Waiver of Board Member Requirements",
+        "pageReferences": [
+          152,
+          153
+        ],
+        "evidence": "Are you requesting a new waiver of the 51% patient majority governance requirement?\n[ ] Yes [X] No\n2a. Do you currently have a waiver of the 51% patient majority governance requirement?\n[ ] Yes [X] No",
+        "explanation": "Form 6B is not applicable because the applicant is not requesting a waiver and does not meet the criteria for requiring Form 6B as per the checklist.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.4.2.2 Completing Form 6B When it is Applicable",
+        "requirement": "Form 6B is only required if you have selected 'Private, non-profit (non-Tribal or Urban Indian)' or 'Public (non-Tribal or Urban Indian)' as the Business Entity in Form 1A, OR you are currently receiving Migratory and Seasonal Agricultural Workers, Homeless Populations, or Residents of Public Housing funding, or if you selected MSAW, HP, or RPH as one of the subprograms in the Budget Information: Section A - Budget Summary form of this application.",
+        "status": "met",
+        "applicationSection": "Form 6B - Request for Waiver of Board Member Requirements",
+        "pageReferences": [
+          152,
+          153
+        ],
+        "evidence": "Are you requesting a new waiver of the 51% patient majority governance requirement?\n[ ] Yes [X] No\n2a. Do you currently have a waiver of the 51% patient majority governance requirement?\n[ ] Yes [X] No",
+        "explanation": "Form 6B is present and completed. The applicant is a private, non-profit and is applying for RPH funding, but is not requesting a waiver. All required fields are appropriately marked.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.4.3.1 Completing Part I of Form 8",
+        "requirement": "In Part I, question 1, select 'Yes' if your organization has a parent, affiliate, or subsidiary organization. In question 2, select 'Yes' if you will utilize any current or planned contracts with another organization to perform substantive programmatic work or a sub-award to carry out a portion of your organization's approved scope of the project.",
+        "status": "met",
+        "applicationSection": "Form 8 - Health Center Agreements",
+        "pageReferences": [
+          153,
+          154
+        ],
+        "evidence": "PART I: Health Center Agreements\n* 1. Does your organization have a parent, affiliate, or subsidiary organization?\n[ ] Yes [X] No\n1a. Number of Parent Organizations\n1b. Number of Affiliate Organizations\n1c. Number of Subsidiary Organizations\nTotal Number of Parent, Affiliate, or Subsidiary Organizations\n0\n2. Do you currently have, or plan to utilize:\na) Contract(s) with another organization to perform substantive programmatic work within the proposed scope of project?\n[ ] Yes [X] No\nOr\nb) Subawards to carry out a portion of the proposed scope of project.\n2a. Number of contracts with another organization to perform substantive programmatic work within the proposed scope of project.\n2b. Number of subawards made to subrecipients to carry out a portion of the proposed scope of project.\n2c. Total number of contracts for substantive programmatic work and/or subawards.\n0\nPage Number: 153",
+        "explanation": "Part I of Form 8 is complete. The applicant has correctly indicated 'No' for both parent/affiliate/subsidiary organizations and for contracts/subawards.",
+        "recommendation": ""
+      },
+      {
+        "checklistSection": "3.4.3.2 Completing Part II of Form 8 - Adding Organization Agreement Details",
+        "requirement": "If you answer 'Yes' to questions 1 and/or 2 in Part II, provide each agreement with external organizations as noted in Part I. If you select 'No' in questions 1 and 2, Part II is Not Applicable.",
+        "status": "not_applicable",
+        "applicationSection": "Form 8 - Health Center Agreements",
+        "pageReferences": [
+          153,
+          154
+        ],
+        "evidence": "If Yes, indicate the number of each agreement by type in 2a and/or 2b below and complete Part II. If No, Part II is Not Applicable.\n2a. Number of contracts with another organization to perform substantive programmatic work within the proposed scope of project.\n2b. Number of subawards made to subrecipients to carry out a portion of the proposed scope of project.\n2c. Total number of contracts for substantive programmatic work and/or subawards.\n0",
+        "explanation": "Part II is not applicable because the applicant answered 'No' to both questions 1 and 2 in Part I.",
+        "recommendation": ""
+      }
+    ],
+    "criticalIssues": [],
+    "recommendations": [
+      "Cross-verify patient projections with SAAT data to confirm compliance with the 75% threshold."
+    ]
+  },
+  "checklistComparison": {
+    "standard": {
+      "success": true,
+      "summary": {
+        "totalQuestions": 3,
+        "matchCount": 1,
+        "disagreeCount": 1,
+        "uncertainCount": 1,
+        "agreementRate": 33
+      },
+      "metadata": {
+        "Announcement Name": "Service Area Competition",
+        "Grant (#)": "N/A",
+        "Announcement (#)": "HRSA-26-004",
+        "Funding Cycle Code": "9856",
+        "Completion Status": "Complete",
+        "Program Specific Recommendation": "Eligible",
+        "Name": "Ashley Vigil",
+        "Date": "11/13/2025 10:04:03 AM",
+        "Recommendation": "Eligible",
+        "gmsRecommendation": {
+          "Name": "Joi, Grymes-Johnson Justification:",
+          "Date": "11/13/2025 10:38:53 AM",
+          "Recommendation": "Eligible",
+          "Justification": ""
+        }
+      },
+      "results": [
+        {
+          "questionNumber": 1,
+          "question": "Does the application contain all required attachments listed in the guidance?",
+          "userAnswer": "Yes",
+          "aiAnswer": "No",
+          "match": "disagree",
+          "confidence": "high",
+          "evidence": "The application contains most required attachments and forms, but Attachment 6 (Co-Applicant Agreement, as applicable) is missing from the list of included attachments. All other attachments (1-5, 7-13) and required forms (SF-424, Project Narrative, Budget, Forms 1A-8, etc.) are present.",
+          "pageReferences": [
+            1,
+            2,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33
+          ],
+          "reasoning": "The Table of Contents and section headers confirm the presence of all required attachments except Attachment 6. There is no section or file listed for Attachment 6, which is required if applicable. The application does not indicate that a co-applicant agreement is not applicable, so its absence must be noted.",
+          "details": "Attachments found: 1 (Service Area Map), 2 (Bylaws), 3 (Org Chart), 4 (Position Descriptions), 5 (Biosketches), 7 (Contracts/Agreements), 8 (Articles of Incorporation), 9 (Collaboration), 10 (Sliding Fee), 11 (Nonprofit Status), 12 (Operational Plan), 13 (Compliance). Attachment 6 is missing. All required forms (SF-424, Project Narrative, Budget, Forms 1A-8, etc.) are present."
+        },
+        {
+          "questionNumber": 2,
+          "question": "Is the applicant an eligible entity as mentioned in the guidance (e.g. non-profit, governmental unit)?",
+          "userAnswer": "Yes",
+          "aiAnswer": "Yes",
+          "match": "agree",
+          "confidence": "high",
+          "evidence": "The SF-424 (Section 1, page 2) and Attachment 11 (FPCSN Non-Profit IRS Letter) confirm the applicant is a nonprofit with 501(c)(3) status. The Entity Details table (page 94) lists the entity type as 'Domestic Nonprofit Corporation' and status as 'Active.'",
+          "pageReferences": [
+            2,
+            18,
+            94
+          ],
+          "reasoning": "The applicant is clearly identified as a nonprofit organization with 501(c)(3) status, which is an eligible entity type per HRSA guidance.",
+          "details": "Entity type: Nonprofit with 501(c)(3) status. Evidence: SF-424, Attachment 11 (IRS Letter), Entity Details table."
+        },
+        {
+          "questionNumber": 3,
+          "question": "Other comments",
+          "userAnswer": "Not determined",
+          "aiAnswer": "N/A",
+          "match": "uncertain",
+          "confidence": "high",
+          "evidence": "No major issues or unusual observations noted in the application sections provided. The only notable issue is the missing Attachment 6, which may not be applicable but is not explicitly addressed.",
+          "pageReferences": [],
+          "reasoning": "No other comments are warranted based on the evidence provided. The application is otherwise complete and well-organized.",
+          "details": "No additional comments. Only issue is missing Attachment 6."
+        }
+      ]
+    },
+    "programSpecific": {
+      "success": true,
+      "summary": {
+        "totalQuestions": 13,
+        "matchCount": 8,
+        "disagreeCount": 0,
+        "uncertainCount": 5,
+        "agreementRate": 62
+      },
+      "results": [
+        {
+          "questionNumber": 1,
+          "question": "Did the applicant include a Project Narrative?",
+          "userAnswer": "Yes",
+          "aiAnswer": "Yes",
+          "match": "agree",
+          "confidence": "high",
+          "evidence": "Section 5 is labeled 'Project Narrative', indicating inclusion of the required narrative.",
+          "pageReferences": [
+            5
+          ],
+          "reasoning": "The table of contents and section listing confirm the presence of a Project Narrative."
+        },
+        {
+          "questionNumber": 2,
+          "question": "Public Agencies: Does the application include Attachment 6: Co-Applicant Agreement?",
+          "userAnswer": "N/A",
+          "aiAnswer": "N/A",
+          "match": "agree",
+          "confidence": "high",
+          "evidence": "Applicant is a nonprofit with 501(c)(3) status, not a public agency. Section 9 of SF-424 lists 'M: Nonprofit with 501C3'.",
+          "pageReferences": [
+            8
+          ],
+          "reasoning": "Attachment 6: Co-Applicant Agreement is only required for public agencies, which does not apply here."
+        },
+        {
+          "questionNumber": 3,
+          "question": "New applicant: Does the application include Attachment 11: Evidence of Nonprofit or Public Agency Status?",
+          "userAnswer": "Yes",
+          "aiAnswer": "Yes",
+          "match": "agree",
+          "confidence": "high",
+          "evidence": "Section 18 is titled 'Attachment 11: Evidence of Nonprofit, Public Agency, or Tribal or Urban Indian Organization Status (as applicable)' and includes 'Attachment 11 - FPCSN Non-Profit IRS Letter.pdf'.",
+          "pageReferences": [
+            18
+          ],
+          "reasoning": "The required evidence of nonprofit status is included as Attachment 11."
+        },
+        {
+          "questionNumber": 4,
+          "question": "New and Competing Supplement applicants: Does the application include Attachment 12: Operational Plan?",
+          "userAnswer": "Yes",
+          "aiAnswer": "Yes",
+          "match": "agree",
+          "confidence": "high",
+          "evidence": "Section 19 is titled 'Attachment 12: Operational Plan (Attachment 12 - FPCSN Operational Plan.pdf)'.",
+          "pageReferences": [
+            19
+          ],
+          "reasoning": "The application includes the required Operational Plan as Attachment 12."
+        },
+        {
+          "questionNumber": 6,
+          "question": "Does the applicant propose to perform a substantive role in the project (i.e., does not apply on behalf of another organization)?",
+          "userAnswer": "Yes",
+          "aiAnswer": "Yes",
+          "match": "agree",
+          "confidence": "high",
+          "evidence": "The Project Narrative and organizational documents (e.g., bylaws, org chart, management bios) indicate the applicant is directly managing and operating the health center.",
+          "pageReferences": [
+            5,
+            10,
+            11,
+            13
+          ],
+          "reasoning": "Applicant is not applying on behalf of another organization and is performing a substantive role."
+        },
+        {
+          "questionNumber": 8,
+          "question": "Does the applicant propose to make General Primary Medical Care available directly (Column I) and/or through formal written contractual agreements in which the health center pays for the service (Column II)?",
+          "userAnswer": "Yes",
+          "aiAnswer": "Yes",
+          "match": "agree",
+          "confidence": "high",
+          "evidence": "Form 5A (Section 25) is included, which details required services and their provision method. Budget narrative and contracts summary (Attachment 7) also support direct and contractual service provision.",
+          "pageReferences": [
+            25,
+            14
+          ],
+          "reasoning": "Presence of Form 5A and contracts summary indicates general primary medical care is provided directly and/or via formal contracts."
+        },
+        {
+          "questionNumber": 10,
+          "question": "Does the applicant propose a service area announced under this NOFO number? If the answer to Question 10 is \"No\", select \"N/A\" for Questions 11 through 15.",
+          "userAnswer": "Yes",
+          "aiAnswer": "Yes",
+          "match": "agree",
+          "confidence": "high",
+          "evidence": "Project Abstract and SF-424 indicate the application is for Service Area Competition (SAC) under NOFO HRSA-26-004, referencing SAAT ID #154 for Philadelphia, PA.",
+          "pageReferences": [
+            2,
+            12
+          ],
+          "reasoning": "Applicant proposes to serve a service area announced under this NOFO."
+        },
+        {
+          "questionNumber": 11,
+          "question": "Is the total number of unduplicated patients projected to be served in the assessment period on Form 1A at least 75 percent of the SAAT Patient Target? | Form 1A: General Information Worksheet[\"",
+          "userAnswer": "Yes",
+          "aiAnswer": "Unable to determine",
+          "match": "uncertain",
+          "confidence": "low",
+          "evidence": "Form 1A: General Information Worksheet is listed (Section 21), but the specific patient projection numbers and SAAT Patient Target are not provided in the evidence.",
+          "pageReferences": [
+            21
+          ],
+          "reasoning": "Without the actual patient projection numbers and SAAT Patient Target, compliance cannot be confirmed."
+        },
+        {
+          "questionNumber": 12,
+          "question": "Does the applicant propose to serve patients for each Service Type listed in the SAAT?",
+          "userAnswer": "Yes",
+          "aiAnswer": "Unable to determine",
+          "match": "uncertain",
+          "confidence": "low",
+          "evidence": "Form 5A is included (Section 25), but the specific Service Types listed in the SAAT and the applicant's proposed services are not detailed in the evidence.",
+          "pageReferences": [
+            25
+          ],
+          "reasoning": "Cannot confirm alignment with all SAAT Service Types without more detailed data."
+        },
+        {
+          "questionNumber": 13,
+          "question": "Does the applicant request annual SAC funding that does NOT exceed the SAAT Total Funding for the service area? | Budget Narrative[? | SAATE\"",
+          "userAnswer": "Yes",
+          "aiAnswer": "Unable to determine",
+          "match": "uncertain",
+          "confidence": "low",
+          "evidence": "Budget Narrative and SF-424A show a federal funding request of $4,341,273, but the SAAT Total Funding for the service area is not provided.",
+          "pageReferences": [
+            7,
+            6
+          ],
+          "reasoning": "Cannot confirm if the request exceeds the SAAT Total Funding without the SAAT value."
+        },
+        {
+          "questionNumber": 14,
+          "question": "Does the applicant maintain the current funding distribution (i.e., CHC, MSAW, HP, RPH) from the SAAT?",
+          "userAnswer": "No",
+          "aiAnswer": "Unable to determine",
+          "match": "uncertain",
+          "confidence": "low",
+          "evidence": "Funding distribution by CHC, MSAW, HP, RPH is not detailed in the evidence provided.",
+          "pageReferences": [
+            7,
+            6
+          ],
+          "reasoning": "No breakdown of funding distribution is available to assess maintenance of current distribution."
+        },
+        {
+          "questionNumber": 15,
+          "question": "Does the applicant propose to serve patients for each population type listed in the SAAT? | SAAT[\" | Form 1A: General Information Worksheet[\"",
+          "userAnswer": "Yes",
+          "aiAnswer": "Unable to determine",
+          "match": "uncertain",
+          "confidence": "low",
+          "evidence": "Form 1A is included (Section 21), but the specific population types listed in the SAAT and the applicant's projections for each are not shown.",
+          "pageReferences": [
+            21
+          ],
+          "reasoning": "Cannot confirm service to all required population types without more detailed data."
+        },
+        {
+          "questionNumber": 16,
+          "question": "New or competing supplement applicant: For Form 5B: Service Sites, does the applicant include:",
+          "userAnswer": "Yes",
+          "aiAnswer": "Yes",
+          "match": "agree",
+          "confidence": "high",
+          "evidence": "Form 5B: Service Sites is included as Section 28.",
+          "pageReferences": [
+            28
+          ],
+          "reasoning": "Form 5B is present, indicating service site information is provided."
+        }
+      ]
+    }
+  },
+  "usage": {
+    "promptTokens": 1488578,
+    "completionTokens": 37577,
+    "totalTokens": 1526155
+  },
+  "metadata": {
+    "model": "chunked-processing",
+    "comparedAt": "2026-02-12T19:10:14.243Z",
+    "chunksProcessed": 10,
+    "totalSections": 62,
+    "rawSections": 93,
+    "duplicatesRemoved": 31,
+    "checklistName": "FY26 SAC Application User Guide_Approved.pdf",
+    "selectedSections": [
+      {
+        "checklistId": "checklist_8d3fbcd88ba9",
+        "checklistName": "FY26 SAC Application User Guide_Approved.pdf",
+        "sectionId": "section_1",
+        "sectionTitle": "1. Starting the FY 2026 SAC/SAC-AA Application",
+        "pageNumber": 2
+      },
+      {
+        "checklistId": "checklist_8d3fbcd88ba9",
+        "checklistName": "FY26 SAC Application User Guide_Approved.pdf",
+        "sectionId": "section_2",
+        "sectionTitle": "2. Completing the Standard SF-424 Section of the Application",
+        "pageNumber": 2
+      },
+      {
+        "checklistId": "checklist_8d3fbcd88ba9",
+        "checklistName": "FY26 SAC Application User Guide_Approved.pdf",
+        "sectionId": "section_3",
+        "sectionTitle": "3. Completing the Program Specific Forms",
+        "pageNumber": 2
+      },
+      {
+        "checklistId": "checklist_8d3fbcd88ba9",
+        "checklistName": "FY26 SAC Application User Guide_Approved.pdf",
+        "sectionId": "section_4",
+        "sectionTitle": "4. Reviewing and Submitting the FY 2026 SAC/SAC-AA Application to HRSA",
+        "pageNumber": 3
+      }
+    ],
+    "applicationId": "05de97c6"
+  }
+}

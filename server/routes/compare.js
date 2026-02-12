@@ -96,20 +96,32 @@ CRITICAL VALIDATION RULES:
    d) Use the pageNumber field from the table for accurate page references
    e) If not met, provide specific recommendations
 
+APPLICABILITY RULES (IMPORTANT):
+- Determine the Application Type from the application data (e.g., "New", "Renewal", "Competing Continuation", "Supplemental").
+- If a checklist section explicitly states it only applies to certain application types (e.g., "For renewal applications only"), and the current application is a different type, mark that section as "not_applicable".
+- Sections requiring SAAT (Service Area Analysis Tool) data integration that cannot be fully verified from the application alone should be marked as "partial" with an explanation that SAAT verification is pending.
+- For patient/visit projections (e.g., section 3.1.1.5), if the data is present but requires cross-referencing with SAAT data to confirm the 75% threshold, mark as "partial" and note that SAAT integration is needed for full validation.
+- "not_applicable" sections should NOT count toward the overall compliance percentage calculation.
+
 Return results in JSON format with this structure:
 {
-  "overallCompliance": "percentage (0-100)",
+  "overallCompliance": "percentage (0-100, excluding not_applicable sections from calculation)",
+  "applicationInfo": {
+    "applicationType": "New | Renewal | Competing Continuation | Supplemental",
+    "applicantName": "extracted applicant name",
+    "grantNumber": "extracted grant number or N/A"
+  },
   "summary": "brief overall summary",
   "sections": [
     {
       "checklistSection": "section name from checklist",
       "requirement": "specific requirement text FROM CHECKLIST ONLY - DO NOT add formQuestions here",
-      "status": "met" | "partial" | "not_met",
+      "status": "met" | "partial" | "not_met" | "not_applicable",
       "applicationSection": "corresponding section in application",
       "pageReferences": [26],
       "evidence": "EXACT copy from application. CRITICAL: If table has formQuestions array, START with question-answer pairs, THEN table. Example: 'How many unduplicated patients do you project to serve in the assessment period? For a 4-year period of performance, the assessment period is CY 2028: 15617\\n\\nPopulation Type | UDS Patients | UDS Visits | Projected Patients | Projected Visits\\nTotal | 15617 | 89085 | 15617 | 88181'",
-      "explanation": "why this meets/doesn't meet the requirement with field-level details",
-      "recommendation": "what needs to be done (if not met)",
+      "explanation": "why this meets/doesn't meet the requirement with field-level details. For not_applicable: explain why this section doesn't apply to this application type.",
+      "recommendation": "what needs to be done (if not met or partial)",
       "missingFields": ["list of empty/missing required fields if applicable"]
     }
   ],
@@ -487,92 +499,27 @@ ${(() => {
 Checklist Sections (with hierarchy):
 ${JSON.stringify(checklistData, null, 2).substring(0, 50000)}
 
-🚨🚨🚨 CRITICAL REQUIREMENT - READ THIS FIRST 🚨🚨🚨
+🚨 CRITICAL REQUIREMENT 🚨
 
-YOUR RESPONSE WILL BE REJECTED IF YOU DO NOT RETURN AT LEAST 70 VALIDATION ENTRIES.
+You are receiving ${checklistData.sections?.length || 0} checklist sections to validate.
+You MUST return exactly ONE validation entry for EACH section provided — no more, no less.
+Expected output: ${checklistData.sections?.length || 0} validation entries.
 
-You are receiving 77 checklist sections. You MUST return validation entries for AT LEAST 70 of them.
-If your response contains fewer than 70 validation entries, it will be automatically rejected and you will have failed the task.
+DO NOT create entries for sections not in the list.
+DO NOT skip any section in the list.
+DO NOT combine multiple sections into one entry.
+DO NOT create duplicate entries for the same section.
 
-MINIMUM REQUIRED SECTIONS TO VALIDATE (YOU MUST INCLUDE ALL OF THESE):
-□ 3.1 + ALL subsections (3.1.1, 3.1.1.1, 3.1.1.2, 3.1.1.3, 3.1.1.4, 3.1.1.5, 3.1.2) = 7 sections
-□ 3.2 + ALL subsections (3.2.1, 3.2.2, 3.2.2.1, 3.2.2.2) = 5 sections
-□ 3.3 + ALL subsections (3.3.1, 3.3.1.1-3.3.1.6, 3.3.2, 3.3.2.1-3.3.2.4, 3.3.3) = 15 sections
-□ 3.4 + ALL subsections (3.4.1, 3.4.2, 3.4.2.1, 3.4.2.2, 3.4.3, 3.4.3.1, 3.4.3.2, 3.4.4) = 10 sections
-□ 3.5 + ALL subsections (3.5.1) = 2 sections
+SECTIONS TO VALIDATE (create exactly one entry per section):
+${(checklistData.sections || []).map((s, i) => `${i + 1}. ${s.title}`).join('\n')}
 
-TOTAL MINIMUM: 39 sections just from these major categories. You need to validate ALL 70+ sections in the list.
-
-🚨 VALIDATION RULES - ABSOLUTELY MANDATORY 🚨
-
-RULE #1: VALIDATE EVERY SECTION YOU RECEIVE
-- You will receive a list of approximately 77 checklist sections
-- Create a validation entry for EVERY SINGLE ONE (no exceptions)
-- Expected output: 70-77 validation entries in your response
-- This includes ALL of: Section 3.1, Section 3.2, Section 3.3, Section 3.4, Section 3.5 and ALL their subsections
-
-RULE #2: DO NOT SKIP ANY SECTIONS
-- Do NOT skip sections thinking they're "organizational headers"
-- Do NOT skip sections thinking they're "not actionable"
-- Do NOT skip sections for ANY reason
-- If a section is in the list, VALIDATE IT
-- Do NOT stop after validating section 3.1 - you MUST continue to 3.2, 3.3, 3.4, 3.5
-
-RULE #3: WHAT TO VALIDATE FOR EACH SECTION
-For each section (e.g., "3.1.1.2 Completing the Proposed Service Area Section"):
-1. Read the section's content/requirements from the checklist
-2. Search the application for evidence of those requirements
-3. Determine status: met/partial/not_met
-4. Provide exact evidence from application (with page numbers)
-5. Explain your reasoning
-6. If not met, provide specific recommendations
-
-RULE #4: COMPLETE LIST OF SECTIONS TO VALIDATE
-You MUST create validation entries for ALL of these (and any others in the list):
-✓ 3.1 Completing the General Information Section
-✓ 3.1.1 Completing Form 1A - General Information Worksheet
-✓ 3.1.1.1 Completing the Applicant Information Section
-✓ 3.1.1.2 Completing the Proposed Service Area Section
-✓ 3.1.1.3 Completing 2a. Service Area Designation
-✓ 3.1.1.4 Completing 2b. Service Area Type
-✓ 3.1.1.5 Completing 2c. Patients and Visits
-✓ 3.1.2 Completing Form 1C - Documents on File
-✓ 3.2 Completing the Budget Information Section
-✓ 3.2.1 Completing Form 2 - Staffing Profile
-✓ 3.2.2 Completing Form 3 - Income Analysis
-✓ 3.2.2.1 Completing the Payer Categories Section
-✓ 3.2.2.2 Completing the Comments/Explanatory Notes Section
-✓ 3.3 Completing the Sites and Services Section
-✓ 3.3.1 Completing Form 5A - Services Provided
-✓ 3.3.1.1 through 3.3.1.6 (all subsections)
-✓ 3.3.2 Completing Form 5B - Service Sites
-✓ 3.3.2.1 through 3.3.2.4 (all subsections)
-✓ 3.3.3 Completing Form 5C - Other Activities / Locations
-✓ 3.4 Completing the Other Forms Section
-✓ 3.4.1 Completing Form 6A - Current Board Member Characteristics
-✓ 3.4.2 Completing Form 6B - Request for Waiver of Board Member Requirements
-✓ 3.4.2.1 and 3.4.2.2 (all subsections)
-✓ 3.4.3 Completing Form 8 - Health Center Agreements
-✓ 3.4.3.1 and 3.4.3.2 (all subsections)
-✓ 3.4.4 Completing Form 12 - Organization Contacts
-✓ 3.5 Completing Other Information
-✓ 3.5.1 Completing the Summary Page
-
-RULE #5: QUALITY OF EVIDENCE
-- Provide COMPLETE evidence (don't truncate)
-- Use ACTUAL page numbers from the application
-- Copy exact text from application
-- For tables: use pipe-delimited format as instructed earlier
-
-⚠️ FINAL CHECKPOINT BEFORE RESPONDING:
-Before you finish your response, verify you have validated ALL of these major sections:
-□ Section 3.1 and ALL its subsections (3.1.1, 3.1.1.1, 3.1.1.2, 3.1.1.3, 3.1.1.4, 3.1.1.5, 3.1.2)
-□ Section 3.2 and ALL its subsections (3.2.1, 3.2.2, 3.2.2.1, 3.2.2.2)
-□ Section 3.3 and ALL its subsections (3.3.1, 3.3.1.1-3.3.1.6, 3.3.2, 3.3.2.1-3.3.2.4, 3.3.3)
-□ Section 3.4 and ALL its subsections (3.4.1, 3.4.2, 3.4.2.1, 3.4.2.2, 3.4.3, 3.4.3.1, 3.4.3.2, 3.4.4)
-□ Section 3.5 and ALL its subsections (3.5.1)
-
-If you have NOT validated all of these, DO NOT submit your response. Continue validating until ALL sections are complete.
+RULES:
+1. Create one validation entry per section listed above
+2. Provide COMPLETE evidence (don't truncate)
+3. Use ACTUAL page numbers from the application
+4. Copy exact text from application
+5. For tables: use pipe-delimited format as instructed earlier
+6. Each entry must have its own evidence, status, and explanation
 
 Return results in JSON format with this structure:
 {
@@ -582,17 +529,22 @@ Return results in JSON format with this structure:
     {
       "checklistSection": "section name from checklist",
       "requirement": "specific requirement text",
-      "status": "met" | "partial" | "not_met",
+      "status": "met" | "partial" | "not_met" | "not_applicable",
       "applicationSection": "corresponding section in application",
       "pageReferences": ["page 1", "page 3"],
       "evidence": "exact quote from application",
-      "explanation": "why this meets/doesn't meet the requirement",
-      "recommendation": "what needs to be done (if not met)"
+      "explanation": "why this meets/doesn't meet the requirement. For not_applicable: why this section doesn't apply.",
+      "recommendation": "what needs to be done (if not met or partial)"
     }
   ],
   "criticalIssues": ["list of critical missing requirements"],
   "recommendations": ["overall recommendations for improvement"]
-}`
+}
+
+APPLICABILITY STATUS RULES:
+- Use "not_applicable" when a section explicitly requires a specific application type (e.g., renewal-only sections for a new application).
+- Use "partial" for sections like 3.1.1.5 (Patients and Visits) where data is present but requires SAAT cross-referencing to confirm the 75% threshold. Include explanation: "SAAT integration needed for full validation."
+- "not_applicable" sections are excluded from overall compliance calculation.`
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -644,22 +596,30 @@ Return results in JSON format with this structure:
       }
     }
     
+    // Dynamic maxTokens and timeout based on section count
+    const sectionCount = checklistData.sections?.length || 1
+    const maxTokens = Math.min(16000, Math.max(4000, sectionCount * 800))
+    const timeoutMinutes = Math.min(8, Math.max(3, Math.ceil(sectionCount / 3)))
+    const timeoutMs = timeoutMinutes * 60 * 1000
+
     console.log(`🤖 Sending to model: ${deployment}`)
     console.log('🌡️  Temperature: 0.1 (for maximum consistency)')
     console.log('📡 OpenAI API Endpoint:', endpoint)
-    console.log('� Request parameters:', {
-      maxTokens: 16000,
-      temperature: 0.1,
-      topP: 0.9,
-      responseFormat: 'json_object'
-    })
+    console.log(`📊 Sections: ${sectionCount}, maxTokens: ${maxTokens}, timeout: ${timeoutMinutes}min`)
 
-    const result = await client.getChatCompletions(deployment, messages, {
-      maxTokens: 16000,
-      temperature: 0.1,
-      topP: 0.9,
-      responseFormat: { type: 'json_object' }
-    })
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`AI comparison timed out after ${timeoutMinutes} minutes`)), timeoutMs)
+    )
+    
+    const result = await Promise.race([
+      client.getChatCompletions(deployment, messages, {
+        maxTokens,
+        temperature: 0.1,
+        topP: 0.9,
+        responseFormat: { type: 'json_object' }
+      }),
+      timeoutPromise
+    ])
 
     const response = result.choices[0]?.message?.content
 
@@ -979,7 +939,11 @@ Return results in JSON format with this structure:
 
     res.json(responseData)
   } catch (error) {
-    console.error('❌ Comparison error:', error)
+    console.error('❌ Comparison error:', error.message)
+    console.error('❌ Error name:', error.name)
+    console.error('❌ Error stack:', error.stack)
+    if (error.code) console.error('❌ Error code:', error.code)
+    if (error.statusCode) console.error('❌ Status code:', error.statusCode)
     res.status(500).json({
       error: 'Failed to compare documents',
       message: error.message

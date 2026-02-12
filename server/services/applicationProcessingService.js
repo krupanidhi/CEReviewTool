@@ -1,0 +1,281 @@
+import fs from 'fs/promises'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+/**
+ * ApplicationProcessingService
+ * Manages background processing of multiple applications against checklists.
+ * Stores processed results per-application for dashboard display and cache management.
+ */
+class ApplicationProcessingService {
+  constructor() {
+    this.storageDir = join(__dirname, '../../processed-applications')
+    this.indexFile = join(this.storageDir, 'index.json')
+    this.applications = new Map() // id -> metadata
+    this.processingQueue = [] // queue of pending jobs
+    this.isProcessing = false
+    this.initialized = false
+  }
+
+  async initialize() {
+    if (this.initialized) return
+    try {
+      await fs.mkdir(this.storageDir, { recursive: true })
+      await this.loadIndex()
+      this.initialized = true
+      console.log(`✅ Application processing service initialized. ${this.applications.size} cached applications.`)
+    } catch (error) {
+      console.error('❌ Application processing service init error:', error)
+    }
+  }
+
+  async loadIndex() {
+    try {
+      const data = await fs.readFile(this.indexFile, 'utf-8')
+      const entries = JSON.parse(data)
+      this.applications = new Map(entries.map(e => [e.id, e]))
+    } catch {
+      this.applications = new Map()
+    }
+  }
+
+  async saveIndex() {
+    const entries = Array.from(this.applications.values())
+    await fs.writeFile(this.indexFile, JSON.stringify(entries, null, 2))
+  }
+
+  async saveApplicationData(id, data) {
+    const filePath = join(this.storageDir, `${id}.json`)
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2))
+  }
+
+  async loadApplicationData(id) {
+    const filePath = join(this.storageDir, `${id}.json`)
+    const data = await fs.readFile(filePath, 'utf-8')
+    return JSON.parse(data)
+  }
+
+  async deleteApplicationData(id) {
+    const filePath = join(this.storageDir, `${id}.json`)
+    try {
+      await fs.unlink(filePath)
+    } catch { /* file may not exist */ }
+  }
+
+  /**
+   * Generate a unique ID for an application
+   */
+  generateId(applicationName) {
+    const sanitized = applicationName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)
+    return `app_${sanitized}_${Date.now()}`
+  }
+
+  /**
+   * List all processed applications (metadata only)
+   */
+  listApplications() {
+    return Array.from(this.applications.values())
+      .sort((a, b) => new Date(b.processedAt || b.createdAt) - new Date(a.processedAt || a.createdAt))
+  }
+
+  /**
+   * Get a single application's full data (metadata + cached results)
+   */
+  async getApplication(id) {
+    const meta = this.applications.get(id)
+    if (!meta) return null
+
+    if (meta.status === 'completed') {
+      try {
+        const data = await this.loadApplicationData(id)
+        return { ...meta, data }
+      } catch {
+        // Data file missing, mark as needs reprocessing
+        meta.status = 'error'
+        meta.error = 'Cached data file missing'
+        await this.saveIndex()
+        return meta
+      }
+    }
+
+    return meta
+  }
+
+  /**
+   * Queue an application for background processing.
+   * Returns immediately with the application ID and 'processing' status.
+   */
+  async queueApplication({ applicationName, applicationData, checklistData, selectedSections, checklistName }) {
+    const id = this.generateId(applicationName)
+
+    const meta = {
+      id,
+      name: applicationName,
+      checklistName: checklistName || 'Unknown Checklist',
+      status: 'queued', // queued | processing | completed | error
+      createdAt: new Date().toISOString(),
+      processedAt: null,
+      error: null,
+      selectedSectionCount: selectedSections?.length || 0,
+      complianceScore: null
+    }
+
+    this.applications.set(id, meta)
+    await this.saveIndex()
+
+    // Add to processing queue
+    this.processingQueue.push({
+      id,
+      applicationData,
+      checklistData,
+      selectedSections
+    })
+
+    // Start processing if not already running
+    this._processQueue()
+
+    return meta
+  }
+
+  /**
+   * Internal: process the queue sequentially
+   */
+  async _processQueue() {
+    if (this.isProcessing) return
+    this.isProcessing = true
+
+    while (this.processingQueue.length > 0) {
+      const job = this.processingQueue.shift()
+      const meta = this.applications.get(job.id)
+      if (!meta) continue
+
+      meta.status = 'processing'
+      await this.saveIndex()
+
+      try {
+        // The actual comparison is done by the caller via the compareFunction
+        // We store the job data so the route can call the AI comparison
+        const result = await this._runComparison(job)
+
+        meta.status = 'completed'
+        meta.processedAt = new Date().toISOString()
+        meta.complianceScore = result.comparison?.overallCompliance || null
+        meta.error = null
+
+        // Save full result data to disk
+        await this.saveApplicationData(job.id, result)
+        await this.saveIndex()
+
+        console.log(`✅ Application processed: ${meta.name} (${meta.complianceScore}% compliance)`)
+      } catch (error) {
+        meta.status = 'error'
+        meta.error = error.message
+        meta.processedAt = new Date().toISOString()
+        await this.saveIndex()
+        console.error(`❌ Application processing failed: ${meta.name}`, error.message)
+      }
+    }
+
+    this.isProcessing = false
+  }
+
+  /**
+   * Set the comparison function (injected from the compare route)
+   */
+  setCompareFunction(fn) {
+    this._compareFunction = fn
+  }
+
+  async _runComparison(job) {
+    if (!this._compareFunction) {
+      throw new Error('Compare function not set. Call setCompareFunction first.')
+    }
+    return await this._compareFunction(job.applicationData, job.checklistData, job.selectedSections)
+  }
+
+  /**
+   * Save an already-completed comparison result directly (no re-processing needed).
+   * Used when the normal comparison flow completes and we want to cache the result.
+   */
+  async saveCompleted({ applicationName, checklistName, comparisonResult, complianceScore, selectedSections, applicationId }) {
+    const id = this.generateId(applicationName)
+
+    // Ensure the checklistName is stored in the result metadata for retrieval
+    const dataToSave = { ...comparisonResult }
+    if (!dataToSave.metadata) dataToSave.metadata = {}
+    dataToSave.metadata.checklistName = checklistName || dataToSave.metadata.checklistName || 'Unknown Checklist'
+    // Persist the original selectedSections so cached reports match fresh ones
+    if (selectedSections) {
+      dataToSave.metadata.selectedSections = selectedSections
+    }
+    // Persist the application document ID so the PDF can be loaded from cache
+    if (applicationId) {
+      dataToSave.metadata.applicationId = applicationId
+    }
+
+    const meta = {
+      id,
+      name: applicationName,
+      checklistName: checklistName || 'Unknown Checklist',
+      applicationId: applicationId || null,
+      status: 'completed',
+      createdAt: new Date().toISOString(),
+      processedAt: new Date().toISOString(),
+      error: null,
+      selectedSectionCount: dataToSave?.comparison?.sections?.length || 0,
+      complianceScore: complianceScore || dataToSave?.comparison?.overallCompliance || null
+    }
+
+    this.applications.set(id, meta)
+    await this.saveApplicationData(id, dataToSave)
+    await this.saveIndex()
+
+    console.log(`✅ Application result saved: ${meta.name} (${meta.complianceScore}% compliance)`)
+    return meta
+  }
+
+  /**
+   * Delete a processed application and its cached data
+   */
+  async deleteApplication(id) {
+    this.applications.delete(id)
+    await this.deleteApplicationData(id)
+    await this.saveIndex()
+  }
+
+  /**
+   * Mark an application for reprocessing (clears cached data, sets status to 'pending_reprocess')
+   */
+  async markForReprocessing(id) {
+    const meta = this.applications.get(id)
+    if (!meta) return null
+
+    meta.status = 'pending_reprocess'
+    meta.complianceScore = null
+    meta.error = null
+    await this.deleteApplicationData(id)
+    await this.saveIndex()
+    return meta
+  }
+
+  /**
+   * Get processing status summary
+   */
+  getStatus() {
+    const all = Array.from(this.applications.values())
+    return {
+      total: all.length,
+      completed: all.filter(a => a.status === 'completed').length,
+      processing: all.filter(a => a.status === 'processing').length,
+      queued: all.filter(a => a.status === 'queued').length,
+      errors: all.filter(a => a.status === 'error').length
+    }
+  }
+}
+
+const applicationProcessingService = new ApplicationProcessingService()
+
+export default applicationProcessingService

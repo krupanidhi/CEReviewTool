@@ -3,12 +3,17 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import fs from 'fs/promises'
 import uploadRoutes from './routes/upload.js'
 import analyzeRoutes from './routes/analyze.js'
 import documentsRoutes from './routes/documents.js'
 import chatRoutes from './routes/chat.js'
 import compareRoutes from './routes/compare.js'
 import settingsRoutes from './routes/settings.js'
+import qaComparisonRoutes from './routes/qaComparison.js'
+import storedChecklistsRoutes from './routes/storedChecklists.js'
+import processedApplicationsRoutes from './routes/processedApplications.js'
+import adminRoutes from './routes/admin.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -30,6 +35,40 @@ app.use('/api/documents', documentsRoutes)
 app.use('/api/chat', chatRoutes)
 app.use('/api/compare', compareRoutes)
 app.use('/api/settings', settingsRoutes)
+app.use('/api/qa-comparison', qaComparisonRoutes)
+app.use('/api/stored-checklists', storedChecklistsRoutes)
+app.use('/api/processed-applications', processedApplicationsRoutes)
+app.use('/api/admin', adminRoutes)
+
+// Logs endpoint — save and retrieve processing logs as text files
+const logsDir = join(__dirname, '../logs')
+
+app.post('/api/logs/save', async (req, res) => {
+  try {
+    await fs.mkdir(logsDir, { recursive: true })
+    const { logs, sessionId } = req.body
+    if (!logs || !Array.isArray(logs)) return res.status(400).json({ error: 'logs array required' })
+    const text = logs.map(l => `[${l.timestamp}] [${l.level?.toUpperCase() || 'INFO'}] ${l.message}${l.data ? ' | ' + JSON.stringify(l.data) : ''}`).join('\n')
+    const filename = `ce-review-logs_${sessionId || new Date().toISOString().replace(/[:.]/g, '-')}.txt`
+    const filepath = join(logsDir, filename)
+    await fs.writeFile(filepath, text, 'utf-8')
+    res.json({ success: true, filename, path: filepath })
+  } catch (err) {
+    console.error('Failed to save logs:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/logs', async (req, res) => {
+  try {
+    await fs.mkdir(logsDir, { recursive: true })
+    const files = await fs.readdir(logsDir)
+    const logFiles = files.filter(f => f.endsWith('.txt')).sort().reverse()
+    res.json({ success: true, files: logFiles, directory: logsDir })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
 
 // Health check
 app.get('/api/health', (req, res) => {
