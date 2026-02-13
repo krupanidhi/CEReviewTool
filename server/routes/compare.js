@@ -22,6 +22,31 @@ if (!endpoint || !key || !deployment) {
 const client = new OpenAIClient(endpoint, new AzureKeyCredential(key))
 
 /**
+ * Compress text to reduce AI token usage.
+ * Strips page markers, excessive whitespace, formatting chars, and noise.
+ */
+function compressText(text) {
+  if (!text) return ''
+  let c = text
+  c = c.replace(/={10,}/g, '')
+  c = c.replace(/PAGE \d+/gi, '')
+  c = c.replace(/Page Number:\s*\d+/gi, '')
+  c = c.replace(/Tracking Number[^\n]*/gi, '')
+  c = c.replace(/\n{3,}/g, '\n\n')
+  c = c.replace(/[ \t]{2,}/g, ' ')
+  c = c.replace(/^\s+$/gm, '')
+  c = c.replace(/Page \d+ of \d+/gi, '')
+  c = c.replace(/[│┤├┼─┌┐└┘]/g, ' ')
+  c = c.replace(/_{5,}/g, '')
+  c = c.replace(/-{5,}/g, '')
+  c = c.replace(/\.{5,}/g, '')
+  c = c.replace(/  +/g, ' ')
+  c = c.replace(/\n /g, '\n')
+  c = c.split('\n').filter(line => line.trim().length > 0).join('\n')
+  return c.trim()
+}
+
+/**
  * POST /api/compare
  * Compare application document against checklist/guide
  */
@@ -453,8 +478,8 @@ ${(() => {
       rowCount: t.rowCount,
       columnCount: t.columnCount,
       structuredData: t.structuredData,
-      pageContext: pageText, // Full page text for fallback
-      formQuestions: formQuestions // Structured question-answer pairs
+      pageContext: compressText(pageText),
+      formQuestions: formQuestions
     };
   }) || [];
   
@@ -464,7 +489,7 @@ ${(() => {
     (p.pageNumber >= 125 && p.pageNumber <= 160)
   ).map(p => ({
     pageNumber: p.pageNumber,
-    text: p.lines?.map(l => l.content).join('\n') || ''
+    text: compressText(p.lines?.map(l => l.content).join('\n') || '')
   })) || [];
   
   console.log(`📊 Filtered tables: ${relevantTables.length} of ${applicationData.tables?.length || 0} (form-related only)`);
@@ -486,13 +511,21 @@ ${(() => {
     }
   }
   
+  // Compress sections — only send title, sectionNumber, pageNumber, and compressed content text
+  const compressedSections = (applicationData.sections || []).slice(0, 30).map(s => ({
+    sectionNumber: s.sectionNumber || '',
+    title: s.title,
+    pageNumber: s.pageNumber,
+    content: compressText(s.content?.map(c => c.text).join('\n') || '')
+  }));
+  
   return JSON.stringify({
-    sections: applicationData.sections?.slice(0, 30) || [],
+    sections: compressedSections,
     tables: relevantTables,
     pages: relevantPages,
-    tableOfContents: applicationData.tableOfContents || [],
+    tableOfContents: applicationData.tableOfContents?.map(t => ({ title: t.title, pageNumber: t.pageNumber })) || [],
     totalPages: applicationData.pages?.length || 0,
-    note: `Filtered to ${relevantTables.length} form-related tables and ${relevantPages.length} relevant pages for better context`
+    note: `Filtered to ${relevantTables.length} form-related tables and ${relevantPages.length} relevant pages`
   }, null, 2);
 })()}
 
@@ -597,9 +630,10 @@ APPLICABILITY STATUS RULES:
     }
     
     // Dynamic maxTokens and timeout based on section count
+    // Single-call mode may send 20-30 sections at once — needs higher limits
     const sectionCount = checklistData.sections?.length || 1
-    const maxTokens = Math.min(16000, Math.max(4000, sectionCount * 800))
-    const timeoutMinutes = Math.min(8, Math.max(3, Math.ceil(sectionCount / 3)))
+    const maxTokens = Math.min(32000, Math.max(4000, sectionCount * 600))
+    const timeoutMinutes = Math.min(10, Math.max(3, Math.ceil(sectionCount / 5)))
     const timeoutMs = timeoutMinutes * 60 * 1000
 
     console.log(`🤖 Sending to model: ${deployment}`)

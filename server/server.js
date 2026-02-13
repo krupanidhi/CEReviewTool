@@ -14,6 +14,7 @@ import qaComparisonRoutes from './routes/qaComparison.js'
 import storedChecklistsRoutes from './routes/storedChecklists.js'
 import processedApplicationsRoutes from './routes/processedApplications.js'
 import adminRoutes from './routes/admin.js'
+import saatRoutes from './routes/saat.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -39,6 +40,7 @@ app.use('/api/qa-comparison', qaComparisonRoutes)
 app.use('/api/stored-checklists', storedChecklistsRoutes)
 app.use('/api/processed-applications', processedApplicationsRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/saat', saatRoutes)
 
 // Logs endpoint — save and retrieve processing logs as text files
 const logsDir = join(__dirname, '../logs')

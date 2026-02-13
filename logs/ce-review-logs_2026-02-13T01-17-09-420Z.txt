@@ -1,0 +1,17 @@
+[2026-02-13T01:14:08.688Z] [INFO] ===== COMPLIANCE COMPARISON START =====
+[2026-02-13T01:14:08.688Z] [INFO] Selected sections: 4 | ["1. Starting the FY 2026 SAC/SAC-AA Application","2. Completing the Standard SF-424 Section of the Application","3. Completing the Program Specific Forms","4. Reviewing and Submitting the FY 2026 SAC/SAC-AA Application to HRSA"]
+[2026-02-13T01:14:08.688Z] [INFO] Application: Application-242645.pdf
+[2026-02-13T01:14:08.688Z] [INFO] Checklist: FY26 SAC Application User Guide_Approved
+[2026-02-13T01:14:08.688Z] [INFO] Extracted section numbers: 1, 2, 3, 4
+[2026-02-13T01:14:08.691Z] [INFO] Total sections: 215, Leaf sections: 123 (skipping 92 parent/informational)
+[2026-02-13T01:14:08.691Z] [INFO] Sending ALL 123 leaf sections in ONE API call...
+[2026-02-13T01:14:08.691Z] [INFO]   Single-call attempt 1/2...
+[2026-02-13T01:16:54.468Z] [INFO]   ✅ Single-call completed: 38 sections in 165.8s
+[2026-02-13T01:16:54.468Z] [INFO] ✅ Compliance complete: 38 sections, 97% compliance in 165.8s
+[2026-02-13T01:16:54.468Z] [INFO] Token usage — prompt: 147606, completion: 10963, total: 158569
+[2026-02-13T01:16:54.468Z] [INFO] ===== AUTO-RUN CHECKLIST COMPARISON =====
+[2026-02-13T01:17:09.369Z] [INFO] ✅ Checklist comparison complete in 14.9s
+[2026-02-13T01:17:09.369Z] [INFO]   Standard: 33% agreement
+[2026-02-13T01:17:09.369Z] [INFO]   Program-specific: 38% agreement
+[2026-02-13T01:17:09.369Z] [INFO] ===== WORKFLOW COMPLETE in 180.7s =====
+[2026-02-13T01:17:09.420Z] [INFO] Results cached to dashboard

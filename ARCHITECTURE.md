@@ -112,30 +112,88 @@ These are **pre-filled checklist documents** (not the user guide). They contain 
 
 ---
 
-## Batch/Bulk Processing Folder Structure
+## Folder Structure (UI & Batch)
+
+Both the UI and batch processing use the same folder structure, rooted at the project directory:
 
 ```
-project-root/
+CEReviewTool/
 ├── applications/                    # Application PDFs to process
-│   ├── Application_001.pdf
-│   ├── Application_002.pdf
+│   ├── Application-242645.pdf
+│   ├── Application-242700.pdf
 │   └── ...
 │
-├── userGuides/                      # User guides organized by Funding Opportunity Number
+├── userGuides/                      # User guides organized by Funding Opp or Fiscal Year
 │   ├── HRSA-26-004/
-│   │   └── SAC_UserGuide_FY2026.pdf
-│   ├── HRSA-26-005/
-│   │   └── AnotherGuide.pdf
+│   │   └── FY26 SAC Application User Guide_Approved.pdf
+│   ├── FY25/
+│   │   └── FY25 Service Area Competition User Guide.pdf
+│   ├── FY24/
+│   │   └── FY24SACUserGuide.pdf
 │   └── ...
 │
-└── checklistQuestions/               # Checklist question files organized by year
-    ├── 2026/
-    │   ├── CE Standard Checklist_structured.json
-    │   └── ProgramSpecificQuestions.json
-    ├── 2025/
-    │   └── ...
-    └── ...
+├── checklistQuestions/               # Checklist question files organized by fiscal year
+│   ├── FY26/
+│   │   ├── CE Standard Checklist_structured.json
+│   │   └── ProgramSpecificQuestions.json
+│   ├── FY25/
+│   │   └── 2025 CE Review Program specific Checklist.pdf
+│   └── ...
+│
+├── SAAT/                            # SAAT CSV exports organized by fiscal year
+│   ├── FY26/
+│   │   └── SAC-SAAT-Export-1720_02_06-2026.csv
+│   ├── FY25/
+│   │   └── ...
+│   └── ...
+│
+├── data/                            # Default/fallback checklist question files
+│   ├── ProgramSpecificQuestions.json
+│   └── CE Standard Checklist_structured.json
+│
+├── stored-checklists/               # Cached user guide extractions (auto-saved)
+├── processed-applications/          # Cached compliance + checklist comparison results
+├── extractions/                     # Azure Doc Intelligence extraction output
+├── documents/                       # Uploaded document metadata
+├── logs/                            # Processing log text files
+└── cache/                           # Key-value pair cache
 ```
+
+### Fiscal Year Derivation
+
+The fiscal year is **automatically derived** from the Funding Opportunity Number found in the application:
+
+| Funding Opp Number | Derived FY | Used For |
+|---------------------|-----------|----------|
+| `HRSA-26-004` | `FY26` | SAAT folder, checklistQuestions folder, userGuides folder |
+| `HRSA-25-001` | `FY25` | Same pattern |
+
+**Logic:** Extract the 2-digit year from `HRSA-XX-NNN` → prefix with `FY` → e.g., `FY26`
+
+This is used to automatically resolve:
+- **SAAT data:** `SAAT/FY26/*.csv`
+- **Checklist questions:** `checklistQuestions/FY26/ProgramSpecificQuestions.json`
+- **Standard checklist:** `checklistQuestions/FY26/CE Standard Checklist_structured.json`
+
+---
+
+## SAAT Integration
+
+The SAAT (Service Area Analysis Tool) CSV data is automatically loaded during program-specific QA comparison to validate Questions 11-15:
+
+| Question | SAAT Validation |
+|----------|----------------|
+| **Q11** | Form 1A total unduplicated patients >= 75% of SAAT `patient_target` |
+| **Q12** | Application proposes ALL `service_type` values from SAAT |
+| **Q13** | Requested annual SAC funding <= SAAT `total_funding` |
+| **Q14** | Application maintains funding distribution (CHC/MSAW/HP/RPH) from SAAT |
+| **Q15** | Application serves patients for each population type with non-zero funding |
+
+**API:** `GET /api/saat/data?fundingOpp=HRSA-26-004`
+
+**CSV columns used:** `announcement_number`, `patient_target`, `total_funding`, `chc_funding`, `msaw_funding`, `hp_funding`, `rph_funding`, `service_type`, `zip`, `pct_patients`
+
+---
 
 ### Batch Script Usage:
 
@@ -157,14 +215,16 @@ npm run batch
 
 ### Batch Processing Steps (per application):
 1. Upload & analyze user guide PDF (once, reused for all applications)
-2. Upload & analyze application PDF
-3. Run chunked compliance comparison (leaf sections only, with retry)
-4. Run checklist Q&A comparison (Standard + Program-Specific)
-5. Cache all results to `processed-applications/`
+2. **Skip already-processed applications** (checks `processed-applications/` cache)
+3. Upload & analyze application PDF
+4. Run chunked compliance comparison (leaf sections only, with retry + dedup)
+5. Run checklist Q&A comparison (Standard + Program-Specific, with SAAT data)
+6. Cache all results to `processed-applications/`
 
 ### Batch Output:
 - Compliance report cached in `processed-applications/`
 - Checklist comparison cached in `processed-applications/<app>_checklist_comparison.json`
+- Already-processed applications are **skipped** (delete cached file to re-process)
 - Results viewable in the CE Review dashboard
 
 ---

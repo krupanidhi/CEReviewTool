@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { promises as fs } from 'fs'
+import { loadSAATData, buildSAATSummary, deriveFiscalYear } from '../services/saatService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -14,6 +15,7 @@ const router = express.Router()
 // Default checklist file locations (fallback)
 const DEFAULT_PSQ_PATH = join(__dirname, '../../data/ProgramSpecificQuestions.json')
 const DEFAULT_STD_PATH = join(__dirname, '../../data/CE Standard Checklist_structured.json')
+const CHECKLIST_QUESTIONS_ROOT = join(__dirname, '../../checklistQuestions')
 
 /**
  * Resolve a checklist file path dynamically:
@@ -21,7 +23,7 @@ const DEFAULT_STD_PATH = join(__dirname, '../../data/CE Standard Checklist_struc
  * 2. If a filename pattern is provided, search extractions/ and data/ folders
  * 3. Fall back to the default path
  */
-async function resolveChecklistPath(explicitPath, filenamePattern, defaultPath) {
+async function resolveChecklistPath(explicitPath, filenamePattern, defaultPath, fiscalYear = null) {
   // Option 1: Explicit path provided
   if (explicitPath) {
     try {
@@ -33,13 +35,20 @@ async function resolveChecklistPath(explicitPath, filenamePattern, defaultPath) 
     }
   }
 
-  // Option 2: Search by filename pattern in extractions/ and data/ folders
+  // Option 2: Search by filename pattern — prioritize checklistQuestions/<FY>/ folder
   if (filenamePattern) {
-    const searchDirs = [
+    const searchDirs = []
+    // If fiscal year is known, search its subfolder first
+    if (fiscalYear) {
+      searchDirs.push(join(CHECKLIST_QUESTIONS_ROOT, fiscalYear))
+    }
+    // Then search general folders
+    searchDirs.push(
+      CHECKLIST_QUESTIONS_ROOT,
       join(__dirname, '../../data'),
       join(__dirname, '../../extractions'),
       join(__dirname, '../../stored-checklists')
-    ]
+    )
     for (const dir of searchDirs) {
       try {
         const files = await fs.readdir(dir)
@@ -56,6 +65,48 @@ async function resolveChecklistPath(explicitPath, filenamePattern, defaultPath) 
   // Option 3: Default path
   console.log(`📋 Using default checklist path: ${defaultPath}`)
   return defaultPath
+}
+
+/**
+ * Extract Funding Opportunity Number from application data.
+ * Searches key-value pairs, content, and form fields for patterns like HRSA-26-004.
+ */
+function extractFundingOppNumber(applicationData) {
+  if (!applicationData) return null
+
+  // Search key-value pairs
+  const kvPairs = applicationData.keyValuePairs || []
+  for (const kv of kvPairs) {
+    const val = (kv.value || '').trim()
+    const match = val.match(/HRSA-\d{2}-\d{3}/i)
+    if (match) return match[0].toUpperCase()
+  }
+
+  // Search content text
+  const content = applicationData.content || ''
+  const contentMatch = content.match(/HRSA-\d{2}-\d{3}/i)
+  if (contentMatch) return contentMatch[0].toUpperCase()
+
+  // Search sections
+  const sections = applicationData.sections || []
+  for (const section of sections) {
+    const sectionContent = section.content?.map(c => c.text).join(' ') || ''
+    const sMatch = sectionContent.match(/HRSA-\d{2}-\d{3}/i)
+    if (sMatch) return sMatch[0].toUpperCase()
+  }
+
+  // Search tables
+  const tables = applicationData.tables || []
+  for (const table of tables) {
+    const formQuestions = table.formQuestions || []
+    for (const fq of formQuestions) {
+      const answer = (fq.answer || '').trim()
+      const fqMatch = answer.match(/HRSA-\d{2}-\d{3}/i)
+      if (fqMatch) return fqMatch[0].toUpperCase()
+    }
+  }
+
+  return null
 }
 
 const endpoint = process.env.VITE_AZURE_OPENAI_ENDPOINT
@@ -87,10 +138,17 @@ function parseUserAnswers(data) {
       const questionNum = parseInt(questionMatch[1])
       let questionText = questionMatch[2].trim()
 
-      // Clean up question text - remove answer markers and suggested resources from the question
+      // Clean up question text generically:
+      // 1. Strip everything from first "Suggested Resource" occurrence onwards (catches all resource refs)
+      // 2. Remove answer checkbox markers like [X] Yes, [_] No, [_] N/A
+      // 3. Clean up any remaining artifacts (orphaned brackets, pipes, URLs, page refs)
       questionText = questionText
+        .replace(/\s*Suggested Resource.*$/i, '')
         .replace(/\[\s*X?\s*_?\s*\]\s*(Yes|No|N\/A)/gi, '')
-        .replace(/Suggested Resource\(s\):[^\[]*\[[\"\?]*/gi, '')
+        .replace(/https?:\/\/\S+/gi, '')
+        .replace(/\|/g, '')
+        .replace(/\[[\s"?\\_]*\]/g, '')
+        .replace(/\[\s*["?\\]*\s*$/g, '')
         .replace(/\s+/g, ' ')
         .trim()
 
@@ -100,12 +158,18 @@ function parseUserAnswers(data) {
       // Also check for sub-questions embedded in content
       const subQuestions = extractSubQuestions(content, questionNum)
 
+      // Detect if this question references SAAT as a suggested resource
+      const rawTitleUpper = title.toUpperCase()
+      const rawContentUpper = content.toUpperCase()
+      const requiresSAAT = rawTitleUpper.includes('SAAT') || rawContentUpper.includes('SAAT')
+
       questions.push({
         number: questionNum,
         question: questionText,
         userAnswer: userAnswer,
         rawTitle: title,
-        rawContent: content
+        rawContent: content,
+        requiresSAAT: requiresSAAT
       })
 
       // Add sub-questions found in content
@@ -226,76 +290,128 @@ router.post('/analyze', async (req, res) => {
 
     console.log('\n🔍 ===== QA COMPARISON ANALYSIS START =====')
 
-    // 1. Parse user-provided answers (dynamic path resolution)
-    const dataPath = await resolveChecklistPath(req.body.checklistPath, req.body.checklistFilename || 'ProgramSpecificQuestions', DEFAULT_PSQ_PATH)
+    // 0. Extract Funding Opportunity Number and derive fiscal year
+    const fundingOppNumber = extractFundingOppNumber(applicationData)
+    const fiscalYear = fundingOppNumber ? deriveFiscalYear(fundingOppNumber) : null
+    console.log(`🔢 Funding Opportunity: ${fundingOppNumber || 'Not found'}, Fiscal Year: ${fiscalYear || 'Unknown'}`)
+
+    // 1. Parse user-provided answers (dynamic path resolution using fiscal year)
+    const dataPath = await resolveChecklistPath(req.body.checklistPath, req.body.checklistFilename || 'ProgramSpecificQuestions', DEFAULT_PSQ_PATH, fiscalYear)
     const raw = await fs.readFile(dataPath, 'utf-8')
     const psqData = JSON.parse(raw)
     const userQuestions = parseUserAnswers(psqData)
 
     console.log(`📋 Parsed ${userQuestions.length} questions from ${dataPath}`)
 
-    // 2. Prepare application evidence summary for AI
+    // 2. Load SAAT data for Q11-Q15 validation (if fiscal year is available)
+    let saatData = null
+    let saatSummary = ''
+    if (fiscalYear) {
+      try {
+        saatData = await loadSAATData(fiscalYear, fundingOppNumber)
+        if (saatData.found) {
+          saatSummary = buildSAATSummary(saatData)
+          console.log(`📊 SAAT data loaded: patient_target=${saatData.patientTarget}, ${saatData.serviceTypes.length} service types, ${saatData.totalZipCodes} zip codes`)
+        } else {
+          console.warn(`⚠️ SAAT data not found for ${fundingOppNumber} in ${fiscalYear}`)
+        }
+      } catch (saatErr) {
+        console.warn(`⚠️ SAAT data load failed: ${saatErr.message}`)
+      }
+    }
+
+    // 3. Prepare application evidence summary for AI
     const applicationSummary = buildApplicationSummary(applicationData)
 
-    // 3. Build AI prompt
-    const questionsForAI = userQuestions.map(q =>
-      `Question ${q.number}: ${q.question}`
-    ).join('\n')
+    // 4. Build AI prompt — clearly separate SAAT questions from non-SAAT questions
+    const saatQuestionNums = userQuestions.filter(q => q.requiresSAAT).map(q => q.number)
+    const nonSaatQuestionNums = userQuestions.filter(q => !q.requiresSAAT).map(q => q.number)
 
-    const systemPrompt = `You are an expert HRSA grant application reviewer. You will be given:
-1. A set of program-specific eligibility/completeness questions
-2. Evidence extracted from a grant application document
+    console.log(`📊 SAAT questions: [${saatQuestionNums.join(', ')}], Non-SAAT questions: [${nonSaatQuestionNums.join(', ')}]`)
 
-Your task is to INDEPENDENTLY determine the answer to each question based SOLELY on the application evidence.
-For each question, you must:
-- Answer "Yes", "No", or "N/A" based on what the application evidence shows
-- Provide a brief explanation citing specific evidence from the application
-- Reference page numbers where the evidence was found
+    // Build question list with clear SAAT tagging
+    const questionsForAI = userQuestions.map(q => {
+      if (q.requiresSAAT) {
+        return `Question ${q.number} [REQUIRES SAAT DATA]: ${q.question}`
+      }
+      return `Question ${q.number}: ${q.question}`
+    }).join('\n')
 
-IMPORTANT RULES:
-- Base your answers ONLY on the application evidence provided
-- If the evidence is insufficient to determine an answer, say "Unable to determine" and explain why
-- Be thorough - search all sections, tables, and form data for relevant evidence
-- For questions about whether forms/attachments are included, look for those specific forms in the application data
-- For questions about patient projections or funding, look for specific numbers in the tables
+    const systemPrompt = `You are an expert HRSA grant application reviewer. You will analyze program-specific eligibility/completeness questions against a grant application.
+
+For EACH question, you must:
+- Answer "Yes", "No", or "N/A" based on the evidence
+- Provide specific evidence citing exact values and page numbers from the application
+- Give clear reasoning explaining your determination
+
+RULES:
+- Most questions can be answered by examining the application document directly (forms, attachments, tables, text)
+- Be thorough — search all sections, tables, form data, and key-value pairs for relevant evidence
+- For questions about forms/attachments, look for those specific forms in the application
+- For questions about patient numbers, funding amounts, or service types, look for specific values in tables
 - For questions about service areas or sites, look for Form 5B and related data
+- Only answer "Unable to determine" if you genuinely cannot find ANY relevant evidence in the application after thorough search
+- NEVER answer "Unable to determine" just because a question seems complex — look for the evidence first
 
-Return your analysis as a JSON array with this exact structure:
+${saatQuestionNums.length > 0 ? `SAAT-TAGGED QUESTIONS (${saatQuestionNums.join(', ')}):
+Questions marked [REQUIRES SAAT DATA] need SAAT reference data to validate. SAAT data will be provided in the user message if available. For these questions, compare application values against SAAT values and show the specific numbers in your reasoning.` : ''}
+
+Return a JSON array with this exact structure:
 [
   {
     "questionNumber": 1,
     "aiAnswer": "Yes" | "No" | "N/A" | "Unable to determine",
     "confidence": "high" | "medium" | "low",
-    "evidence": "Brief description of evidence found",
+    "evidence": "Specific evidence found (cite exact values, field names, form names)",
     "pageReferences": [26, 135],
-    "reasoning": "Why this answer was determined"
+    "reasoning": "Clear explanation of why this answer was determined, with specific values"
   }
 ]
 
 Return ONLY the JSON array, no other text.`
 
-    const userPrompt = `PROGRAM-SPECIFIC QUESTIONS TO ANSWER:
+    // Build user prompt — application evidence first, then SAAT data scoped to tagged questions only
+    let userPrompt = `PROGRAM-SPECIFIC QUESTIONS TO ANSWER:
 ${questionsForAI}
 
 APPLICATION EVIDENCE:
 ${applicationSummary}`
 
-    console.log(`📝 Sending ${userQuestions.length} questions to AI for analysis...`)
-    console.log(`📄 Application summary length: ${applicationSummary.length} chars`)
+    // Only append SAAT data if there are SAAT-tagged questions
+    if (saatQuestionNums.length > 0 && saatData?.found) {
+      userPrompt += `
 
-    // 4. Call Azure OpenAI
+SAAT REFERENCE DATA (use ONLY for questions ${saatQuestionNums.join(', ')} marked [REQUIRES SAAT DATA]):
+${saatSummary}
+
+For each SAAT question, your reasoning MUST include:
+- The specific SAAT value (e.g., "SAAT patient target: 19,137")
+- The corresponding application value (e.g., "Form 1A projected patients: 15,617")
+- The calculation or comparison (e.g., "15,617 / 19,137 = 81.6%, which exceeds the 75% threshold")
+- Your conclusion based on the comparison`
+    } else if (saatQuestionNums.length > 0 && !saatData?.found) {
+      userPrompt += `
+
+NOTE FOR QUESTIONS ${saatQuestionNums.join(', ')}: These questions require SAAT data for full validation, but SAAT data is not available (${!fundingOppNumber ? 'Funding Opportunity Number not found in application' : 'SAAT CSV not found for ' + fiscalYear}). Answer "Unable to determine" for these specific questions only and explain that SAAT data is needed.`
+    }
+
+    console.log(`📝 Sending ${userQuestions.length} questions to AI (${saatQuestionNums.length} SAAT-tagged)`)
+    console.log(`📄 Application summary: ${applicationSummary.length} chars`)
+    console.log(`📊 SAAT data included: ${saatData?.found ? 'Yes' : 'No'}`)
+
+    // 5. Call Azure OpenAI (increased tokens for SAAT-enriched prompts)
     const response = await client.getChatCompletions(deployment, [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
     ], {
       temperature: 0.1,
-      maxTokens: 4000
+      maxTokens: 8000
     })
 
     const aiResponseText = response.choices[0]?.message?.content || ''
     console.log(`🤖 AI response length: ${aiResponseText.length} chars`)
 
-    // 5. Parse AI response
+    // 6. Parse AI response
     let aiAnswers = []
     try {
       // Extract JSON from response (handle markdown code blocks)
@@ -360,7 +476,21 @@ ${applicationSummary}`
     res.json({
       success: true,
       summary,
-      results: comparisonResults
+      results: comparisonResults,
+      saatInfo: saatData?.found ? {
+        available: true,
+        fundingOppNumber,
+        fiscalYear,
+        patientTarget: saatData.patientTarget,
+        totalFunding: saatData.totalFunding,
+        serviceTypes: saatData.serviceTypes,
+        zipCodeCount: saatData.totalZipCodes
+      } : {
+        available: false,
+        fundingOppNumber: fundingOppNumber || null,
+        fiscalYear: fiscalYear || null,
+        reason: !fundingOppNumber ? 'Funding Opportunity Number not found in application' : !fiscalYear ? 'Could not derive fiscal year' : 'SAAT CSV not found'
+      }
     })
 
   } catch (error) {
@@ -486,8 +616,13 @@ router.post('/standard-analyze', async (req, res) => {
 
     console.log('\n🔍 ===== STANDARD CHECKLIST COMPARISON START =====')
 
-    // 1. Parse standard checklist (dynamic path resolution)
-    const dataPath = await resolveChecklistPath(req.body.checklistPath, req.body.checklistFilename || 'Standard Checklist', DEFAULT_STD_PATH)
+    // 0. Extract Funding Opportunity Number and derive fiscal year for path resolution
+    const fundingOppNumber = extractFundingOppNumber(applicationData)
+    const fiscalYear = fundingOppNumber ? deriveFiscalYear(fundingOppNumber) : null
+    console.log(`🔢 Funding Opportunity: ${fundingOppNumber || 'Not found'}, Fiscal Year: ${fiscalYear || 'Unknown'}`)
+
+    // 1. Parse standard checklist (dynamic path resolution with fiscal year)
+    const dataPath = await resolveChecklistPath(req.body.checklistPath, req.body.checklistFilename || 'Standard Checklist', DEFAULT_STD_PATH, fiscalYear)
     const raw = await fs.readFile(dataPath, 'utf-8')
     const scData = JSON.parse(raw)
     const { questions: userQuestions, metadata } = parseStandardChecklist(scData)
@@ -647,63 +782,91 @@ function compareAnswers(userAnswer, aiAnswer) {
 }
 
 /**
- * Build a summary of the application data for AI consumption
+ * Compress text to reduce AI token usage — ported from Prefunding Review.
+ * Strips page markers, excessive whitespace, formatting chars, and noise.
+ */
+function compressText(text) {
+  if (!text) return ''
+  let compressed = text
+  compressed = compressed.replace(/={10,}/g, '')
+  compressed = compressed.replace(/PAGE \d+/gi, '')
+  compressed = compressed.replace(/Page Number:\s*\d+/gi, '')
+  compressed = compressed.replace(/Tracking Number[^\n]*/gi, '')
+  compressed = compressed.replace(/\n{3,}/g, '\n\n')
+  compressed = compressed.replace(/[ \t]{2,}/g, ' ')
+  compressed = compressed.replace(/^\s+$/gm, '')
+  compressed = compressed.replace(/Page \d+ of \d+/gi, '')
+  compressed = compressed.replace(/[│┤├┼─┌┐└┘]/g, ' ')
+  compressed = compressed.replace(/_{5,}/g, '')
+  compressed = compressed.replace(/-{5,}/g, '')
+  compressed = compressed.replace(/\.{5,}/g, '')
+  compressed = compressed.replace(/  +/g, ' ')
+  compressed = compressed.replace(/\n /g, '\n')
+  compressed = compressed.split('\n').filter(line => line.trim().length > 0).join('\n')
+  return compressed.trim()
+}
+
+/**
+ * Build a compressed summary of the application data for AI consumption.
+ * Strips bounding boxes, polygons, word-level data — sends only essential text content.
  */
 function buildApplicationSummary(applicationData) {
   const parts = []
 
-  // Include page text (truncated for token limits)
+  // Include page text — extract only line content, no bounding boxes/polygons/words
   if (applicationData.pages) {
     const pageTexts = applicationData.pages
-      .filter(p => p.text && p.text.length > 0)
-      .slice(0, 30) // First 30 pages should cover most eligibility info
-      .map(p => `--- Page ${p.pageNumber || p.page} ---\n${p.text.substring(0, 2000)}`)
-    parts.push('APPLICATION PAGE TEXT:\n' + pageTexts.join('\n\n'))
+      .slice(0, 50)
+      .map(p => {
+        const lineText = p.lines?.map(l => l.content).join('\n') || p.text || ''
+        if (!lineText.trim()) return null
+        return `--- Page ${p.pageNumber || p.page} ---\n${lineText}`
+      })
+      .filter(Boolean)
+    if (pageTexts.length > 0) {
+      parts.push('APPLICATION CONTENT:\n' + compressText(pageTexts.join('\n\n')))
+    }
   }
 
-  // Include sections
+  // Include sections — compressed content only
   if (applicationData.sections) {
     const sectionTexts = applicationData.sections
       .slice(0, 50)
       .map(s => {
         const content = s.content?.map(c => c.text).join('\n') || ''
-        return `[Section ${s.sectionNumber || ''}: ${s.title}]\n${content.substring(0, 1000)}`
+        return `[${s.sectionNumber || ''} ${s.title}]\n${content}`
       })
-    parts.push('\nAPPLICATION SECTIONS:\n' + sectionTexts.join('\n\n'))
+    parts.push('\nSECTIONS:\n' + compressText(sectionTexts.join('\n\n')))
   }
 
-  // Include tables
+  // Include tables — structured data only, no raw cells/bounding boxes
   if (applicationData.tables) {
     const tableSummaries = applicationData.tables
-      .slice(0, 30)
+      .filter(t => t.structuredData && t.structuredData.length > 0)
+      .slice(0, 40)
       .map(t => {
-        const headers = t.headers || Object.keys(t.structuredData?.[0] || {})
-        const rows = (t.structuredData || []).slice(0, 5)
-        const rowTexts = rows.map(r =>
-          headers.map(h => `${h}: ${r[h] || ''}`).join(' | ')
-        )
-        return `[Table on Page ${t.pageNumber || '?'}] Headers: ${headers.join(', ')}\n${rowTexts.join('\n')}`
+        const headers = Object.keys(t.structuredData[0] || {})
+        const rows = t.structuredData.slice(0, 10)
+        const headerLine = headers.join(' | ')
+        const rowLines = rows.map(r => headers.map(h => r[h] || '').join(' | '))
+        return `[Table Page ${t.pageNumber || '?'}]\n${headerLine}\n${rowLines.join('\n')}`
       })
-    parts.push('\nAPPLICATION TABLES:\n' + tableSummaries.join('\n\n'))
+    if (tableSummaries.length > 0) {
+      parts.push('\nTABLES:\n' + tableSummaries.join('\n\n'))
+    }
   }
 
   // Include key-value pairs
-  if (applicationData.keyValuePairs) {
+  if (applicationData.keyValuePairs && applicationData.keyValuePairs.length > 0) {
     const kvTexts = applicationData.keyValuePairs
       .slice(0, 50)
       .map(kv => `${kv.key}: ${kv.value}`)
     parts.push('\nKEY-VALUE PAIRS:\n' + kvTexts.join('\n'))
   }
 
-  // Include TOC
-  if (applicationData.tableOfContents) {
-    const tocTexts = applicationData.tableOfContents
-      .map(t => `${t.title} (Page ${t.pageNumber})`)
-    parts.push('\nTABLE OF CONTENTS:\n' + tocTexts.join('\n'))
-  }
-
   const summary = parts.join('\n\n')
-  // Truncate to stay within token limits (~120k chars ≈ 30k tokens)
+  // Safety cap for Azure OpenAI token limits (~120k chars ≈ 30k tokens)
+  // Compression already reduces payload — this only triggers for extremely large applications
   return summary.substring(0, 120000)
 }
 

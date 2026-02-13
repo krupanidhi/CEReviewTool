@@ -502,7 +502,7 @@ async function main() {
   const allSectionTitles = checklistData.sections?.map(s => s.title).filter(Boolean) || []
   const mainSectionNumbers = [...new Set(
     allSectionTitles.map(t => {
-      const match = t.match(/^(\d+)\./)
+      const match = t.match(/^(\d+)/)
       return match ? match[1] : null
     }).filter(Boolean)
   )]
@@ -518,6 +518,8 @@ async function main() {
   const totalApps = applicationPDFs.length
   const batchResults = []
 
+  const processedAppsDir = join(__dirname, '../../processed-applications')
+
   for (let appIdx = 0; appIdx < totalApps; appIdx++) {
     const appPath = applicationPDFs[appIdx]
     const appName = path.basename(appPath)
@@ -525,6 +527,18 @@ async function main() {
     log('\n' + '═'.repeat(70))
     log(`APPLICATION ${appIdx + 1}/${totalApps}: ${appName}`)
     log('═'.repeat(70))
+
+    // Check if already processed — skip if cached result exists
+    try {
+      const sanitizedName = appName.replace(/[^a-zA-Z0-9.-]/g, '_')
+      const cachedFiles = await fs.readdir(processedAppsDir).catch(() => [])
+      const alreadyProcessed = cachedFiles.some(f => f.includes(sanitizedName) && f.endsWith('.json'))
+      if (alreadyProcessed) {
+        logSuccess(`${appName} — ALREADY PROCESSED (skipping). Delete cached file to re-process.`)
+        batchResults.push({ application: appName, status: 'skipped', reason: 'Already processed' })
+        continue
+      }
+    } catch { /* processed-applications dir may not exist yet, continue */ }
 
     // Step 2a: Upload application
     log('\n── Step 2a: Upload & analyze application ──')
@@ -608,8 +622,10 @@ async function main() {
   const completed = batchResults.filter(r => r.status === 'completed')
   const failed = batchResults.filter(r => r.status === 'failed')
   const partial = batchResults.filter(r => r.status === 'partial')
+  const skipped = batchResults.filter(r => r.status === 'skipped')
 
   console.log(`  ✅ Completed: ${completed.length}/${totalApps}`)
+  if (skipped.length > 0) console.log(`  ⏭️  Skipped:   ${skipped.length}/${totalApps} (already processed)`)
   if (failed.length > 0) console.log(`  ❌ Failed:    ${failed.length}/${totalApps}`)
   if (partial.length > 0) console.log(`  ⚠️  Partial:   ${partial.length}/${totalApps}`)
   console.log('')

@@ -77,12 +77,11 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
 
           log('info', `Extracted section numbers: ${selectedSectionNumbers.join(', ')}`)
 
-          // ---- SMART CHUNKED PROCESSING ----
-          const allChunkSections = []
+          // ---- SINGLE-CALL PROCESSING (matching Prefunding Review approach) ----
+          let allChunkSections = []
           let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
 
           // Step 1: Collect ALL sections under selected main numbers
-          // Also match sections like "4 Submission" (space after number, no dot)
           const allSelectedSections = checklistData.sections?.filter(section => {
             const sectionTitle = section.title || ''
             return selectedSectionNumbers.some(num => {
@@ -108,101 +107,152 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
 
           log('info', `Total sections: ${allSelectedSections.length}, Leaf sections: ${leafSections.length} (skipping ${allSelectedSections.length - leafSections.length} parent/informational)`)
 
-          // Step 3: Group leaf sections by second-level parent (3.1, 3.2, etc.)
-          const chunks = []
-          const chunkGroups = {}
-          leafSections.forEach(section => {
-            const title = section.title || ''
-            const match = title.match(/^(\d+)\.(\d+)/)
-            const groupKey = match ? `${match[1]}.${match[2]}` : title.match(/^(\d+)/) ? title.match(/^(\d+)/)[1] : 'other'
-            if (!chunkGroups[groupKey]) chunkGroups[groupKey] = []
-            chunkGroups[groupKey].push(section)
-          })
-
-          // Sort chunk keys numerically so processing follows proper sequence (3.1, 3.2, ..., 4)
-          const sortedKeys = Object.keys(chunkGroups).sort((a, b) => {
-            const aParts = a.split('.').map(Number)
-            const bParts = b.split('.').map(Number)
-            for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-              const aVal = aParts[i] || 0
-              const bVal = bParts[i] || 0
-              if (aVal !== bVal) return aVal - bVal
-            }
-            return 0
-          })
-
-          for (const groupKey of sortedKeys) {
-            chunks.push({ label: `Section ${groupKey}`, specificSections: chunkGroups[groupKey], subKey: groupKey })
+          // Step 3: Try SINGLE API call with ALL leaf sections (fast path)
+          const allSectionsChecklistData = {
+            ...checklistData,
+            sections: leafSections,
+            tableOfContents: checklistData.tableOfContents || [],
+            content: leafSections
+              .map(section => {
+                const sectionText = section.content?.map(c => c.text).join('\n') || ''
+                return `\n=== ${section.title} ===\n${sectionText}`
+              })
+              .join('\n\n'),
+            selectedSectionNumbers: selectedSectionNumbers
           }
 
-          const totalChunks = chunks.length
-          setProgress({ current: 0, total: totalChunks, currentSection: '' })
-          log('info', `Processing ${totalChunks} section chunks sequentially`)
+          setProgress({ current: 0, total: 1, currentSection: 'All sections (single call)' })
+          log('info', `Sending ALL ${leafSections.length} leaf sections in ONE API call...`)
 
-          for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
-            const chunk = chunks[chunkIdx]
-            const chunkStart = performance.now()
-            setProgress({ current: chunkIdx + 1, total: totalChunks, currentSection: chunk.label })
-            log('info', `Chunk ${chunkIdx + 1}/${totalChunks}: ${chunk.label} (${chunk.specificSections.length} subsections)`)
+          let singleCallSuccess = false
+          const singleCallStart = performance.now()
 
-            const chunkChecklistData = {
-              ...checklistData,
-              sections: chunk.specificSections,
-              tableOfContents: checklistData.tableOfContents?.filter(toc => {
-                const tocTitle = toc.title || ''
-                return tocTitle.startsWith(chunk.subKey)
-              }) || [],
-              content: chunk.specificSections
-                .map(section => {
-                  const sectionText = section.content?.map(c => c.text).join('\n') || ''
-                  return `\n=== ${section.title} ===\n${sectionText}`
-                })
-                .join('\n\n'),
-              selectedSectionNumbers: [chunk.subKey]
-            }
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+              log('info', `  Single-call attempt ${attempt}/2...`)
+              setProgress({ current: 1, total: 1, currentSection: `All sections (attempt ${attempt})` })
+              const singleResult = await compareDocuments(applicationData, allSectionsChecklistData)
+              const singleElapsed = ((performance.now() - singleCallStart) / 1000).toFixed(1)
 
-            const MAX_RETRIES = 3
-            let lastError = null
-            let chunkResult = null
-
-            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-              try {
-                log('info', `  Attempt ${attempt}/${MAX_RETRIES} for ${chunk.label}`)
-                chunkResult = await compareDocuments(applicationData, chunkChecklistData)
-                const chunkElapsed = ((performance.now() - chunkStart) / 1000).toFixed(1)
-                log('info', `  ✅ ${chunk.label} completed: ${chunkResult.comparison?.sections?.length || 0} sections in ${chunkElapsed}s`)
+              if (singleResult && singleResult.comparison?.sections?.length > 0) {
+                allChunkSections = singleResult.comparison.sections
+                if (singleResult.usage) {
+                  totalUsage.promptTokens = singleResult.usage.promptTokens || 0
+                  totalUsage.completionTokens = singleResult.usage.completionTokens || 0
+                  totalUsage.totalTokens = singleResult.usage.totalTokens || 0
+                }
+                singleCallSuccess = true
+                log('info', `  ✅ Single-call completed: ${allChunkSections.length} sections in ${singleElapsed}s`)
                 break
-              } catch (err) {
-                lastError = err
-                log('warn', `  ⚠️ Attempt ${attempt} failed for ${chunk.label}: ${err.message}`)
-                if (attempt < MAX_RETRIES) {
-                  const delay = Math.min(1000 * Math.pow(2, attempt), 30000)
-                  log('info', `  Retrying in ${delay / 1000}s...`)
-                  await new Promise(resolve => setTimeout(resolve, delay))
+              } else {
+                log('warn', `  ⚠️ Single-call returned empty results, attempt ${attempt}`)
+              }
+            } catch (err) {
+              log('warn', `  ⚠️ Single-call attempt ${attempt} failed: ${err.message}`)
+              if (attempt < 2) {
+                await new Promise(resolve => setTimeout(resolve, 3000))
+              }
+            }
+          }
+
+          // Fallback: chunked sequential processing if single call failed
+          if (!singleCallSuccess) {
+            log('info', 'Falling back to chunked sequential processing...')
+
+            const chunkGroups = {}
+            leafSections.forEach(section => {
+              const title = section.title || ''
+              const match = title.match(/^(\d+)\.(\d+)/)
+              const groupKey = match ? `${match[1]}.${match[2]}` : title.match(/^(\d+)/) ? title.match(/^(\d+)/)[1] : 'other'
+              if (!chunkGroups[groupKey]) chunkGroups[groupKey] = []
+              chunkGroups[groupKey].push(section)
+            })
+
+            const sortedKeys = Object.keys(chunkGroups).sort((a, b) => {
+              const aParts = a.split('.').map(Number)
+              const bParts = b.split('.').map(Number)
+              for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+                const aVal = aParts[i] || 0
+                const bVal = bParts[i] || 0
+                if (aVal !== bVal) return aVal - bVal
+              }
+              return 0
+            })
+
+            const chunks = sortedKeys.map(groupKey => ({
+              label: `Section ${groupKey}`,
+              specificSections: chunkGroups[groupKey],
+              subKey: groupKey
+            }))
+
+            setProgress({ current: 0, total: chunks.length, currentSection: '' })
+            log('info', `Processing ${chunks.length} section chunks sequentially (fallback)`)
+
+            for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
+              const chunk = chunks[chunkIdx]
+              const chunkStart = performance.now()
+              setProgress({ current: chunkIdx + 1, total: chunks.length, currentSection: chunk.label })
+              log('info', `Chunk ${chunkIdx + 1}/${chunks.length}: ${chunk.label} (${chunk.specificSections.length} subsections)`)
+
+              const chunkChecklistData = {
+                ...checklistData,
+                sections: chunk.specificSections,
+                tableOfContents: checklistData.tableOfContents?.filter(toc => {
+                  const tocTitle = toc.title || ''
+                  return tocTitle.startsWith(chunk.subKey)
+                }) || [],
+                content: chunk.specificSections
+                  .map(section => {
+                    const sectionText = section.content?.map(c => c.text).join('\n') || ''
+                    return `\n=== ${section.title} ===\n${sectionText}`
+                  })
+                  .join('\n\n'),
+                selectedSectionNumbers: [chunk.subKey]
+              }
+
+              const MAX_RETRIES = 3
+              let lastError = null
+              let chunkResult = null
+
+              for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                  log('info', `  Attempt ${attempt}/${MAX_RETRIES} for ${chunk.label}`)
+                  chunkResult = await compareDocuments(applicationData, chunkChecklistData)
+                  const chunkElapsed = ((performance.now() - chunkStart) / 1000).toFixed(1)
+                  log('info', `  ✅ ${chunk.label} completed: ${chunkResult.comparison?.sections?.length || 0} sections in ${chunkElapsed}s`)
+                  break
+                } catch (err) {
+                  lastError = err
+                  log('warn', `  ⚠️ Attempt ${attempt} failed for ${chunk.label}: ${err.message}`)
+                  if (attempt < MAX_RETRIES) {
+                    const delay = Math.min(1000 * Math.pow(2, attempt), 30000)
+                    log('info', `  Retrying in ${delay / 1000}s...`)
+                    await new Promise(resolve => setTimeout(resolve, delay))
+                  }
                 }
               }
-            }
 
-            if (chunkResult && chunkResult.comparison?.sections) {
-              allChunkSections.push(...chunkResult.comparison.sections)
-              if (chunkResult.usage) {
-                totalUsage.promptTokens += chunkResult.usage.promptTokens || 0
-                totalUsage.completionTokens += chunkResult.usage.completionTokens || 0
-                totalUsage.totalTokens += chunkResult.usage.totalTokens || 0
+              if (chunkResult && chunkResult.comparison?.sections) {
+                allChunkSections.push(...chunkResult.comparison.sections)
+                if (chunkResult.usage) {
+                  totalUsage.promptTokens += chunkResult.usage.promptTokens || 0
+                  totalUsage.completionTokens += chunkResult.usage.completionTokens || 0
+                  totalUsage.totalTokens += chunkResult.usage.totalTokens || 0
+                }
+              } else {
+                log('error', `  ❌ All ${MAX_RETRIES} attempts failed for ${chunk.label}: ${lastError?.message}`)
+                allChunkSections.push({
+                  checklistSection: chunk.label,
+                  requirement: 'Processing failed for this section group',
+                  status: 'not_met',
+                  applicationSection: '',
+                  pageReferences: [],
+                  evidence: '',
+                  explanation: `Failed after ${MAX_RETRIES} attempts: ${lastError?.message || 'Unknown error'}. You can re-run this section individually.`,
+                  recommendation: 'Re-run comparison for this section group individually.',
+                  missingFields: []
+                })
               }
-            } else {
-              log('error', `  ❌ All ${MAX_RETRIES} attempts failed for ${chunk.label}: ${lastError?.message}`)
-              allChunkSections.push({
-                checklistSection: chunk.label,
-                requirement: 'Processing failed for this section group',
-                status: 'not_met',
-                applicationSection: '',
-                pageReferences: [],
-                evidence: '',
-                explanation: `Failed after ${MAX_RETRIES} attempts: ${lastError?.message || 'Unknown error'}. You can re-run this section individually.`,
-                recommendation: 'Re-run comparison for this section group individually.',
-                missingFields: []
-              })
             }
           }
 
@@ -260,12 +310,13 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
             log('error', `Checklist comparison error: ${qaErr.message}`)
           }
 
+          const processingMode = singleCallSuccess ? 'single-call' : 'chunked-fallback'
           const mergedResult = {
             success: true,
             comparison: {
               overallCompliance,
               applicationInfo: dedupedSections[0]?.applicationInfo || {},
-              summary: `Compliance analysis completed across ${chunks.length} section groups with ${dedupedSections.length} total validation entries.`,
+              summary: `Compliance analysis completed (${processingMode}) with ${dedupedSections.length} total validation entries.`,
               sections: dedupedSections,
               criticalIssues: dedupedSections
                 .filter(s => s.status === 'not_met')
@@ -277,9 +328,9 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
             checklistComparison: checklistComparisonResults,
             usage: totalUsage,
             metadata: {
-              model: 'chunked-processing',
+              model: processingMode,
               comparedAt: new Date().toISOString(),
-              chunksProcessed: chunks.length,
+              leafSections: leafSections.length,
               totalSections: dedupedSections.length,
               rawSections: allChunkSections.length,
               duplicatesRemoved: allChunkSections.length - dedupedSections.length
