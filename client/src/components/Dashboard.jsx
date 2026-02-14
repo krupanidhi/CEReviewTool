@@ -1,32 +1,20 @@
 import { useState, useEffect, useRef } from 'react'
-import { Search, FileText, Calendar, Hash, Eye, LayoutDashboard, Loader2, CheckCircle, AlertCircle, Clock, RefreshCw, Trash2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { getProcessedApplications, getProcessedApplication, deleteProcessedApplication } from '../services/api'
 
 export default function Dashboard({ onViewResults }) {
   const [applications, setApplications] = useState([])
-  const [filteredApplications, setFilteredApplications] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [processingStatus, setProcessingStatus] = useState(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(12)
   const pollRef = useRef(null)
 
   useEffect(() => {
     loadApplications()
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [])
-
-  useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredApplications(applications)
-    } else {
-      const query = searchQuery.toLowerCase()
-      const filtered = applications.filter(app => 
-        app.name.toLowerCase().includes(query) ||
-        app.id.toLowerCase().includes(query)
-      )
-      setFilteredApplications(filtered)
-    }
-  }, [searchQuery, applications])
 
   // Start/stop polling based on whether any apps are processing
   useEffect(() => {
@@ -79,46 +67,11 @@ export default function Dashboard({ onViewResults }) {
     }
   }
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'completed':
-        return (
-          <span className="flex items-center gap-1 text-xs font-medium text-green-400 bg-green-500/10 px-2 py-1 rounded-full">
-            <CheckCircle className="w-3 h-3" /> Completed
-          </span>
-        )
-      case 'processing':
-        return (
-          <span className="flex items-center gap-1 text-xs font-medium text-blue-400 bg-blue-500/10 px-2 py-1 rounded-full">
-            <Loader2 className="w-3 h-3 animate-spin" /> Processing
-          </span>
-        )
-      case 'queued':
-        return (
-          <span className="flex items-center gap-1 text-xs font-medium text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded-full">
-            <Clock className="w-3 h-3" /> Queued
-          </span>
-        )
-      case 'error':
-        return (
-          <span className="flex items-center gap-1 text-xs font-medium text-red-400 bg-red-500/10 px-2 py-1 rounded-full">
-            <AlertCircle className="w-3 h-3" /> Error
-          </span>
-        )
-      default:
-        return (
-          <span className="flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-500/10 px-2 py-1 rounded-full">
-            <Clock className="w-3 h-3" /> {status}
-          </span>
-        )
-    }
-  }
-
   const getComplianceColor = (score) => {
     const num = parseInt(score)
-    if (num >= 80) return 'text-green-400'
-    if (num >= 60) return 'text-yellow-400'
-    return 'text-red-400'
+    if (num >= 80) return '#16a34a'
+    if (num >= 60) return '#ca8a04'
+    return '#dc2626'
   }
 
   const formatDate = (dateStr) => {
@@ -131,174 +84,162 @@ export default function Dashboard({ onViewResults }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '256px' }}>
+        <Loader2 style={{ width: 32, height: 32, color: '#3b82f6' }} className="animate-spin" />
       </div>
     )
   }
 
+  const filteredApps = applications.filter(app =>
+    !searchQuery ||
+    app.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    app.id?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const totalPages = Math.ceil(filteredApps.length / itemsPerPage)
+  const startIdx = (currentPage - 1) * itemsPerPage
+  const currentApps = filteredApps.slice(startIdx, startIdx + itemsPerPage)
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-3">
-            <div className="bg-blue-500/10 p-2 rounded-lg">
-              <LayoutDashboard className="w-6 h-6 text-blue-500" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white">Dashboard - Analyzed Applications</h2>
-              <p className="text-sm text-gray-400">View and manage CE review validation results</p>
-            </div>
-          </div>
-          <button
-            onClick={loadApplications}
-            className="bg-slate-700 hover:bg-slate-600 text-gray-300 p-2 rounded-lg transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw className="w-5 h-5" />
-          </button>
-        </div>
+    <div>
+      <h2 style={{ color: '#0B4778', marginBottom: '20px', fontSize: '1.5rem', fontWeight: '700' }}>
+        Dashboard - Analyzed Applications
+      </h2>
 
-        {/* Processing Status Bar */}
-        {processingStatus && (processingStatus.processing > 0 || processingStatus.queued > 0) && (
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4 flex items-center gap-3">
-            <Loader2 className="w-5 h-5 text-blue-400 animate-spin flex-shrink-0" />
-            <span className="text-sm text-blue-300">
-              {processingStatus.processing > 0 && `${processingStatus.processing} application(s) processing`}
-              {processingStatus.processing > 0 && processingStatus.queued > 0 && ', '}
-              {processingStatus.queued > 0 && `${processingStatus.queued} queued`}
-            </span>
-          </div>
-        )}
-
-        {/* Search Bar */}
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search by application name..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-900 text-white rounded-lg pl-12 pr-4 py-3 border border-slate-600 focus:border-blue-500 focus:outline-none"
-          />
+      {processingStatus && (processingStatus.processing > 0 || processingStatus.queued > 0) && (
+        <div style={{ background: '#DBEAFE', border: '2px solid #93C5FD', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', color: '#0B4778', fontSize: '0.9rem', fontWeight: '500' }}>
+          <Loader2 style={{ width: 18, height: 18, color: '#3b82f6', flexShrink: 0 }} className="animate-spin" />
+          <span>
+            {processingStatus.processing > 0 && `${processingStatus.processing} application(s) processing`}
+            {processingStatus.processing > 0 && processingStatus.queued > 0 && ', '}
+            {processingStatus.queued > 0 && `${processingStatus.queued} queued`}
+          </span>
         </div>
+      )}
 
-        {/* Results Count */}
-        <div className="mt-4 flex items-center justify-between text-sm text-gray-400">
-          <span>Showing {filteredApplications.length} of {applications.length} applications</span>
-          {processingStatus && (
-            <span>{processingStatus.completed} completed • {processingStatus.total} total</span>
-          )}
-        </div>
+      <div style={{ marginBottom: '30px' }}>
+        <input
+          type="text"
+          placeholder="Search by application name..."
+          value={searchQuery}
+          onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1) }}
+          style={{ width: '100%', padding: '12px 20px', fontSize: '1rem', background: '#EFF6FB', border: '2px solid #D9E8F6', borderRadius: '8px', color: '#0B4778', outline: 'none', boxSizing: 'border-box' }}
+          onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+          onBlur={(e) => e.target.style.borderColor = '#D9E8F6'}
+        />
       </div>
 
-      {/* Application Tiles */}
-      {filteredApplications.length === 0 ? (
-        <div className="bg-slate-800 rounded-lg p-12 text-center border border-slate-700">
-          <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-300 mb-2">
-            {applications.length === 0 ? 'No analyzed applications yet' : 'No matching applications'}
+      {filteredApps.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FFFFFF', borderRadius: '12px', border: '2px dashed #D9E8F6' }}>
+          <div style={{ fontSize: '4rem', marginBottom: '20px' }}>📂</div>
+          <h3 style={{ color: '#0B4778', marginBottom: '10px' }}>
+            {applications.length === 0 ? 'No Analyzed Applications Yet' : 'No Matching Applications'}
           </h3>
-          <p className="text-gray-500">
-            {applications.length === 0 
-              ? 'Go to Compare & Validate to process applications'
-              : 'Try a different search term'}
+          <p style={{ color: '#0B4778', fontSize: '0.9rem' }}>
+            {applications.length === 0 ? 'Upload and analyze your first application to see it here' : 'Try a different search term'}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredApplications.map((app) => (
-            <div
-              key={app.id}
-              className={`bg-slate-800 rounded-lg border transition-all ${
-                app.status === 'completed'
-                  ? 'border-slate-700 hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/10 cursor-pointer'
-                  : app.status === 'processing' || app.status === 'queued'
-                  ? 'border-blue-500/30'
-                  : 'border-red-500/30'
-              }`}
-              onClick={() => app.status === 'completed' && handleViewResults(app)}
-            >
-              <div className="p-5">
-                {/* Status + Delete */}
-                <div className="flex items-center justify-between mb-3">
-                  {getStatusBadge(app.status)}
-                  <button
-                    onClick={(e) => handleDelete(app.id, e)}
-                    className="text-gray-500 hover:text-red-400 transition-colors p-1"
-                    title="Delete application"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+        <>
+          <div style={{ marginBottom: '20px', color: '#0B4778', fontSize: '1rem', fontWeight: '600' }}>
+            Showing {startIdx + 1}-{Math.min(startIdx + itemsPerPage, filteredApps.length)} of {filteredApps.length} applications
+          </div>
 
-                {/* Document Icon */}
-                <div className="mb-4">
-                  <div className={`rounded-lg p-4 border ${
-                    app.status === 'completed' ? 'bg-slate-900 border-slate-600' :
-                    app.status === 'processing' ? 'bg-blue-900/20 border-blue-500/30' :
-                    app.status === 'error' ? 'bg-red-900/20 border-red-500/30' :
-                    'bg-slate-900 border-slate-600'
-                  }`}>
-                    {app.status === 'processing' ? (
-                      <Loader2 className="w-8 h-8 text-blue-400 mx-auto animate-spin" />
-                    ) : (
-                      <FileText className="w-8 h-8 text-blue-400 mx-auto" />
-                    )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+            {currentApps.map((app) => (
+              <div
+                key={app.id}
+                style={{ background: '#EFF6FB', border: '2px solid #D9E8F6', borderRadius: '12px', padding: '20px', transition: 'all 0.3s', cursor: app.status === 'completed' ? 'pointer' : 'default', position: 'relative' }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.boxShadow = '0 10px 25px rgba(59, 130, 246, 0.2)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#D9E8F6'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' }}
+                onClick={() => app.status === 'completed' && handleViewResults(app)}
+              >
+                <button
+                  onClick={(e) => handleDelete(app.id, e)}
+                  style={{ position: 'absolute', top: '10px', right: '10px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#94a3b8', padding: '4px', borderRadius: '4px' }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = '#dc2626'}
+                  onMouseLeave={(e) => e.currentTarget.style.color = '#94a3b8'}
+                  title="Delete application"
+                >🗑️</button>
+
+                <div style={{ marginBottom: '15px' }}>
+                  <div style={{ fontSize: '2rem', marginBottom: '10px' }}>
+                    {app.status === 'processing' ? '⏳' : '📄'}
                   </div>
-                </div>
+                  <h3 style={{ color: '#0B4778', fontSize: '1.1rem', marginBottom: '8px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={app.name}>
+                    {(app.name || 'Unnamed Application').replace(/\.pdf$/i, '')}
+                  </h3>
 
-                {/* Application Name */}
-                <h3 className="text-white font-medium mb-2 line-clamp-2 min-h-[2.5rem] text-sm" title={app.name}>
-                  {app.name}
-                </h3>
-
-                {/* Compliance Score */}
-                {app.status === 'completed' && app.complianceScore && (
-                  <div className="mb-3">
-                    <div className={`text-2xl font-bold ${getComplianceColor(app.complianceScore)}`}>
-                      {app.complianceScore}%
-                    </div>
-                    <div className="text-xs text-gray-500">Compliance Score</div>
-                  </div>
-                )}
-
-                {/* Error Message */}
-                {app.status === 'error' && app.error && (
-                  <div className="mb-3 text-xs text-red-400 bg-red-500/10 rounded p-2 line-clamp-2">
-                    {app.error}
-                  </div>
-                )}
-
-                {/* Metadata */}
-                <div className="space-y-1.5 mb-4">
-                  {app.checklistName && (
-                    <div className="flex items-center space-x-2 text-xs text-gray-400">
-                      <FileText className="w-3 h-3 flex-shrink-0" />
-                      <span className="truncate">{app.checklistName}</span>
-                    </div>
+                  {app.status === 'completed' && app.complianceScore && (
+                    <p style={{ color: getComplianceColor(app.complianceScore), fontSize: '1.5rem', fontWeight: '700', marginBottom: '5px' }}>
+                      {app.complianceScore}% <span style={{ fontSize: '0.75rem', fontWeight: '500', color: '#0B4778' }}>Compliance</span>
+                    </p>
                   )}
-                  <div className="flex items-center space-x-2 text-xs text-gray-400">
-                    <Calendar className="w-3 h-3 flex-shrink-0" />
-                    <span>{formatDate(app.processedAt || app.createdAt)}</span>
-                  </div>
+
+                  {app.status === 'error' && app.error && (
+                    <p style={{ color: '#dc2626', fontSize: '0.85rem', marginBottom: '5px', background: '#FEE2E2', padding: '6px 8px', borderRadius: '6px' }}>
+                      ❌ {app.error}
+                    </p>
+                  )}
+
+                  <p style={{ color: '#0B4778', fontSize: '0.9rem', marginBottom: '5px', fontWeight: '500' }}>
+                    📅 {formatDate(app.processedAt || app.createdAt)}
+                  </p>
+
+                  {app.checklistName && (
+                    <p style={{ color: '#0B4778', fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: '500' }}>
+                      📋 {app.checklistName}
+                    </p>
+                  )}
+
+                  <p style={{ color: '#0B4778', fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontWeight: '500' }}>
+                    🔑 {app.id?.substring(0, 12)}...
+                  </p>
                 </div>
 
-                {/* View Results Button */}
                 {app.status === 'completed' && (
                   <button
                     onClick={(e) => { e.stopPropagation(); handleViewResults(app) }}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2 text-sm"
-                  >
-                    <Eye className="w-4 h-4" />
-                    <span>View Results</span>
-                  </button>
+                    style={{ width: '100%', padding: '10px 16px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s' }}
+                    onMouseEnter={(e) => e.target.style.background = '#2563eb'}
+                    onMouseLeave={(e) => e.target.style.background = '#3b82f6'}
+                  >View Results</button>
                 )}
               </div>
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', marginTop: '30px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                style={{ padding: '10px 20px', background: currentPage === 1 ? '#D9E8F6' : '#3b82f6', color: currentPage === 1 ? '#3b82f6' : 'white', border: 'none', borderRadius: '6px', fontSize: '0.9rem', fontWeight: '600', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', transition: 'all 0.3s' }}
+              >← Previous</button>
+
+              <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                  const show = page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1
+                  if (!show) {
+                    if (page === currentPage - 2 || page === currentPage + 2) return <span key={page} style={{ color: '#3b82f6', padding: '0 5px' }}>...</span>
+                    return null
+                  }
+                  return (
+                    <button key={page} onClick={() => setCurrentPage(page)}
+                      style={{ padding: '10px 15px', background: currentPage === page ? '#3b82f6' : 'white', color: currentPage === page ? 'white' : '#3b82f6', border: currentPage === page ? 'none' : '2px solid #3b82f6', borderRadius: '6px', fontSize: '0.9rem', fontWeight: currentPage === page ? '600' : '400', cursor: 'pointer', transition: 'all 0.3s', minWidth: '40px' }}
+                    >{page}</button>
+                  )
+                })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                style={{ padding: '10px 20px', background: currentPage === totalPages ? '#D9E8F6' : '#3b82f6', color: currentPage === totalPages ? '#3b82f6' : 'white', border: 'none', borderRadius: '6px', fontSize: '0.9rem', fontWeight: '600', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', transition: 'all 0.3s' }}
+              >Next →</button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   )

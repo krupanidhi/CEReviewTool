@@ -97,6 +97,32 @@ router.post('/', upload.single('file'), async (req, res) => {
     await fs.writeFile(structuredPath, JSON.stringify(structuredData, null, 2))
     console.log(`📋 Structured JSON saved to: ${structuredPath}`)
 
+    // Cache user guide extraction in userGuides/ folder for batch reuse
+    // Detect if this is a user guide by checking if a matching PDF exists in userGuides/
+    try {
+      const userGuidesRoot = join(__dirname, '../../userGuides')
+      const ugDirs = await fs.readdir(userGuidesRoot, { withFileTypes: true }).catch(() => [])
+      for (const dir of ugDirs) {
+        if (!dir.isDirectory()) continue
+        const ugFolder = join(userGuidesRoot, dir.name)
+        const ugFiles = await fs.readdir(ugFolder).catch(() => [])
+        const matchingPdf = ugFiles.find(f =>
+          f.toLowerCase() === req.file.originalname.toLowerCase() && /\.pdf$/i.test(f)
+        )
+        if (matchingPdf) {
+          const ugBaseName = matchingPdf.replace(/\.pdf$/i, '')
+          const ugExtractionPath = join(ugFolder, `${ugBaseName}_extraction.json`)
+          const ugStructuredPath = join(ugFolder, `${ugBaseName}_structured.json`)
+          await fs.writeFile(ugExtractionPath, JSON.stringify(analysisResult.data, null, 2))
+          await fs.writeFile(ugStructuredPath, JSON.stringify(structuredData, null, 2))
+          console.log(`📋 User guide cached for batch reuse: ${ugExtractionPath}`)
+          break
+        }
+      }
+    } catch (ugCacheErr) {
+      console.warn(`⚠️ User guide cache failed (non-critical): ${ugCacheErr.message}`)
+    }
+
     // Cache key-value pairs for internal reference
     if (analysisResult.data.keyValuePairs && analysisResult.data.keyValuePairs.length > 0) {
       await cacheService.cacheKeyValuePairs(

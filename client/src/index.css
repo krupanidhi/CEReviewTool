@@ -1,15 +1,17 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "Source Sans 3", Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #0f172a;
+  color-scheme: light;
+  color: #0B4778;
+  background-color: #EFF6FB;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -20,28 +22,334 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #0f172a;
+  background-color: #EFF6FB;
 }
 
 #root {
   min-height: 100vh;
 }
 
-/* Custom scrollbar for dark theme */
+/* Custom scrollbar for light theme */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1e293b;
+  background: #EFF6FB;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: #D9E8F6;
   border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: #93C5FD;
 }
+
+/* HRSA Header */
+.ce-header {
+  background-color: #0B4778;
+  color: #FFFFFF;
+  padding: 25px 30px;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  position: relative;
+}
+
+/* Card container below header */
+.ce-card {
+  background: #FFFFFF;
+  border-bottom-right-radius: 12px;
+  border-bottom-left-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  border: 1px solid #D9E8F6;
+  border-top: 5px solid #990000;
+}
+
+/* Tabs */
+.ce-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #D9E8F6;
+  flex-wrap: wrap;
+}
+
+.ce-tab {
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #94a3b8;
+  border-bottom: 3px solid transparent;
+  transition: all 0.3s;
+  font-family: inherit;
+}
+
+.ce-tab:hover {
+  color: #3b82f6;
+}
+
+.ce-tab.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+  font-weight: 600;
+}
+
+.ce-tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Hide scrollbars but keep scroll functionality */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Chat popup animation */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   Global Tailwind dark-class overrides for light HRSA theme.
+   These remap the dark-mode Tailwind utility classes used
+   throughout child components to the Prefunding light palette.
+   ============================================================ */
+
+/* --- Backgrounds --- */
+.bg-slate-900  { background-color: #EFF6FB !important; }
+.bg-slate-800  { background-color: #FFFFFF !important; }
+.bg-slate-700  { background-color: #EFF6FB !important; }
+.bg-slate-950  { background-color: #EFF6FB !important; }
+.bg-\[rgb\(15\,23\,42\)\] { background-color: #EFF6FB !important; }
+
+/* --- Text colors --- */
+.text-white    { color: #0B4778 !important; }
+.text-gray-100 { color: #0B4778 !important; }
+.text-gray-200 { color: #1e3a5f !important; }
+.text-gray-300 { color: #0B4778 !important; }
+.text-gray-400 { color: #64748b !important; }
+.text-gray-500 { color: #94a3b8 !important; }
+.text-gray-600 { color: #94a3b8 !important; }
+
+/* Buttons with colored backgrounds must keep white text */
+.bg-blue-600.text-white,
+.bg-blue-700.text-white,
+.bg-green-600.text-white,
+.bg-green-700.text-white,
+.bg-red-600.text-white,
+.bg-red-700.text-white,
+.bg-purple-600.text-white,
+.bg-purple-700.text-white,
+.bg-blue-500.text-white { color: #FFFFFF !important; }
+
+/* Step indicators with colored backgrounds must keep white text */
+.bg-blue-500.text-white { color: #FFFFFF !important; }
+
+/* Active tab with blue background must keep white text */
+.bg-blue-600.text-white.shadow,
+.bg-blue-600.text-white.shadow-lg { color: #FFFFFF !important; }
+
+/* --- Border colors --- */
+.border-slate-600 { border-color: #D9E8F6 !important; }
+.border-slate-700 { border-color: #D9E8F6 !important; }
+.border-slate-800 { border-color: #D9E8F6 !important; }
+
+/* --- Hover backgrounds --- */
+.hover\:bg-slate-700:hover { background-color: #EFF6FB !important; }
+.hover\:bg-slate-600:hover { background-color: #D9E8F6 !important; }
+
+/* --- Focus borders --- */
+.focus\:border-blue-500:focus { border-color: #3b82f6 !important; }
+
+/* --- Status / accent colors (keep as-is) --- */
+.text-blue-400  { color: #3b82f6 !important; }
+.text-blue-500  { color: #3b82f6 !important; }
+.text-green-400 { color: #16a34a !important; }
+.text-green-500 { color: #16a34a !important; }
+.text-red-400   { color: #dc2626 !important; }
+.text-red-500   { color: #dc2626 !important; }
+.text-yellow-400 { color: #ca8a04 !important; }
+.text-purple-400 { color: #7c3aed !important; }
+.text-purple-500 { color: #7c3aed !important; }
+
+/* --- Badge / pill backgrounds --- */
+.bg-blue-500\/10   { background-color: #EFF6FF !important; }
+.bg-green-500\/10  { background-color: #F0FDF4 !important; }
+.bg-red-500\/10    { background-color: #FEF2F2 !important; }
+.bg-yellow-500\/10 { background-color: #FFFBEB !important; }
+.bg-purple-500\/10 { background-color: #F5F3FF !important; }
+.bg-blue-600       { background-color: #3b82f6 !important; }
+
+/* --- Divide colors --- */
+.divide-slate-600 > :not([hidden]) ~ :not([hidden]) { border-color: #D9E8F6 !important; }
+.divide-slate-700 > :not([hidden]) ~ :not([hidden]) { border-color: #D9E8F6 !important; }
+.divide-slate-700\/50 > :not([hidden]) ~ :not([hidden]) { border-color: #D9E8F6 !important; }
+
+/* --- Ring colors --- */
+.ring-slate-500 { --tw-ring-color: #D9E8F6 !important; }
+
+/* --- Prose overrides for markdown in light theme --- */
+.prose-invert { color: #0B4778 !important; }
+
+/* --- Specific component patterns --- */
+.bg-slate-800\/50 { background-color: #EFF6FB !important; }
+.border-slate-700\/50 { border-color: #D9E8F6 !important; }
+.bg-slate-800\/30 { background-color: #EFF6FB !important; }
+.border-slate-700\/30 { border-color: #D9E8F6 !important; }
+.border-slate-800\/50 { border-color: #EFF6FB !important; }
+.hover\:bg-slate-800\/30:hover { background-color: #EFF6FB !important; }
+.border-slate-600\/50 { border-color: #D9E8F6 !important; }
+
+/* --- Dark-tinted status backgrounds → light equivalents --- */
+.bg-teal-900\/30   { background-color: #F0FDF4 !important; }
+.border-teal-700\/50 { border-color: #bbf7d0 !important; }
+.bg-yellow-900\/30  { background-color: #FFFBEB !important; }
+.border-yellow-700\/50 { border-color: #fde68a !important; }
+.bg-red-900\/30     { background-color: #FEF2F2 !important; }
+.border-red-700\/50  { border-color: #fecaca !important; }
+.bg-red-900\/20     { background-color: #FEF2F2 !important; }
+.border-red-700\/40  { border-color: #fecaca !important; }
+.bg-blue-900\/20    { background-color: #EFF6FF !important; }
+.border-blue-700\/50 { border-color: #bfdbfe !important; }
+.bg-yellow-900\/20  { background-color: #FFFBEB !important; }
+.border-yellow-700\/40 { border-color: #fde68a !important; }
+.bg-slate-900\/50   { background-color: #EFF6FB !important; }
+.bg-slate-900\/30   { background-color: #EFF6FB !important; }
+.bg-slate-800\/70   { background-color: #EFF6FB !important; }
+
+/* --- Dark-tinted text → light equivalents --- */
+.text-blue-300  { color: #3b82f6 !important; }
+.text-blue-200  { color: #3b82f6 !important; }
+.text-green-300 { color: #16a34a !important; }
+.text-green-200 { color: #16a34a !important; }
+.text-red-300   { color: #dc2626 !important; }
+.text-yellow-300 { color: #ca8a04 !important; }
+
+/* --- Dashed borders → solid light borders --- */
+.border-dashed { border-style: solid !important; }
+.border-blue-500 { border-color: #3b82f6 !important; }
+.border-green-500 { border-color: #16a34a !important; }
+.border-4 { border-width: 2px !important; }
+
+/* --- Green/blue header backgrounds → HRSA blue --- */
+.bg-green-600 { background-color: #0B4778 !important; }
+.bg-green-700 { background-color: #093d66 !important; }
+.bg-blue-800\/50 { background-color: #EFF6FF !important; }
+.bg-green-800\/50 { background-color: #F0FDF4 !important; }
+.bg-blue-900\/10 { background-color: #EFF6FF !important; }
+.bg-green-900\/10 { background-color: #F0FDF4 !important; }
+.bg-green-900\/20 { background-color: #F0FDF4 !important; }
+
+/* --- Purple buttons → HRSA blue --- */
+.bg-purple-600 { background-color: #3b82f6 !important; }
+.bg-purple-700 { background-color: #2563eb !important; }
+.hover\:bg-purple-700:hover { background-color: #2563eb !important; }
+.hover\:bg-green-700:hover { background-color: #093d66 !important; }
+
+/* --- Red buttons (destructive) → softer red --- */
+.bg-red-600 { background-color: #dc2626 !important; }
+.bg-red-700 { background-color: #b91c1c !important; }
+.hover\:bg-red-700:hover { background-color: #b91c1c !important; }
+.hover\:bg-red-800:hover { background-color: #991b1b !important; }
+
+/* --- Additional hover states --- */
+.hover\:bg-blue-700:hover { background-color: #2563eb !important; }
+.hover\:bg-blue-600\/50:hover { background-color: #dbeafe !important; }
+.hover\:border-blue-400:hover { border-color: #60a5fa !important; }
+.hover\:border-green-400\/50:hover { border-color: #86efac !important; }
+.hover\:bg-slate-700\/30:hover { background-color: #EFF6FB !important; }
+.hover\:bg-white\/5:hover { background-color: rgba(59,130,246,0.05) !important; }
+
+/* --- Ring overrides --- */
+.ring-1.ring-green-500\/50 { --tw-ring-color: #86efac !important; }
+.ring-1.ring-blue-500\/50 { --tw-ring-color: #93c5fd !important; }
+.ring-1.ring-green-500\/50, .ring-green-500\/50 { --tw-ring-color: #86efac !important; }
+.ring-red-500\/50 { --tw-ring-color: #fca5a5 !important; }
+.ring-yellow-500\/50 { --tw-ring-color: #fde68a !important; }
+.ring-blue-500\/50 { --tw-ring-color: #93c5fd !important; }
+
+/* --- Badge backgrounds with opacity --- */
+.bg-green-500\/20 { background-color: #dcfce7 !important; }
+.bg-green-500\/30 { background-color: #dcfce7 !important; }
+.bg-red-500\/20   { background-color: #fee2e2 !important; }
+.bg-red-500\/30   { background-color: #fee2e2 !important; }
+.bg-yellow-500\/20 { background-color: #fef3c7 !important; }
+.bg-yellow-500\/30 { background-color: #fef3c7 !important; }
+.bg-blue-500\/20  { background-color: #dbeafe !important; }
+.bg-blue-500\/30  { background-color: #dbeafe !important; }
+.bg-purple-500\/20 { background-color: #ede9fe !important; }
+.bg-gray-500\/20  { background-color: #f1f5f9 !important; }
+.bg-blue-600\/30  { background-color: #dbeafe !important; }
+
+/* --- Border with opacity --- */
+.border-green-500\/20 { border-color: #bbf7d0 !important; }
+.border-green-500\/30 { border-color: #bbf7d0 !important; }
+.border-red-500\/20  { border-color: #fecaca !important; }
+.border-blue-500\/20 { border-color: #bfdbfe !important; }
+.border-blue-500\/30 { border-color: #93c5fd !important; }
+.border-blue-500\/40 { border-color: #93c5fd !important; }
+.border-yellow-500\/20 { border-color: #fde68a !important; }
+.border-white\/10 { border-color: #D9E8F6 !important; }
+
+/* --- Disabled state --- */
+.disabled\:bg-slate-600:disabled { background-color: #D9E8F6 !important; color: #94a3b8 !important; }
+
+/* --- Evidence block table overrides --- */
+.bg-slate-700 { background-color: #EFF6FB !important; }
+.hover\:bg-slate-700\/50:hover { background-color: #EFF6FB !important; }
+
+/* --- Red/yellow/blue 500/5 tints for rows --- */
+.bg-red-500\/5 { background-color: #FFF5F5 !important; }
+.bg-yellow-500\/5 { background-color: #FFFDF5 !important; }
+
+/* --- Font family override for monospace blocks --- */
+.font-mono { font-family: 'Source Sans 3', monospace !important; }
+
+/* --- Opacity overrides for section tiles --- */
+.opacity-60 { opacity: 0.7 !important; }
+
+/* --- Selected section tab shadow --- */
+.shadow-lg { box-shadow: 0 4px 12px rgba(59,130,246,0.15) !important; }
+
+/* --- Input fields inside cards need distinct background --- */
+input.bg-slate-800,
+textarea.bg-slate-800 { background-color: #EFF6FB !important; }
+
+/* --- hover:text-white on non-button elements → HRSA blue --- */
+.hover\:text-white:hover { color: #0B4778 !important; }
+
+/* --- hover:text-gray-200/300 → HRSA blue --- */
+.hover\:text-gray-200:hover { color: #0B4778 !important; }
+.hover\:text-gray-300:hover { color: #0B4778 !important; }
+
+/* --- hover:text-red-300/400 for delete icons --- */
+.hover\:text-red-300:hover { color: #dc2626 !important; }
+.hover\:text-red-400:hover { color: #dc2626 !important; }
+
+/* --- hover:text-blue-300 --- */
+.hover\:text-blue-300:hover { color: #2563eb !important; }
+
+/* --- Additional missing patterns --- */
+.bg-purple-500 { background-color: #3b82f6 !important; }
+.bg-gray-500\/10 { background-color: #f1f5f9 !important; }
+.border-gray-500\/20 { border-color: #e2e8f0 !important; }
+.bg-slate-600 { background-color: #D9E8F6 !important; }
+.hover\:bg-slate-600\/50:hover { background-color: #D9E8F6 !important; }

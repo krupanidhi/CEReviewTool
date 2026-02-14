@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Dashboard from './components/Dashboard'
 import ChatInterface from './components/ChatInterface'
 import ComparisonWorkflow from './components/ComparisonWorkflow'
@@ -7,7 +7,8 @@ import ChecklistComparison from './components/ChecklistComparison'
 import Settings from './components/Settings'
 import ApplicationPageViewer from './components/ApplicationPageViewer'
 import LogViewer from './components/LogViewer'
-import { FileText, MessageSquare, GitCompare, Settings as SettingsIcon, LayoutDashboard, ClipboardCheck, BookOpen, Terminal } from 'lucide-react'
+import { getConfig } from './services/api'
+import { MessageSquare } from 'lucide-react'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -41,6 +42,27 @@ function App() {
     try { localStorage.removeItem('ce_review_logs') } catch {}
   }
 
+  // Fetch and log server config (endpoints + folder paths) on first mount
+  useEffect(() => {
+    let mounted = true
+    getConfig().then(config => {
+      if (!mounted || !config) return
+      const logEntry = (msg) => handleLog({ timestamp: new Date().toISOString(), level: 'info', message: msg })
+      logEntry('── External Endpoints ──')
+      logEntry(`  🌐 Azure Document Intelligence: ${config.endpoints?.azureDocIntelligence || '(not set)'}`)
+      logEntry(`  🌐 Azure OpenAI: ${config.endpoints?.azureOpenAI || '(not set)'}`)
+      logEntry(`  🤖 OpenAI Deployment: ${config.endpoints?.openAIDeployment || '(not set)'}`)
+      logEntry('── API Endpoints ──')
+      logEntry(`  🔗 CE Review Server: ${config.endpoints?.ceServer || '(not set)'}`)
+      logEntry('── Folder Paths ──')
+      if (config.folders) {
+        Object.entries(config.folders).forEach(([key, val]) => {
+          logEntry(`  📂 ${key}: ${val}`)
+        })
+      }
+    })
+    return () => { mounted = false }
+  }, [])
 
   const handleComparisonComplete = (result) => {
     setComparisonResult(result)
@@ -132,160 +154,124 @@ function App() {
   }, [isResizing])
 
   return (
-    <div className="min-h-screen bg-slate-900 text-gray-100">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="bg-blue-600 p-2 rounded-lg">
-                <FileText className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-white">
-                  CE Review Check List Validator
-                </h1>
-                <p className="text-sm text-gray-400">
-                  Azure Document Intelligence & AI-Powered Validation
-                </p>
-              </div>
+    <div style={{ minHeight: '100vh', background: '#EFF6FB', color: '#0B4778' }}>
+      {/* Container */}
+      <div style={{ maxWidth: '100%', margin: '0 auto', padding: '20px 20px 0 20px' }}>
+        {/* HRSA Header */}
+        <div className="ce-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div style={{
+              width: '60px', height: '60px',
+              border: '3px solid #FFFFFF', borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, background: 'rgba(255, 255, 255, 0.1)'
+            }}>
+              <svg width="38" height="38" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="8" y="6" width="24" height="28" rx="2" stroke="#FFFFFF" strokeWidth="2" fill="none"/>
+                <line x1="13" y1="14" x2="27" y2="14" stroke="#FFFFFF" strokeWidth="2"/>
+                <line x1="13" y1="19" x2="27" y2="19" stroke="#FFFFFF" strokeWidth="2"/>
+                <line x1="13" y1="24" x2="22" y2="24" stroke="#FFFFFF" strokeWidth="2"/>
+                <path d="M22 26 L26 30 L34 20" stroke="#3b82f6" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </div>
-            <div className="flex items-center space-x-2">
-              <div className="flex items-center space-x-2 bg-slate-700 px-3 py-1.5 rounded-lg">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-xs text-gray-300">Connected</span>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <h1 style={{ margin: 0, fontSize: '1.6rem', fontWeight: '600', color: '#FFFFFF', lineHeight: '1.3' }}>
+                AI Review Assistant
+              </h1>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#FFFFFF', opacity: '0.9', lineHeight: '1.3' }}>
+                AI-Powered Document Intelligence for CE Review
+              </p>
             </div>
           </div>
         </div>
-      </header>
 
-      {/* Navigation Tabs */}
-      <div className="bg-slate-800 border-b border-slate-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-8">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`flex items-center space-x-2 px-4 py-4 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'dashboard'
-                  ? 'border-blue-500 text-blue-400'
-                  : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              <span>Dashboard</span>
+        {/* Card with red top accent */}
+        <div className="ce-card">
+          {/* Tabs */}
+          <div className="ce-tabs">
+            <button className={`ce-tab ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
+              Dashboard
             </button>
-            <button
-              onClick={() => setActiveTab('compare')}
-              className={`flex items-center space-x-2 px-4 py-4 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'compare'
-                  ? 'border-blue-500 text-blue-400'
-                  : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
-              }`}
-            >
-              <GitCompare className="w-4 h-4" />
-              <span>Compare & Validate</span>
+            <button className={`ce-tab ${activeTab === 'compare' ? 'active' : ''}`} onClick={() => setActiveTab('compare')}>
+              Compare & Validate
             </button>
             {comparisonResult && (
-              <button
-                onClick={() => setActiveTab('report')}
-                className={`flex items-center space-x-2 px-4 py-4 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'report'
-                    ? 'border-blue-500 text-blue-400'
-                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
-                }`}
-              >
-                <FileText className="w-4 h-4" />
-                <span>Compliance Report</span>
+              <button className={`ce-tab ${activeTab === 'report' ? 'active' : ''}`} onClick={() => setActiveTab('report')}>
+                Compliance Report
               </button>
             )}
             {comparisonResult && (
-              <button
-                onClick={() => setActiveTab('qa-comparison')}
-                className={`flex items-center space-x-2 px-4 py-4 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'qa-comparison'
-                    ? 'border-blue-500 text-blue-400'
-                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
-                }`}
-              >
-                <ClipboardCheck className="w-4 h-4" />
-                <span>Checklist Comparison</span>
+              <button className={`ce-tab ${activeTab === 'qa-comparison' ? 'active' : ''}`} onClick={() => setActiveTab('qa-comparison')}>
+                Checklist Comparison
               </button>
             )}
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`flex items-center space-x-2 px-4 py-4 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'settings'
-                  ? 'border-blue-500 text-blue-400'
-                  : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
-              }`}
-            >
-              <SettingsIcon className="w-4 h-4" />
-              <span>Settings</span>
+            <button className={`ce-tab ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+              ⚙️ Settings
             </button>
-          </nav>
+          </div>
+
+          {/* Main Content */}
+          {activeTab === 'dashboard' && (
+            <Dashboard onViewResults={handleViewResultsFromDashboard} />
+          )}
+          {activeTab === 'compare' && (
+            <ComparisonWorkflow 
+              onComparisonComplete={handleComparisonComplete}
+              cachedDocs={cachedUploadedDocs}
+              onDocumentsUploaded={handleDocumentsUploaded}
+              onLog={handleLog}
+            />
+          )}
+          {activeTab === 'report' && (
+            <CategorizedComplianceReport comparisonData={comparisonResult} onOpenPageViewer={(page, sectionPages, sectionName) => { setPageViewerContext({ page, sectionPages: sectionPages || [page], sectionName: sectionName || '' }); setPageViewerOpen(true); window.__pageViewerGoTo = page; }} />
+          )}
+          {activeTab === 'qa-comparison' && (
+            <ChecklistComparison comparisonData={comparisonResult} />
+          )}
+          {activeTab === 'settings' && (
+            <Settings />
+          )}
         </div>
       </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'dashboard' && (
-          <Dashboard onViewResults={handleViewResultsFromDashboard} />
-        )}
-        {activeTab === 'compare' && (
-          <ComparisonWorkflow 
-            onComparisonComplete={handleComparisonComplete}
-            cachedDocs={cachedUploadedDocs}
-            onDocumentsUploaded={handleDocumentsUploaded}
-            onLog={handleLog}
-          />
-        )}
-        {activeTab === 'report' && (
-          <CategorizedComplianceReport comparisonData={comparisonResult} onOpenPageViewer={(page, sectionPages, sectionName) => { setPageViewerContext({ page, sectionPages: sectionPages || [page], sectionName: sectionName || '' }); setPageViewerOpen(true); window.__pageViewerGoTo = page; }} />
-        )}
-        {activeTab === 'qa-comparison' && (
-          <ChecklistComparison comparisonData={comparisonResult} />
-        )}
-        {activeTab === 'settings' && (
-          <Settings />
-        )}
-      </main>
-
       {/* Floating Action Buttons */}
-      <div className="fixed bottom-6 right-6 flex flex-col space-y-3 z-50">
-        {/* Log Viewer Button */}
+      <div style={{ position: 'fixed', bottom: '24px', right: '24px', display: 'flex', flexDirection: 'column', gap: '12px', zIndex: 50 }}>
         {processingLogs.length > 0 && !logViewerOpen && !chatOpen && (
           <button
             onClick={() => setLogViewerOpen(true)}
-            className="bg-green-600 hover:bg-green-700 text-white p-3.5 rounded-full shadow-lg transition-all hover:scale-110 relative"
+            style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#EFF6FB', color: '#0B4778', border: '2px solid #D9E8F6', cursor: 'pointer', fontSize: '1.3rem', boxShadow: '0 4px 12px rgba(11,71,120,0.15)', transition: 'all 0.3s', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
             title="View Processing Logs"
           >
-            <Terminal className="w-5 h-5" />
+            📋
             {processingLogs.filter(l => l.level === 'error').length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
+              <span style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#dc2626', color: 'white', fontSize: '0.65rem', width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {processingLogs.filter(l => l.level === 'error').length}
               </span>
             )}
           </button>
         )}
-        {/* Page Viewer Button - only show when comparison result exists */}
         {comparisonResult && !pageViewerOpen && !chatOpen && (
           <button
             onClick={() => setPageViewerOpen(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white p-3.5 rounded-full shadow-lg transition-all hover:scale-110"
+            style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#EFF6FB', color: '#0B4778', border: '2px solid #D9E8F6', cursor: 'pointer', fontSize: '1.3rem', boxShadow: '0 4px 12px rgba(11,71,120,0.15)', transition: 'all 0.3s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
             title="View Application Pages"
           >
-            <BookOpen className="w-5 h-5" />
+            📖
           </button>
         )}
-        {/* Chat Button */}
         {!chatOpen && (
           <button
             onClick={() => setChatOpen(true)}
-            className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-full shadow-lg transition-all hover:scale-110"
+            style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#EFF6FB', color: '#0B4778', border: '2px solid #D9E8F6', cursor: 'pointer', fontSize: '1.4rem', boxShadow: '0 4px 12px rgba(11,71,120,0.15)', transition: 'all 0.3s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
             title="Chat with AI"
           >
-            <MessageSquare className="w-6 h-6" />
+            💬
           </button>
         )}
       </div>
@@ -308,37 +294,43 @@ function App() {
 
       {/* Slide-out Chat Panel */}
       {chatOpen && (
-        <div 
-          className="fixed inset-y-0 right-0 bg-slate-900 border-l border-slate-700 shadow-2xl z-50 flex flex-col"
-          style={{ width: `${chatWidth}px` }}
-        >
+        <div style={{
+          position: 'fixed', top: 0, right: 0, bottom: 0,
+          width: `${chatWidth}px`,
+          background: '#FFFFFF', borderLeft: '2px solid #D9E8F6',
+          boxShadow: '-4px 0 20px rgba(0,0,0,0.15)', zIndex: 50,
+          display: 'flex', flexDirection: 'column'
+        }}>
           {/* Resize Handle */}
           <div
-            className={`absolute left-0 top-0 bottom-0 w-1 hover:w-2 bg-slate-600 hover:bg-purple-500 cursor-col-resize transition-all ${
-              isResizing ? 'w-2 bg-purple-500' : ''
-            }`}
+            style={{
+              position: 'absolute', left: 0, top: 0, bottom: 0,
+              width: isResizing ? '4px' : '2px',
+              background: isResizing ? '#7c3aed' : '#D9E8F6',
+              cursor: 'col-resize', transition: 'all 0.2s'
+            }}
             onMouseDown={handleMouseDown}
+            onMouseEnter={(e) => { e.currentTarget.style.width = '4px'; e.currentTarget.style.background = '#7c3aed' }}
+            onMouseLeave={(e) => { if (!isResizing) { e.currentTarget.style.width = '2px'; e.currentTarget.style.background = '#D9E8F6' } }}
             title="Drag to resize"
-          >
-            <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-1 h-12 bg-slate-400 rounded-full opacity-50"></div>
-          </div>
+          />
           
-          <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-slate-800">
-            <div className="flex items-center space-x-2">
-              <MessageSquare className="w-5 h-5 text-purple-500" />
-              <h3 className="text-lg font-semibold text-white">Chat with AI</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', borderBottom: '2px solid #D9E8F6', background: '#0B4778' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.2rem' }}>💬</span>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: '600', color: '#FFFFFF', margin: 0 }}>Chat with AI</h3>
             </div>
             <button
               onClick={() => setChatOpen(false)}
-              className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+              style={{ background: 'rgba(255,255,255,0.15)', border: 'none', cursor: 'pointer', padding: '6px 10px', borderRadius: '6px', color: '#FFFFFF', fontSize: '1rem', transition: 'background 0.2s' }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
               title="Close chat"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              ✕
             </button>
           </div>
-          <div className="flex-1 overflow-hidden">
+          <div style={{ flex: 1, overflow: 'hidden' }}>
             <ChatInterface 
               document={selectedDocument}
               applicationDoc={chatDocuments.application}
@@ -351,24 +343,10 @@ function App() {
       {/* Overlay when chat is open */}
       {chatOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40"
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 40 }}
           onClick={() => setChatOpen(false)}
         />
       )}
-
-      {/* Footer */}
-      <footer className="bg-slate-800 border-t border-slate-700 mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between text-sm text-gray-400">
-            <p>© 2026 CE Review Tool. Powered by Azure AI.</p>
-            <div className="flex items-center space-x-4">
-              <span>Azure Document Intelligence</span>
-              <span>•</span>
-              <span>Azure OpenAI</span>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   )
 }

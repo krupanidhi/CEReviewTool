@@ -72,6 +72,31 @@ app.get('/api/logs', async (req, res) => {
   }
 })
 
+// Configuration endpoint — returns endpoints and folder paths for UI logging
+const ceRoot = join(__dirname, '..')
+app.get('/api/config', (req, res) => {
+  res.json({
+    endpoints: {
+      azureDocIntelligence: process.env.VITE_AZURE_DOC_ENDPOINT || '(not set)',
+      azureOpenAI: process.env.VITE_AZURE_OPENAI_ENDPOINT || '(not set)',
+      openAIDeployment: process.env.VITE_AZURE_OPENAI_DEPLOYMENT || 'gpt-4',
+      ceServer: `http://localhost:${PORT}`,
+    },
+    folders: {
+      applications: join(ceRoot, 'applications'),
+      userGuides: join(ceRoot, 'userGuides'),
+      checklistQuestions: join(ceRoot, 'checklistQuestions'),
+      saat: join(ceRoot, 'SAAT'),
+      data: join(ceRoot, 'data'),
+      processedApplications: join(ceRoot, 'processed-applications'),
+      extractions: join(ceRoot, 'extractions'),
+      documents: join(ceRoot, 'documents'),
+      storedChecklists: join(ceRoot, 'stored-checklists'),
+      logs: join(ceRoot, 'logs'),
+    }
+  })
+})
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ 

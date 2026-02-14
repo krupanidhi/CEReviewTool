@@ -195,7 +195,7 @@ The SAAT (Service Area Analysis Tool) CSV data is automatically loaded during pr
 
 ---
 
-### Batch Script Usage:
+### CE-Only Batch Script Usage:
 
 ```bash
 # Interactive mode (prompts for paths):
@@ -213,7 +213,103 @@ node server/scripts/batchProcess.js \
 npm run batch
 ```
 
-### Batch Processing Steps (per application):
+---
+
+### Combined Batch Script (CE Review + Prefunding Review):
+
+Extracts each application PDF **once** via Azure Document Intelligence, then runs
+both CE Review and Prefunding Review using the same extraction result.
+
+#### Files:
+- `server/scripts/combinedBatchProcess.js` — Main entry point
+- `server/scripts/combinedBatchCE.js` — CE Review batch functions
+- `server/scripts/combinedBatchPF.js` — Prefunding Review batch functions
+- `server/scripts/sharedExtraction.js` — Shared Azure DI extraction + format converters
+
+#### Data Folder Structure:
+```
+CEReviewTool/
+├── applications/                    ← Common folder for all PDFs
+│   └── Application-242645.pdf
+├── userGuides/
+│   └── HRSA-26-004/                 ← Resolved from Funding Opp Number
+│       └── FY26 SAC Application User Guide_Approved.pdf
+├── checklistQuestions/
+│   └── FY26/                        ← Resolved from year code (FY + xx)
+│       ├── CE Standard Checklist_structured.json
+│       └── ProgramSpecificQuestions.json
+├── SAAT/
+│   └── FY26/
+│       └── SAC-SAAT-Export-*.csv
+└── processed-applications/          ← CE dashboard cache
+    ├── index.json
+    └── app_*.json
+
+AIPrefundingReview/data/
+├── 26/compliance-rules.json         ← Resolved from year code (xx)
+└── cache/                           ← Prefunding dashboard cache
+    └── <md5hash>_v1.0.json
+```
+
+#### Year Auto-Detection:
+The script extracts `Funding Opportunity Number: HRSA-xx-004` from the PDF content.
+The `xx` (e.g., `26`) is used to resolve:
+- **CE Review:** `userGuides/HRSA-xx-004/`, `checklistQuestions/FYxx/`, `SAAT/FYxx/`
+- **Prefunding:** `AIPrefundingReview/data/xx/compliance-rules.json`
+
+#### Usage:
+```bash
+# Interactive (prompts for mode):
+node server/scripts/combinedBatchProcess.js
+
+# Run both reviews:
+node server/scripts/combinedBatchProcess.js --mode both
+
+# CE Review only:
+node server/scripts/combinedBatchProcess.js --mode ce-only
+
+# Prefunding Review only:
+node server/scripts/combinedBatchProcess.js --mode prefunding-only
+```
+
+#### Combined Batch Steps (per application):
+1. **Extract** PDF via Azure Document Intelligence (called **once**, shared)
+2. **Convert** raw result to CE JSON format + Prefunding plain text format
+3. **CE Review** (if enabled):
+   - Upload user guide to CE server → get checklist sections
+   - Run compliance comparison (single-call with chunked fallback)
+   - Run checklist Q&A (Standard + Program-Specific)
+   - Cache to `processed-applications/` → **CE dashboard tile**
+4. **Prefunding Review** (if enabled):
+   - Load compliance rules for detected year
+   - Run all-sections validation via Azure OpenAI (single call)
+   - Cache to `AIPrefundingReview/data/cache/` → **Prefunding dashboard tile**
+
+#### Dashboard Integration:
+- **CE Review dashboard:** Results cached via `POST /api/processed-applications/save`,
+  visible as tiles in the Dashboard tab (port 3002)
+- **Prefunding dashboard:** Results cached as `<md5>_v1.0.json` in `data/cache/`,
+  visible as tiles in the Applications tab (port 3001)
+
+#### Prefunding Cache Format:
+```json
+{
+  "fileHash": "md5 of extracted text",
+  "manualVersion": "v1.0",
+  "timestamp": "ISO date",
+  "applicationName": "Application-242645",
+  "extractedContent": "full extracted text with PAGE markers",
+  "results": {
+    "Sliding Fee Discount Program": {
+      "compliantItems": [{ "element", "status", "evidence", "evidenceLocation", "reasoning" }],
+      "nonCompliantItems": [...],
+      "notApplicableItems": [...]
+    }
+  }
+}
+```
+
+### CE-Only Batch Processing Steps (per application):
 1. Upload & analyze user guide PDF (once, reused for all applications)
 2. **Skip already-processed applications** (checks `processed-applications/` cache)
 3. Upload & analyze application PDF

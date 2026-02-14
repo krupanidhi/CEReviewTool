@@ -98,9 +98,11 @@ function parseCSVLine(line) {
 
 /**
  * Load SAAT data for a given fiscal year and optionally filter by announcement number.
+ * Returns ALL service areas under the NOFO, grouped by service area ID.
+ * The caller must match the applicant to the correct service area.
  * @param {string} fiscalYear - e.g., "FY26"
  * @param {string} [announcementNumber] - e.g., "HRSA-26-004" to filter
- * @returns {Promise<Object>} Parsed SAAT data
+ * @returns {Promise<Object>} Parsed SAAT data with all service areas
  */
 export async function loadSAATData(fiscalYear, announcementNumber = null) {
   const saatDir = join(SAAT_ROOT, fiscalYear)
@@ -141,20 +143,44 @@ export async function loadSAATData(fiscalYear, announcementNumber = null) {
       found: false,
       fiscalYear,
       announcementNumber,
+      serviceAreas: [],
+      matchedArea: null,
       message: `No SAAT data found for ${announcementNumber || 'any announcement'} in ${fiscalYear}`
     }
   }
 
-  // Aggregate data from rows
-  return aggregateSAATData(allRows, fiscalYear, announcementNumber)
+  // Group rows by service area ID — each ID is a distinct service area
+  const grouped = new Map()
+  allRows.forEach(row => {
+    const saId = (row.id || '').trim()
+    if (!grouped.has(saId)) grouped.set(saId, [])
+    grouped.get(saId).push(row)
+  })
+
+  // Build per-service-area summaries
+  const serviceAreas = []
+  for (const [saId, rows] of grouped) {
+    serviceAreas.push(buildServiceAreaSummary(saId, rows))
+  }
+
+  console.log(`📊 SAAT: ${serviceAreas.length} distinct service areas found under ${announcementNumber || 'all announcements'}`)
+  serviceAreas.forEach(sa => console.log(`   - SA ${sa.id}: ${sa.city}, ${sa.state} (${sa.type}) — ${sa.totalZipCodes} zips, target: ${sa.patientTarget}`))
+
+  return {
+    found: true,
+    fiscalYear,
+    announcementNumber: announcementNumber || allRows[0].announcement_number,
+    serviceAreas,
+    matchedArea: null // caller sets this after matching to applicant
+  }
 }
 
 /**
- * Aggregate SAAT CSV rows into a structured summary for AI analysis.
- * Each row represents one zip code entry for a service area.
+ * Build a structured summary for a single SAAT service area.
+ * @param {string} saId - Service area ID from CSV
+ * @param {Array} rows - All CSV rows for this service area
  */
-function aggregateSAATData(rows, fiscalYear, announcementNumber) {
-  // All rows for the same announcement share the same funding/target values
+function buildServiceAreaSummary(saId, rows) {
   const firstRow = rows[0]
 
   const patientTarget = parseInt(firstRow.patient_target) || 0
@@ -182,60 +208,147 @@ function aggregateSAATData(rows, fiscalYear, announcementNumber) {
     .filter(z => z.zip)
     .sort((a, b) => b.pctPatients - a.pctPatients)
 
-  // Unique zip codes
   const uniqueZips = [...new Set(zipEntries.map(z => z.zip))]
 
-  // Determine funding distribution (which population types have non-zero funding)
+  // Funding distribution
   const fundingDistribution = []
   if (chcFunding > 0) fundingDistribution.push({ type: 'CHC', amount: chcFunding })
   if (msawFunding > 0) fundingDistribution.push({ type: 'MSAW', amount: msawFunding })
   if (hpFunding > 0) fundingDistribution.push({ type: 'HP', amount: hpFunding })
   if (rphFunding > 0) fundingDistribution.push({ type: 'RPH', amount: rphFunding })
 
-  // Service area metadata
-  const serviceAreaType = firstRow.service_area_type || ''
-  const currentRecipient = firstRow.current_award_recipient || ''
-  const city = firstRow.city || ''
-  const state = firstRow.state || ''
-
   return {
-    found: true,
-    fiscalYear,
-    announcementNumber: announcementNumber || firstRow.announcement_number,
-    serviceArea: {
-      city,
-      state,
-      type: serviceAreaType,
-      currentRecipient
-    },
+    id: saId,
+    city: firstRow.city || '',
+    state: firstRow.state || '',
+    type: firstRow.service_area_type || '',
+    currentRecipient: firstRow.current_award_recipient || '',
+    grantNumber: firstRow.gn || '',
     patientTarget,
     totalFunding,
-    fundingBreakdown: {
-      chc: chcFunding,
-      msaw: msawFunding,
-      hp: hpFunding,
-      rph: rphFunding
-    },
+    fundingBreakdown: { chc: chcFunding, msaw: msawFunding, hp: hpFunding, rph: rphFunding },
     fundingDistribution,
     serviceTypes,
     zipCodes: uniqueZips,
     zipDetails: zipEntries,
-    totalZipCodes: uniqueZips.length,
-    // Pre-computed values for Q11-Q15 validation
-    validation: {
-      // Q11: Is Form 1A patient count >= 75% of SAAT patient_target?
-      q11_patientTarget: patientTarget,
-      q11_75pctThreshold: Math.ceil(patientTarget * 0.75),
-      // Q12: Does applicant propose all service types listed in SAAT?
-      q12_requiredServiceTypes: serviceTypes,
-      // Q13: Does requested funding NOT exceed SAAT total?
-      q13_maxFunding: totalFunding,
-      // Q14: Does applicant maintain funding distribution (CHC, MSAW, HP, RPH)?
-      q14_fundingDistribution: fundingDistribution,
-      // Q15: Does applicant propose to serve patients for each population type?
-      q15_populationTypes: fundingDistribution.map(f => f.type)
+    totalZipCodes: uniqueZips.length
+  }
+}
+
+/**
+ * Match the applicant to the correct SAAT service area using zip codes, city/state, or grant number.
+ * @param {Object} saatData - Output from loadSAATData (contains serviceAreas array)
+ * @param {Object} applicantProfile - Extracted from application (has zipCodesFromApp, organizationName, etc.)
+ * @param {Object} applicationData - Full application data for deeper text search
+ * @returns {Object} saatData with matchedArea set, plus matchMethod description
+ */
+export function matchApplicantToServiceArea(saatData, applicantProfile, applicationData) {
+  if (!saatData?.found || !saatData.serviceAreas || saatData.serviceAreas.length === 0) {
+    return saatData
+  }
+
+  const areas = saatData.serviceAreas
+
+  // Strategy 1 (HIGHEST PRIORITY): Match by Service Area ID from actual forms (Summary Page, Form 1A)
+  const appSaId = applicantProfile?.serviceAreaId
+  if (appSaId) {
+    // Clean the ID for comparison (remove asterisks, whitespace)
+    const cleanAppId = appSaId.replace(/[*\s]/g, '')
+    for (const area of areas) {
+      const cleanAreaId = (area.id || '').replace(/[*\s]/g, '')
+      if (cleanAreaId === cleanAppId) {
+        saatData.matchedArea = area
+        saatData.matchMethod = `Matched by Service Area ID: ${appSaId} (from application forms)`
+        console.log(`📊 SAAT Match: SA ${area.id} (${area.city}, ${area.state}) — SA ID match`)
+        return saatData
+      }
+    }
+    console.log(`📊 SAAT: Applicant SA ID ${appSaId} not found in SAAT CSV (${areas.map(a => a.id).join(', ')})`)
+  }
+
+  // Strategy 2: Match by zip code overlap
+  const appZips = new Set(applicantProfile?.zipCodesFromApp || [])
+  if (appZips.size > 0) {
+    let bestMatch = null
+    let bestOverlap = 0
+    for (const area of areas) {
+      const overlap = area.zipCodes.filter(z => appZips.has(z)).length
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap
+        bestMatch = area
+      }
+    }
+    if (bestMatch && bestOverlap > 0) {
+      saatData.matchedArea = bestMatch
+      saatData.matchMethod = `Matched by ${bestOverlap} overlapping zip codes`
+      console.log(`📊 SAAT Match: SA ${bestMatch.id} (${bestMatch.city}, ${bestMatch.state}) — ${bestOverlap} zip overlap`)
+      return saatData
     }
   }
+
+  // Strategy 3: Match by city/state from applicant profile first, then full text
+  const appCity = applicantProfile?.serviceAreaCity
+  const appState = applicantProfile?.serviceAreaState
+  if (appCity && appState) {
+    for (const area of areas) {
+      if (area.city.toLowerCase() === appCity.toLowerCase() && area.state.toLowerCase() === appState.toLowerCase()) {
+        saatData.matchedArea = area
+        saatData.matchMethod = `Matched by service area city/state: ${appCity}, ${appState}`
+        console.log(`📊 SAAT Match: SA ${area.id} (${area.city}, ${area.state}) — profile city/state match`)
+        return saatData
+      }
+    }
+  }
+
+  // Strategy 4: Match by city/state from full application text
+  const fullText = extractFullText(applicationData)
+  for (const area of areas) {
+    if (!area.city) continue
+    const cityPattern = new RegExp(`\\b${escapeRegex(area.city)}\\b`, 'i')
+    const statePattern = new RegExp(`\\b${escapeRegex(area.state)}\\b`, 'i')
+    if (cityPattern.test(fullText) && statePattern.test(fullText)) {
+      saatData.matchedArea = area
+      saatData.matchMethod = `Matched by city/state in application text: ${area.city}, ${area.state}`
+      console.log(`📊 SAAT Match: SA ${area.id} (${area.city}, ${area.state}) — text city/state match`)
+      return saatData
+    }
+  }
+
+  // Strategy 5: Match by grant number (gn field) in application text
+  for (const area of areas) {
+    if (area.grantNumber && fullText.includes(area.grantNumber)) {
+      saatData.matchedArea = area
+      saatData.matchMethod = `Matched by grant number: ${area.grantNumber}`
+      console.log(`📊 SAAT Match: SA ${area.id} (${area.city}, ${area.state}) — grant number match`)
+      return saatData
+    }
+  }
+
+  // No match found — log details for debugging
+  saatData.matchedArea = null
+  saatData.matchMethod = `No match found — applicant SA ID: ${appSaId || 'not extracted'}, city: ${appCity || 'unknown'}, state: ${appState || 'unknown'} — SAAT has: ${areas.map(a => `${a.id}(${a.city},${a.state})`).join(', ')}`
+  console.log(`📊 SAAT Match: NONE — applicant's service area not found in SAAT CSV`)
+  return saatData
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function extractFullText(applicationData) {
+  const parts = []
+  if (applicationData?.pages) {
+    applicationData.pages.slice(0, 20).forEach(p => {
+      const text = p.lines?.map(l => l.content).join('\n') || ''
+      if (text) parts.push(text)
+    })
+  }
+  if (applicationData?.keyValuePairs) {
+    applicationData.keyValuePairs.forEach(kv => {
+      parts.push(`${kv.key || ''}: ${kv.value || ''}`)
+    })
+  }
+  return parts.join('\n')
 }
 
 /**
@@ -248,44 +361,107 @@ export function buildSAATSummary(saatData) {
     return 'SAAT DATA: Not available for this service area.'
   }
 
-  const v = saatData.validation
-  return `
-=== SAAT (Service Area Analysis Tool) DATA ===
-Announcement: ${saatData.announcementNumber}
-Service Area: ${saatData.serviceArea.city}, ${saatData.serviceArea.state} (${saatData.serviceArea.type})
-Current Award Recipient: ${saatData.serviceArea.currentRecipient}
+  const parts = []
 
-PATIENT TARGET: ${saatData.patientTarget.toLocaleString()} unduplicated patients
-  - 75% Threshold: ${v.q11_75pctThreshold.toLocaleString()} (Form 1A must show at least this many)
+  parts.push(`=== SAAT (Service Area Analysis Tool) DATA ===`)
+  parts.push(`Announcement: ${saatData.announcementNumber}`)
 
-TOTAL FUNDING: $${saatData.totalFunding.toLocaleString()}
-  - CHC: $${saatData.fundingBreakdown.chc.toLocaleString()}
-  - MSAW: $${saatData.fundingBreakdown.msaw.toLocaleString()}
-  - HP: $${saatData.fundingBreakdown.hp.toLocaleString()}
-  - RPH: $${saatData.fundingBreakdown.rph.toLocaleString()}
+  // Q10 context: list ALL service areas announced under this NOFO
+  parts.push(`\nALL SERVICE AREAS ANNOUNCED UNDER THIS NOFO (${saatData.serviceAreas.length} total):`)
+  parts.push(`(Q10: The applicant's proposed service area must be one of these to answer "Yes")`)
+  saatData.serviceAreas.forEach(sa => {
+    parts.push(`  - SA ID ${sa.id}: ${sa.city}, ${sa.state} (${sa.type}) — Grant: ${sa.grantNumber || 'N/A'}, Recipient: ${sa.currentRecipient || 'N/A'}`)
+  })
 
-REQUIRED SERVICE TYPES: ${saatData.serviceTypes.join(', ')}
+  // Matched service area details (for Q11-Q16)
+  const matched = saatData.matchedArea
+  if (matched) {
+    parts.push(`\n═══ MATCHED SERVICE AREA FOR THIS APPLICANT ═══`)
+    parts.push(`Match Method: ${saatData.matchMethod}`)
+    parts.push(`Service Area ID: ${matched.id}`)
+    parts.push(`Location: ${matched.city}, ${matched.state} (${matched.type})`)
+    parts.push(`Current Award Recipient: ${matched.currentRecipient}`)
+    parts.push(`Grant Number: ${matched.grantNumber || 'N/A'}`)
 
-FUNDING DISTRIBUTION (population types with non-zero funding):
-${v.q14_fundingDistribution.map(f => `  - ${f.type}: $${f.amount.toLocaleString()}`).join('\n')}
+    const threshold75 = Math.ceil(matched.patientTarget * 0.75)
+    parts.push(`\nPATIENT TARGET: ${matched.patientTarget.toLocaleString()} unduplicated patients`)
+    parts.push(`  - 75% Threshold: ${threshold75.toLocaleString()} (Form 1A must show at least this many)`)
 
-ZIP CODES IN SERVICE AREA: ${saatData.totalZipCodes} zip codes
-Top zip codes by patient percentage:
-${saatData.zipDetails.slice(0, 10).map(z => `  - ${z.zip}: ${(z.pctPatients * 100).toFixed(1)}%`).join('\n')}
-${saatData.totalZipCodes > 10 ? `  ... and ${saatData.totalZipCodes - 10} more` : ''}
+    parts.push(`\nTOTAL FUNDING: $${matched.totalFunding.toLocaleString()}`)
+    parts.push(`  - CHC: $${matched.fundingBreakdown.chc.toLocaleString()}`)
+    parts.push(`  - MSAW: $${matched.fundingBreakdown.msaw.toLocaleString()}`)
+    parts.push(`  - HP: $${matched.fundingBreakdown.hp.toLocaleString()}`)
+    parts.push(`  - RPH: $${matched.fundingBreakdown.rph.toLocaleString()}`)
 
-=== VALIDATION CRITERIA FOR QUESTIONS 11-15 ===
-Q11: Form 1A total unduplicated patients must be >= ${v.q11_75pctThreshold.toLocaleString()} (75% of SAAT target ${saatData.patientTarget.toLocaleString()})
-Q12: Application must propose ALL of these service types: ${v.q12_requiredServiceTypes.join(', ')}
-Q13: Requested annual SAC funding must NOT exceed $${v.q13_maxFunding.toLocaleString()}
-Q14: Application must maintain funding distribution across: ${v.q15_populationTypes.join(', ')}
-Q15: Application must propose to serve patients for each population type: ${v.q15_populationTypes.join(', ')}
-=== END SAAT DATA ===
-`.trim()
+    parts.push(`\nREQUIRED SERVICE TYPES: ${matched.serviceTypes.join(', ')}`)
+
+    parts.push(`\nFUNDING DISTRIBUTION (population types with non-zero funding):`)
+    matched.fundingDistribution.forEach(f => parts.push(`  - ${f.type}: $${f.amount.toLocaleString()}`))
+
+    parts.push(`\nZIP CODES IN SERVICE AREA: ${matched.totalZipCodes} zip codes`)
+    parts.push(`All SAAT zip codes (sorted by patient percentage, descending):`)
+    parts.push(buildZipCodeTable(matched.zipDetails))
+
+    const popTypes = matched.fundingDistribution.map(f => f.type)
+    parts.push(`\n=== VALIDATION CRITERIA FOR QUESTIONS 11-16 ===`)
+    parts.push(`Q11: Form 1A total unduplicated patients must be >= ${threshold75.toLocaleString()} (75% of SAAT target ${matched.patientTarget.toLocaleString()})`)
+    parts.push(`Q12: Application must propose ALL of these service types: ${matched.serviceTypes.join(', ')}`)
+    parts.push(`Q13: Requested annual SAC funding must NOT exceed $${matched.totalFunding.toLocaleString()}`)
+    parts.push(`Q14: Application must maintain funding distribution across: ${popTypes.join(', ')}`)
+    parts.push(`Q15: Application must propose to serve patients for each population type: ${popTypes.join(', ')}`)
+    const highlightZips = matched.zipDetails.filter(z => z.highlight === 'Yes')
+    parts.push(`Q16: Form 5B zip codes must include SAAT zip codes where cumulative patient % reaches >= 75%.`)
+    parts.push(`     The "75% threshold" zips: ${highlightZips.map(z => z.zip).join(', ')}`)
+    parts.push(`     Cumulative % of highlighted zips: ${(highlightZips.reduce((s, z) => s + z.pctPatients, 0) * 100).toFixed(1)}%`)
+  } else {
+    parts.push(`\n═══ NO MATCHED SERVICE AREA ═══`)
+    parts.push(`Match Method: ${saatData.matchMethod || 'No match attempted'}`)
+    parts.push(`The applicant's service area was NOT found in the SAAT CSV data.`)
+    parts.push(`This does NOT necessarily mean Q10 is "No" — the SAAT CSV may be a partial export.`)
+    parts.push(`For Q10: Check if the applicant's NOFO number (${saatData.announcementNumber}) matches and if they propose a valid service area.`)
+    parts.push(`For Q11-Q16: Without matched SAAT data, answer based on application evidence alone and note SAAT cross-validation was not possible.`)
+  }
+
+  parts.push(`=== END SAAT DATA ===`)
+  return parts.join('\n')
+}
+
+/**
+ * Build a compact zip code table with cumulative percentages for AI cross-referencing.
+ * Shows all zip codes with their individual and cumulative patient percentages.
+ */
+function buildZipCodeTable(zipDetails) {
+  if (!zipDetails || zipDetails.length === 0) return '  (no zip codes available)'
+
+  let cumulative = 0
+  const lines = []
+
+  // Show all zips up to 75% threshold with individual detail, then summarize the rest
+  const threshold75Idx = zipDetails.findIndex(z => {
+    cumulative += z.pctPatients
+    return cumulative >= 0.75
+  })
+
+  cumulative = 0
+  for (let i = 0; i < zipDetails.length; i++) {
+    const z = zipDetails[i]
+    cumulative += z.pctPatients
+    const marker = z.highlight === 'Yes' ? ' [75% threshold]' : ''
+    if (i < 40) {
+      lines.push(`  ${z.zip}: ${(z.pctPatients * 100).toFixed(1)}% (cumulative: ${(cumulative * 100).toFixed(1)}%)${marker}`)
+    }
+  }
+
+  if (zipDetails.length > 40) {
+    lines.push(`  ... and ${zipDetails.length - 40} more zip codes (total cumulative: ${(cumulative * 100).toFixed(1)}%)`)
+  }
+
+  return lines.join('\n')
 }
 
 export default {
   deriveFiscalYear,
   loadSAATData,
+  matchApplicantToServiceArea,
   buildSAATSummary
 }

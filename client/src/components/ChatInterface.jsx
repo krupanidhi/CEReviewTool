@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, MessageSquare, Trash2, Bot, User } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { chatWithModel } from '../services/api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -92,22 +92,16 @@ export default function ChatInterface({ document, applicationDoc, checklistDoc }
   }
 
   return (
-    <div className="bg-slate-800 rounded-lg border border-slate-700 flex flex-col h-full">
+    <div style={{ background: '#FFFFFF', display: 'flex', flexDirection: 'column', height: '100%', borderRadius: '0 0 12px 12px' }}>
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-slate-700">
-        <div className="flex items-center space-x-3">
-          <div className="bg-purple-500/10 p-2 rounded-lg">
-            <MessageSquare className="w-5 h-5 text-purple-500" />
-          </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #D9E8F6' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '1.3rem' }}>🤖</span>
           <div>
-            <h3 className="text-lg font-semibold text-white">Intelligent Document Q&A</h3>
-            <p className="text-xs text-gray-400">
+            <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#0B4778', margin: 0 }}>Intelligent Document Q&A</h3>
+            <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0 }}>
               {applicationDoc && checklistDoc ? (
-                <span className="flex items-center space-x-2">
-                  <span className="text-green-400">✓ Application</span>
-                  <span>•</span>
-                  <span className="text-green-400">✓ Checklist</span>
-                </span>
+                <span>✅ Application • ✅ Checklist</span>
               ) : document ? (
                 `Context: ${document.originalName}`
               ) : (
@@ -116,149 +110,82 @@ export default function ChatInterface({ document, applicationDoc, checklistDoc }
             </p>
           </div>
         </div>
-        <button
-          onClick={clearChat}
-          className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
-          title="Clear chat"
-        >
-          <Trash2 className="w-4 h-4 text-gray-400" />
-        </button>
+        <button onClick={clearChat} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', fontSize: '0.9rem', color: '#94a3b8' }} title="Clear chat">🗑️</button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <Bot className="w-16 h-16 text-gray-600 mb-4" />
-            <h4 className="text-lg font-medium text-gray-300 mb-2">Start a conversation</h4>
-            <p className="text-sm text-gray-500 max-w-md">
-              {applicationDoc && checklistDoc ? (
-                'Ask questions about the application. I\'ll reference the checklist requirements and provide evidence-based answers.'
-              ) : (
-                'Upload application and checklist documents to enable intelligent Q&A.'
-              )}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🤖</div>
+            <h4 style={{ fontSize: '1.1rem', fontWeight: '600', color: '#0B4778', marginBottom: '8px' }}>Start a conversation</h4>
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8', maxWidth: '320px' }}>
+              {applicationDoc && checklistDoc
+                ? "Ask questions about the application. I'll reference the checklist requirements and provide evidence-based answers."
+                : 'Upload application and checklist documents to enable intelligent Q&A.'}
             </p>
           </div>
         ) : (
           <>
             {messages.map((message, idx) => (
-              <div
-                key={idx}
-                className={`flex items-start space-x-3 ${
-                  message.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
-              >
+              <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start' }}>
                 {message.role === 'assistant' && (
-                  <div className="bg-purple-500/10 p-2 rounded-lg flex-shrink-0">
-                    <Bot className="w-5 h-5 text-purple-500" />
-                  </div>
+                  <span style={{ fontSize: '1.2rem', flexShrink: 0, marginTop: '4px' }}>🤖</span>
                 )}
-                
-                <div
-                  className={`max-w-[80%] rounded-lg p-4 ${
-                    message.role === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : message.role === 'error'
-                      ? 'bg-red-500/10 border border-red-500/20 text-red-400'
-                      : 'bg-slate-700 text-gray-100'
-                  }`}
-                >
+                <div style={{
+                  maxWidth: '80%', borderRadius: '12px', padding: '12px 16px',
+                  background: message.role === 'user' ? '#3b82f6' : message.role === 'error' ? '#FEF2F2' : '#EFF6FB',
+                  color: message.role === 'user' ? '#FFFFFF' : message.role === 'error' ? '#dc2626' : '#0B4778',
+                  border: message.role === 'error' ? '1px solid #FECACA' : 'none'
+                }}>
                   {message.role === 'assistant' ? (
-                    <div className="prose prose-invert prose-sm max-w-none">
+                    <div className="prose prose-sm max-w-none" style={{ color: '#0B4778' }}>
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
-                          // Headings
-                          h1: ({node, ...props}) => <h1 className="text-xl font-bold text-white mb-3 mt-4" {...props} />,
-                          h2: ({node, ...props}) => <h2 className="text-lg font-bold text-white mb-2 mt-3" {...props} />,
-                          h3: ({node, ...props}) => <h3 className="text-base font-semibold text-white mb-2 mt-2" {...props} />,
-                          
-                          // Paragraphs
-                          p: ({node, ...props}) => <p className="text-sm text-gray-100 mb-2 leading-relaxed" {...props} />,
-                          
-                          // Lists
-                          ul: ({node, ...props}) => <ul className="list-disc list-inside mb-3 space-y-1" {...props} />,
-                          ol: ({node, ...props}) => <ol className="list-decimal list-inside mb-3 space-y-1" {...props} />,
-                          li: ({node, ...props}) => <li className="text-sm text-gray-100 ml-2" {...props} />,
-                          
-                          // Tables
-                          table: ({node, ...props}) => (
-                            <div className="overflow-x-auto my-4">
-                              <table className="min-w-full border border-slate-600 rounded-lg" {...props} />
-                            </div>
-                          ),
-                          thead: ({node, ...props}) => <thead className="bg-slate-600" {...props} />,
-                          tbody: ({node, ...props}) => <tbody className="divide-y divide-slate-600" {...props} />,
-                          tr: ({node, ...props}) => <tr className="hover:bg-slate-600/50" {...props} />,
-                          th: ({node, ...props}) => (
-                            <th className="px-4 py-2 text-left text-xs font-semibold text-white border-r border-slate-600 last:border-r-0" {...props} />
-                          ),
-                          td: ({node, ...props}) => (
-                            <td className="px-4 py-2 text-sm text-gray-100 border-r border-slate-600 last:border-r-0" {...props} />
-                          ),
-                          
-                          // Code blocks
-                          code: ({node, inline, ...props}) => 
-                            inline ? (
-                              <code className="bg-slate-800 text-purple-400 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />
-                            ) : (
-                              <code className="block bg-slate-800 text-gray-100 p-3 rounded-lg text-xs font-mono overflow-x-auto my-2" {...props} />
-                            ),
-                          pre: ({node, ...props}) => <pre className="bg-slate-800 rounded-lg overflow-hidden my-2" {...props} />,
-                          
-                          // Blockquotes
-                          blockquote: ({node, ...props}) => (
-                            <blockquote className="border-l-4 border-purple-500 pl-4 py-2 my-3 italic text-gray-300" {...props} />
-                          ),
-                          
-                          // Links
-                          a: ({node, ...props}) => (
-                            <a className="text-blue-400 hover:text-blue-300 underline" target="_blank" rel="noopener noreferrer" {...props} />
-                          ),
-                          
-                          // Strong/Bold
-                          strong: ({node, ...props}) => <strong className="font-bold text-white" {...props} />,
-                          
-                          // Emphasis/Italic
-                          em: ({node, ...props}) => <em className="italic text-gray-200" {...props} />,
-                          
-                          // Horizontal rule
-                          hr: ({node, ...props}) => <hr className="border-slate-600 my-4" {...props} />,
+                          h1: ({node, ...props}) => <h1 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#0B4778', marginBottom: '8px', marginTop: '12px' }} {...props} />,
+                          h2: ({node, ...props}) => <h2 style={{ fontSize: '1.05rem', fontWeight: '700', color: '#0B4778', marginBottom: '6px', marginTop: '10px' }} {...props} />,
+                          h3: ({node, ...props}) => <h3 style={{ fontSize: '0.95rem', fontWeight: '600', color: '#0B4778', marginBottom: '6px', marginTop: '8px' }} {...props} />,
+                          p: ({node, ...props}) => <p style={{ fontSize: '0.85rem', color: '#0B4778', marginBottom: '8px', lineHeight: '1.6' }} {...props} />,
+                          ul: ({node, ...props}) => <ul style={{ listStyleType: 'disc', paddingLeft: '20px', marginBottom: '8px' }} {...props} />,
+                          ol: ({node, ...props}) => <ol style={{ listStyleType: 'decimal', paddingLeft: '20px', marginBottom: '8px' }} {...props} />,
+                          li: ({node, ...props}) => <li style={{ fontSize: '0.85rem', color: '#0B4778', marginBottom: '4px' }} {...props} />,
+                          table: ({node, ...props}) => <div style={{ overflowX: 'auto', margin: '12px 0' }}><table style={{ minWidth: '100%', border: '1px solid #D9E8F6', borderRadius: '8px', borderCollapse: 'collapse' }} {...props} /></div>,
+                          thead: ({node, ...props}) => <thead style={{ background: '#EFF6FB' }} {...props} />,
+                          th: ({node, ...props}) => <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: '#0B4778', borderBottom: '1px solid #D9E8F6', borderRight: '1px solid #D9E8F6' }} {...props} />,
+                          td: ({node, ...props}) => <td style={{ padding: '8px 12px', fontSize: '0.85rem', color: '#0B4778', borderBottom: '1px solid #D9E8F6', borderRight: '1px solid #D9E8F6' }} {...props} />,
+                          code: ({node, inline, ...props}) => inline
+                            ? <code style={{ background: '#EFF6FB', color: '#7c3aed', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', fontFamily: 'monospace' }} {...props} />
+                            : <code style={{ display: 'block', background: '#EFF6FB', color: '#0B4778', padding: '12px', borderRadius: '8px', fontSize: '0.75rem', fontFamily: 'monospace', overflowX: 'auto', margin: '8px 0' }} {...props} />,
+                          pre: ({node, ...props}) => <pre style={{ background: '#EFF6FB', borderRadius: '8px', overflow: 'hidden', margin: '8px 0' }} {...props} />,
+                          blockquote: ({node, ...props}) => <blockquote style={{ borderLeft: '4px solid #3b82f6', paddingLeft: '12px', margin: '8px 0', fontStyle: 'italic', color: '#64748b' }} {...props} />,
+                          a: ({node, ...props}) => <a style={{ color: '#3b82f6', textDecoration: 'underline' }} target="_blank" rel="noopener noreferrer" {...props} />,
+                          strong: ({node, ...props}) => <strong style={{ fontWeight: '700', color: '#0B4778' }} {...props} />,
+                          hr: ({node, ...props}) => <hr style={{ border: 'none', borderTop: '1px solid #D9E8F6', margin: '12px 0' }} {...props} />,
                         }}
                       >
                         {message.content}
                       </ReactMarkdown>
                     </div>
                   ) : (
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <p style={{ fontSize: '0.85rem', whiteSpace: 'pre-wrap', margin: 0 }}>{message.content}</p>
                   )}
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10">
-                    <span className="text-xs opacity-70">{formatTime(message.timestamp)}</span>
-                    {message.usage && (
-                      <span className="text-xs opacity-70">
-                        {message.usage.totalTokens} tokens
-                      </span>
-                    )}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', paddingTop: '6px', borderTop: message.role === 'user' ? '1px solid rgba(255,255,255,0.15)' : '1px solid #D9E8F6' }}>
+                    <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>{formatTime(message.timestamp)}</span>
+                    {message.usage && <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>{message.usage.totalTokens} tokens</span>}
                   </div>
                 </div>
-
                 {message.role === 'user' && (
-                  <div className="bg-blue-500/10 p-2 rounded-lg flex-shrink-0">
-                    <User className="w-5 h-5 text-blue-500" />
-                  </div>
+                  <span style={{ fontSize: '1.2rem', flexShrink: 0, marginTop: '4px' }}>👤</span>
                 )}
               </div>
             ))}
             {loading && (
-              <div className="flex items-start space-x-3">
-                <div className="bg-purple-500/10 p-2 rounded-lg">
-                  <Bot className="w-5 h-5 text-purple-500" />
-                </div>
-                <div className="bg-slate-700 rounded-lg p-4">
-                  <div className="flex items-center space-x-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
-                    <span className="text-sm text-gray-400">Thinking...</span>
-                  </div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <span style={{ fontSize: '1.2rem' }}>🤖</span>
+                <div style={{ background: '#EFF6FB', borderRadius: '12px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Loader2 style={{ width: 16, height: 16, color: '#7c3aed' }} className="animate-spin" />
+                  <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Thinking...</span>
                 </div>
               </div>
             )}
@@ -268,30 +195,28 @@ export default function ChatInterface({ document, applicationDoc, checklistDoc }
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-slate-700">
-        <div className="flex items-end space-x-3">
+      <div style={{ padding: '12px 16px', borderTop: '1px solid #D9E8F6' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px' }}>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={applicationDoc && checklistDoc ? "Ask about compliance, requirements, evidence, or any section..." : "Upload documents first to enable chat..."}
-            className="flex-1 bg-slate-900 text-white rounded-lg px-4 py-3 border border-slate-600 focus:border-blue-500 focus:outline-none resize-y min-h-[60px] max-h-[300px]"
+            placeholder={applicationDoc && checklistDoc ? "Ask about compliance, requirements, evidence..." : "Upload documents first to enable chat..."}
+            style={{ flex: 1, background: '#EFF6FB', color: '#0B4778', borderRadius: '8px', padding: '10px 14px', border: '2px solid #D9E8F6', outline: 'none', resize: 'vertical', minHeight: '50px', maxHeight: '200px', fontSize: '0.9rem', fontFamily: 'inherit' }}
+            onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+            onBlur={(e) => e.target.style.borderColor = '#D9E8F6'}
             rows="2"
             disabled={loading || (!applicationDoc && !checklistDoc && !document)}
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || loading}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white p-3 rounded-lg transition-colors flex-shrink-0"
+            style={{ background: !input.trim() || loading ? '#D9E8F6' : '#3b82f6', color: !input.trim() || loading ? '#94a3b8' : '#FFFFFF', border: 'none', padding: '10px 14px', borderRadius: '8px', cursor: !input.trim() || loading ? 'not-allowed' : 'pointer', flexShrink: 0, fontSize: '1.1rem', transition: 'all 0.2s' }}
           >
-            {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <Send className="w-5 h-5" />
-            )}
+            {loading ? '⏳' : '➤'}
           </button>
         </div>
-        <p className="text-xs text-gray-500 mt-2">
+        <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '6px' }}>
           Press Enter to send, Shift+Enter for new line
         </p>
       </div>

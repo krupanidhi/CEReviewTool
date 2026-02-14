@@ -30,7 +30,7 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
     setSelectedSections(sections)
   }, [])
 
-  const [progress, setProgress] = useState({ current: 0, total: 0, currentSection: '' })
+  const [progress, setProgress] = useState({ current: 0, total: 0, currentSection: '', indeterminate: false })
 
   const workflowLogsRef = useRef([])
 
@@ -121,7 +121,7 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
             selectedSectionNumbers: selectedSectionNumbers
           }
 
-          setProgress({ current: 0, total: 1, currentSection: 'All sections (single call)' })
+          setProgress({ current: 0, total: 1, currentSection: 'Compliance Analysis — processing all sections...', indeterminate: true })
           log('info', `Sending ALL ${leafSections.length} leaf sections in ONE API call...`)
 
           let singleCallSuccess = false
@@ -130,7 +130,7 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
           for (let attempt = 1; attempt <= 2; attempt++) {
             try {
               log('info', `  Single-call attempt ${attempt}/2...`)
-              setProgress({ current: 1, total: 1, currentSection: `All sections (attempt ${attempt})` })
+              setProgress({ current: 0, total: 1, currentSection: `Compliance Analysis (attempt ${attempt}) — AI is reviewing ${leafSections.length} sections...`, indeterminate: true })
               const singleResult = await compareDocuments(applicationData, allSectionsChecklistData)
               const singleElapsed = ((performance.now() - singleCallStart) / 1000).toFixed(1)
 
@@ -142,6 +142,7 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
                   totalUsage.totalTokens = singleResult.usage.totalTokens || 0
                 }
                 singleCallSuccess = true
+                setProgress({ current: 1, total: 1, currentSection: 'Compliance Analysis complete', indeterminate: false })
                 log('info', `  ✅ Single-call completed: ${allChunkSections.length} sections in ${singleElapsed}s`)
                 break
               } else {
@@ -185,13 +186,13 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
               subKey: groupKey
             }))
 
-            setProgress({ current: 0, total: chunks.length, currentSection: '' })
+            setProgress({ current: 0, total: chunks.length, currentSection: '', indeterminate: false })
             log('info', `Processing ${chunks.length} section chunks sequentially (fallback)`)
 
             for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
               const chunk = chunks[chunkIdx]
               const chunkStart = performance.now()
-              setProgress({ current: chunkIdx + 1, total: chunks.length, currentSection: chunk.label })
+              setProgress({ current: chunkIdx + 1, total: chunks.length, currentSection: chunk.label, indeterminate: false })
               log('info', `Chunk ${chunkIdx + 1}/${chunks.length}: ${chunk.label} (${chunk.specificSections.length} subsections)`)
 
               const chunkChecklistData = {
@@ -256,9 +257,43 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
             }
           }
 
+          // Filter out junk sections: AI sometimes returns numbered sub-steps/instructions
+          // as separate sections (e.g., "39. 1. Starting the FY 2026..." or "1 Total :selected:").
+          // Valid sections match the leaf section titles we sent to the AI.
+          const leafTitleSet = new Set(leafSections.map(s => (s.title || '').trim().toLowerCase()))
+          const filteredSections = allChunkSections.filter(section => {
+            const title = (section.checklistSection || '').trim()
+            if (!title) return false
+            // Direct match against leaf section titles
+            if (leafTitleSet.has(title.toLowerCase())) return true
+            // Match by section number prefix (e.g., "3.1.1.1" matches "3.1.1.1 Completing the Applicant...")
+            const numMatch = title.match(/^(\d+(?:\.\d+)+)/)
+            if (numMatch) {
+              const num = numMatch[1]
+              for (const leafTitle of leafTitleSet) {
+                if (leafTitle.startsWith(num.toLowerCase())) return true
+              }
+            }
+            // Match top-level sections (1-9 only, not 39, 40, etc.)
+            const topMatch = title.match(/^(\d+)\.\s/)
+            if (topMatch && parseInt(topMatch[1]) <= 9) {
+              for (const leafTitle of leafTitleSet) {
+                if (leafTitle.startsWith(topMatch[1] + '.') || leafTitle.startsWith(topMatch[1] + ' ')) return true
+              }
+              return true
+            }
+            // Reject anything starting with a high number (39+) — these are AI-generated sequential numbers
+            const leadingNum = title.match(/^(\d+)/)
+            if (leadingNum && parseInt(leadingNum[1]) > 9) return false
+            return true
+          })
+          if (filteredSections.length < allChunkSections.length) {
+            log('warn', `Filtered junk sections: ${allChunkSections.length} → ${filteredSections.length} (removed ${allChunkSections.length - filteredSections.length} non-section items)`)
+          }
+
           // Deduplicate sections by checklistSection title — AI sometimes returns duplicates
           const seenSections = new Map()
-          allChunkSections.forEach(section => {
+          filteredSections.forEach(section => {
             const key = (section.checklistSection || '').trim().toLowerCase()
             if (!key) return
             const existing = seenSections.get(key)
@@ -267,8 +302,8 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
             }
           })
           const dedupedSections = [...seenSections.values()]
-          if (dedupedSections.length < allChunkSections.length) {
-            log('warn', `Deduplicated: ${allChunkSections.length} → ${dedupedSections.length} sections (removed ${allChunkSections.length - dedupedSections.length} duplicates)`)
+          if (dedupedSections.length < filteredSections.length) {
+            log('warn', `Deduplicated: ${filteredSections.length} → ${dedupedSections.length} sections (removed ${filteredSections.length - dedupedSections.length} duplicates)`)
           }
 
           // Merge all chunk results
@@ -285,17 +320,31 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
           // ---- AUTO-RUN CHECKLIST COMPARISON ----
           let checklistComparisonResults = null
           try {
-            setProgress({ current: 0, total: 2, currentSection: 'Checklist Comparison (Standard)' })
+            setProgress({ current: 0, total: 2, currentSection: 'Checklist Comparison — AI is analyzing both sections in parallel...', indeterminate: true })
             log('info', '===== AUTO-RUN CHECKLIST COMPARISON =====')
             const qaStart = performance.now()
 
+            // Run in parallel for speed, track completion with counter
+            let qaCompleted = 0
             const [stdResult, psqResult] = await Promise.all([
-              runStandardComparison(applicationData).catch(err => {
+              runStandardComparison(applicationData).then(r => {
+                qaCompleted++
+                setProgress({ current: qaCompleted, total: 2, currentSection: qaCompleted < 2 ? 'Checklist Comparison — waiting for remaining...' : 'Checklist Comparison Complete', indeterminate: qaCompleted < 2 })
+                return r
+              }).catch(err => {
                 log('warn', `Standard comparison failed: ${err.message}`)
+                qaCompleted++
+                setProgress({ current: qaCompleted, total: 2, currentSection: qaCompleted < 2 ? 'Checklist Comparison — waiting for remaining...' : 'Checklist Comparison Complete', indeterminate: qaCompleted < 2 })
                 return null
               }),
-              runQAComparison(applicationData).catch(err => {
+              runQAComparison(applicationData).then(r => {
+                qaCompleted++
+                setProgress({ current: qaCompleted, total: 2, currentSection: qaCompleted < 2 ? 'Checklist Comparison — waiting for remaining...' : 'Checklist Comparison Complete', indeterminate: qaCompleted < 2 })
+                return r
+              }).catch(err => {
                 log('warn', `Program-specific comparison failed: ${err.message}`)
+                qaCompleted++
+                setProgress({ current: qaCompleted, total: 2, currentSection: qaCompleted < 2 ? 'Checklist Comparison — waiting for remaining...' : 'Checklist Comparison Complete', indeterminate: qaCompleted < 2 })
                 return null
               })
             ])
@@ -380,7 +429,7 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
       setError(`Comparison failed: ${err.message}`)
     } finally {
       setComparing(false)
-      setProgress({ current: 0, total: 0, currentSection: '' })
+      setProgress({ current: 0, total: 0, currentSection: '', indeterminate: false })
       // Save logs to server as text file
       if (workflowLogsRef.current.length > 0) {
         saveLogsToServer(workflowLogsRef.current, new Date().toISOString().replace(/[:.]/g, '-')).catch(() => {})
@@ -445,20 +494,28 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
             <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-300">
-                  Processing {progress.currentSection}
+                  {progress.currentSection}
                 </span>
                 <span className="text-sm text-gray-400">
-                  {progress.current} / {progress.total} section groups
+                  {progress.indeterminate
+                    ? `${progress.current} / ${progress.total} section groups`
+                    : `${progress.current} / ${progress.total} section groups — ${Math.round((progress.current / progress.total) * 100)}%`}
                 </span>
               </div>
-              <div className="w-full bg-slate-700 rounded-full h-2.5">
-                <div
-                  className="bg-purple-600 h-2.5 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
-                />
+              <div className="w-full bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                {progress.indeterminate ? (
+                  <div className="bg-purple-600 h-2.5 rounded-full animate-pulse" style={{ width: '100%', opacity: 0.6 }} />
+                ) : (
+                  <div
+                    className="bg-purple-600 h-2.5 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
+                  />
+                )}
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                Each section group is processed separately with automatic retry to ensure 100% completion.
+                {progress.indeterminate
+                  ? 'AI is processing — this may take 1-3 minutes depending on application size.'
+                  : 'Each section group is processed separately with automatic retry to ensure 100% completion.'}
               </p>
             </div>
           )}
@@ -480,7 +537,9 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
                   <Loader2 className="w-5 h-5 animate-spin" />
                   <span>
                     {progress.total > 0
-                      ? `Processing ${progress.currentSection} (${progress.current}/${progress.total})`
+                      ? progress.indeterminate
+                        ? `Processing (${progress.current}/${progress.total})...`
+                        : `Processing (${progress.current}/${progress.total}) ${Math.round((progress.current / progress.total) * 100)}%`
                       : 'Preparing...'}
                   </span>
                 </>

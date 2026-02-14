@@ -1,9 +1,12 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { CheckCircle, XCircle, AlertTriangle, Download, ChevronDown, ChevronUp, ExternalLink, FileText, MinusCircle } from 'lucide-react'
+import { downloadExcelReport, downloadWordReport } from '../utils/reportGenerator'
 
 export default function CategorizedComplianceReport({ comparisonData, onOpenPageViewer }) {
   const [expandedSections, setExpandedSections] = useState({})
   const [activeMainSection, setActiveMainSection] = useState(null)
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false)
+  const downloadMenuRef = useRef(null)
 
   if (!comparisonData?.results || comparisonData.results.length === 0) {
     return (
@@ -165,7 +168,18 @@ export default function CategorizedComplianceReport({ comparisonData, onOpenPage
     }))
   }
 
-  const downloadReport = () => {
+  // Close download menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target)) setDownloadMenuOpen(false)
+    }
+    if (downloadMenuOpen) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [downloadMenuOpen])
+
+  const appName = applications?.[0]?.originalName || applications?.[0]?.name || 'Application'
+
+  const downloadJSON = () => {
     const reportData = {
       generatedAt: new Date().toISOString(),
       applications: applications.map(a => a.originalName || a.name),
@@ -188,6 +202,17 @@ export default function CategorizedComplianceReport({ comparisonData, onOpenPage
     link.click()
     window.document.body.removeChild(link)
     URL.revokeObjectURL(url)
+    setDownloadMenuOpen(false)
+  }
+
+  const handleExcelDownload = () => {
+    downloadExcelReport(comparisonData, appName)
+    setDownloadMenuOpen(false)
+  }
+
+  const handleWordDownload = async () => {
+    await downloadWordReport(comparisonData, appName)
+    setDownloadMenuOpen(false)
   }
 
   // Section description mapping for quick recognition on tiles
@@ -298,14 +323,28 @@ export default function CategorizedComplianceReport({ comparisonData, onOpenPage
               <div>Sections Validated: {selectedSections?.length || sections.length}</div>
             </div>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 relative" ref={downloadMenuRef}>
             <button
-              onClick={downloadReport}
+              onClick={() => setDownloadMenuOpen(!downloadMenuOpen)}
               className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
             >
               <Download className="w-4 h-4" />
-              <span>Download Report</span>
+              <span>Download</span>
+              <ChevronDown className="w-3 h-3" />
             </button>
+            {downloadMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-20 min-w-[200px]">
+                <button onClick={handleExcelDownload} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 hover:bg-slate-600 rounded-t-lg transition-colors">
+                  <span className="text-green-400">📊</span> Excel Report (.xlsx)
+                </button>
+                <button onClick={handleWordDownload} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 hover:bg-slate-600 transition-colors">
+                  <span className="text-blue-400">📄</span> Word Report (.docx)
+                </button>
+                <button onClick={downloadJSON} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 hover:bg-slate-600 rounded-b-lg transition-colors">
+                  <span className="text-yellow-400">📋</span> JSON Data (.json)
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

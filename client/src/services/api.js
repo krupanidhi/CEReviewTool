@@ -589,6 +589,20 @@ export async function saveLogsToServer(logs, sessionId) {
 }
 
 /**
+ * Get server configuration (endpoints, folder paths) for UI logging
+ * @returns {Promise<Object>} Config with endpoints and folders
+ */
+export async function getConfig() {
+  try {
+    const response = await apiClient.get('/config')
+    return response.data
+  } catch (error) {
+    console.warn('Failed to fetch config:', error.message)
+    return null
+  }
+}
+
+/**
  * Check API health
  * @returns {Promise<Object>} Health status
  */
