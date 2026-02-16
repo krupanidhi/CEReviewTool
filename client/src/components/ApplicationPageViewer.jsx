@@ -39,6 +39,7 @@ export default function ApplicationPageViewer({ comparisonData, isOpen, onClose,
   }, [sectionContext])()
 
   const sectionLabel = sectionContext?.sectionName || null
+  const pageOffset = sectionContext?.pageOffset || 0
 
   // Listen for external page navigation requests (from report page reference clicks)
   useEffect(() => {
@@ -50,6 +51,22 @@ export default function ApplicationPageViewer({ comparisonData, isOpen, onClose,
       window.__pageViewerGoTo = null
     }
   }, [isOpen])
+
+  // Listen for navigate-to-page custom events (from checklist comparison page links)
+  useEffect(() => {
+    const handler = (e) => {
+      const page = e.detail?.page
+      if (page && page >= 1 && (!numPages || page <= numPages)) {
+        setCurrentPage(page)
+        // Scroll page into view
+        if (pageContainerRef.current) {
+          pageContainerRef.current.scrollTop = 0
+        }
+      }
+    }
+    window.addEventListener('navigate-to-page', handler)
+    return () => window.removeEventListener('navigate-to-page', handler)
+  }, [numPages])
 
   // Sync input with current page
   useEffect(() => {
@@ -255,7 +272,7 @@ export default function ApplicationPageViewer({ comparisonData, isOpen, onClose,
                   {statusColor && (
                     <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: statusColor, marginRight: '4px' }} />
                   )}
-                  p.{pageNum}
+                  p.{pageOffset ? pageNum - pageOffset : pageNum}
                 </button>
               )
             })}

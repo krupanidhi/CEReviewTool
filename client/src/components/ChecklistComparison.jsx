@@ -44,7 +44,7 @@ function SummaryCards({ summary }) {
   )
 }
 
-function ResultsTable({ results, filter, setFilter, expanded, toggle }) {
+function ResultsTable({ results, filter, setFilter, expanded, toggle, pageOffset = 0 }) {
   const answerCounts = { yes: results.filter(r => (r.aiAnswer || '').toLowerCase() === 'yes').length, no: results.filter(r => (r.aiAnswer || '').toLowerCase() === 'no').length, na: results.filter(r => (r.aiAnswer || '').toLowerCase() === 'n/a').length }
   const filtered = filter === 'all' ? results
     : filter === 'yes' ? results.filter(r => (r.aiAnswer || '').toLowerCase() === 'yes')
@@ -93,7 +93,7 @@ function ResultsTable({ results, filter, setFilter, expanded, toggle }) {
                   </div>
                   {r.evidence && <div className="bg-slate-800/50 rounded p-2.5 border border-slate-700"><span className="text-xs text-gray-500 uppercase block mb-1">Evidence</span><p className="text-sm text-gray-300 whitespace-pre-wrap">{r.evidence}</p></div>}
                   {r.reasoning && <div className="bg-slate-800/50 rounded p-2.5 border border-slate-700"><span className="text-xs text-gray-500 uppercase block mb-1">Reasoning</span><p className="text-sm text-gray-300 whitespace-pre-wrap">{r.reasoning}</p></div>}
-                  {r.pageReferences?.length > 0 && <div className="flex items-center space-x-2"><span className="text-xs text-gray-500">Pages:</span>{r.pageReferences.map((p, i) => <span key={i} className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">p.{p}</span>)}</div>}
+                  {r.pageReferences?.length > 0 && <div className="flex items-center space-x-2 flex-wrap"><span className="text-xs text-gray-500">Pages:</span>{r.pageReferences.map((p, i) => { const physPage = parseInt(p); const displayPage = pageOffset ? physPage - pageOffset : physPage; return <button key={i} onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('navigate-to-page', { detail: { page: physPage, pageOffset } })) }} className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded cursor-pointer hover:bg-blue-500/40 transition-colors" title={`Go to page ${physPage} (document page ${displayPage})`}>p.{displayPage}</button> })}</div>}
                 </div>
               )}
             </div>
@@ -161,6 +161,8 @@ export default function ChecklistComparison({ comparisonData }) {
   const [psqL, setPsqL] = useState(false)
   const [psqF, setPsqF] = useState('all')
   const [psqE, setPsqE] = useState({})
+  const [stdPO, setStdPO] = useState(0)
+  const [psqPO, setPsqPO] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [dlMenuOpen, setDlMenuOpen] = useState(false)
@@ -201,8 +203,8 @@ export default function ChecklistComparison({ comparisonData }) {
     setError(null); setStdL(true); setPsqL(true)
     try {
       const [s, p] = await Promise.all([runStandardComparison(appData), runQAComparison(appData)])
-      setStdR(s.results); setStdS(s.summary); if (s.metadata) setStdM(s.metadata)
-      setPsqR(p.results); setPsqS(p.summary)
+      setStdR(s.results); setStdS(s.summary); if (s.metadata) setStdM(s.metadata); setStdPO(s.pageOffset || 0)
+      setPsqR(p.results); setPsqS(p.summary); setPsqPO(p.pageOffset || 0)
     } catch (e) { setError(e.message) }
     finally { setStdL(false); setPsqL(false) }
   }
@@ -210,14 +212,14 @@ export default function ChecklistComparison({ comparisonData }) {
   const runStd = async () => {
     if (!appData) { setError('No application data.'); return }
     setError(null); setStdL(true)
-    try { const d = await runStandardComparison(appData); setStdR(d.results); setStdS(d.summary); if (d.metadata) setStdM(d.metadata) }
+    try { const d = await runStandardComparison(appData); setStdR(d.results); setStdS(d.summary); if (d.metadata) setStdM(d.metadata); setStdPO(d.pageOffset || 0) }
     catch (e) { setError(e.message) } finally { setStdL(false) }
   }
 
   const runPsq = async () => {
     if (!appData) { setError('No application data.'); return }
     setError(null); setPsqL(true)
-    try { const d = await runQAComparison(appData); setPsqR(d.results); setPsqS(d.summary) }
+    try { const d = await runQAComparison(appData); setPsqR(d.results); setPsqS(d.summary); setPsqPO(d.pageOffset || 0) }
     catch (e) { setError(e.message) } finally { setPsqL(false) }
   }
 
@@ -309,7 +311,7 @@ export default function ChecklistComparison({ comparisonData }) {
           {stdM && <MetadataCard metadata={stdM} />}
           {stdL && <div className="bg-slate-800 rounded-lg p-8 text-center border border-slate-700"><Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto mb-3" /><p className="text-white">Analyzing standard checklist...</p></div>}
           {stdS && <SummaryCards summary={stdS} />}
-          {stdR ? <ResultsTable results={stdR} filter={stdF} setFilter={setStdF} expanded={stdE} toggle={k => setStdE(p => ({ ...p, [k]: !p[k] }))} />
+          {stdR ? <ResultsTable results={stdR} filter={stdF} setFilter={setStdF} expanded={stdE} toggle={k => setStdE(p => ({ ...p, [k]: !p[k] }))} pageOffset={stdPO} />
             : !stdL && stdQ && stdQ.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -327,7 +329,7 @@ export default function ChecklistComparison({ comparisonData }) {
         <div className="space-y-4">
           {psqL && <div className="bg-slate-800 rounded-lg p-8 text-center border border-slate-700"><Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto mb-3" /><p className="text-white">Analyzing program-specific questions...</p></div>}
           {psqS && <SummaryCards summary={psqS} />}
-          {psqR ? <ResultsTable results={psqR} filter={psqF} setFilter={setPsqF} expanded={psqE} toggle={k => setPsqE(p => ({ ...p, [k]: !p[k] }))} />
+          {psqR ? <ResultsTable results={psqR} filter={psqF} setFilter={setPsqF} expanded={psqE} toggle={k => setPsqE(p => ({ ...p, [k]: !p[k] }))} pageOffset={psqPO} />
             : !psqL && psqQ && psqQ.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">

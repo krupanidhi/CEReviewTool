@@ -325,6 +325,290 @@ node server/scripts/combinedBatchProcess.js --mode prefunding-only
 
 ---
 
+## Checklist Q&A Rules Engine
+
+The checklist Q&A system uses a **rules-based dispatch engine** that routes each question to the most efficient answer strategy. Only questions that truly need AI interpretation are sent to the AI — and even then, only with the specific pages relevant to that question (not the entire 160-page document).
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Checklist Question Input                         │
+│  (parsed from checklistQuestions/FY26/*.json via Azure DI)         │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │
+                    ┌──────▼──────┐
+                    │  Condition  │  evaluateCondition()
+                    │   Check     │  Is this question applicable?
+                    └──────┬──────┘
+                           │
+              ┌────────────┼─── N/A (condition not met)
+              │            │         → method: 'rules_condition'
+              │            │         → No AI call
+              │     ┌──────▼──────┐
+              │     │ Dependency  │  Q11-Q15 depend on Q10=Yes
+              │     │   Check     │
+              │     └──────┬──────┘
+              │            │
+              │  ┌─────────┼─── N/A (dependency not met)
+              │  │         │         → method: 'rules_dependency'
+              │  │         │         → No AI call
+              │  │  ┌──────▼──────────────────────────────────┐
+              │  │  │         Answer Strategy Dispatch         │
+              │  │  │                                          │
+              │  │  │  'presence'     → answerPresenceQuestion │ No AI
+              │  │  │  'saat_compare' → answerSAATBatch        │ AI + SAAT data
+              │  │  │  'ai_focused'   → answerFocusedBatch     │ AI + focused pages
+              │  │  └──────────────────────────────────────────┘
+              │  │
+              ▼  ▼
+        ┌─────────────┐
+        │   Results    │  Sorted by question number
+        │   + Pages    │  Page refs resolved server-side via formPageMap/formPageRanges
+        └─────────────┘
+```
+
+### Source Files
+
+| File | Purpose |
+|------|---------|
+| `server/services/checklistRules.js` | Rules definitions, application index builder, presence checker, page extraction |
+| `server/routes/qaComparison.js` | API routes, AI dispatch, SAAT batch, focused batch, response parsing |
+| `server/services/saatService.js` | SAAT CSV loading, service area matching, summary builder |
+| `server/services/pdfLinkExtractor.js` | PDF TOC hyperlink extraction for exact page destinations |
+
+---
+
+### Question Rules (`PROGRAM_SPECIFIC_RULES`)
+
+Defined in `server/services/checklistRules.js`. Each rule has:
+
+```js
+{
+  questionNumber: 8,              // Matches checklist Q number
+  answerStrategy: 'ai_focused',   // How to answer: 'presence' | 'saat_compare' | 'ai_focused'
+  lookFor: ['Form 5A'],           // Form/attachment names to find in the application index
+  condition: null,                // Applicant-type condition for N/A (null = always applicable)
+  focusPages: ['Form 5A'],        // Which pages to send to AI (for ai_focused strategy)
+  aiQuestion: 'On Form 5A...',    // Rewritten question for AI clarity (for ai_focused strategy)
+  description: 'Check Form 5A...' // Human-readable summary
+}
+```
+
+### Answer Strategies
+
+#### 1. `presence` — No AI Required
+
+**Used by:** Q1 (Project Narrative), Q3 (Attachment 11), Q4 (Attachment 12)
+
+Checks if a required form/attachment exists in the application's Table of Contents index. Returns Yes/No deterministically with the page number where the document starts.
+
+**Logic:**
+1. Parse `suggestedResources` from the checklist question (primary lookup hint)
+2. Fall back to `rule.lookFor` names
+3. Look up each name in `formPageMap` (exact match, then partial match)
+4. If found → **Yes** with page reference; if not found → **No**
+
+**Method tag:** `rules_presence`
+
+#### 2. `rules_condition` / `rules_dependency` — No AI Required
+
+**Used by:** Q2 (public agency only), Q5 (new applicants only), Q16-Q19 (conditional)
+
+Before any answer strategy runs, two checks happen:
+
+- **Condition check** (`evaluateCondition`): Compares rule conditions against applicant flags derived from the application text. Conditions include:
+  - `applicant_type: public_agency` — Only public agencies
+  - `applicant_status: new` — Only new applicants
+  - `applicant_status: new_or_competing` — New or competing supplement
+  - `funding_type: rph` — Only RPH funding requestors
+  - `funding_type: hp_or_rph` — HP and/or RPH funding
+
+- **Dependency check**: Q11-Q15 all have `dependsOn: { question: 10, requiredAnswer: 'Yes' }`. If Q10 ≠ Yes, they are automatically N/A.
+
+**Method tags:** `rules_condition`, `rules_dependency`
+
+#### 3. `saat_compare` — AI + SAAT Reference Data
+
+**Used by:** Q10-Q16 (service area validation questions)
+
+These questions require cross-referencing the application against the **SAAT CSV** (Service Area Analysis Tool) data published by HRSA.
+
+**Logic:**
+1. Load SAAT CSV for the fiscal year (`SAAT/FY26/*.csv`)
+2. Match the applicant to a service area by zip code overlap
+3. Build a SAAT summary with patient targets, funding amounts, service types, zip codes
+4. Collect relevant form pages (Form 1A, SF-424A, Form 5B, Summary Page)
+5. Send all SAAT questions as a **single batch** to AI with SAAT data + form pages
+6. AI applies specific rules per question (e.g., Q11: patients ≥ 75% of target)
+
+**SAAT-specific AI rules in the prompt:**
+| Question | Rule |
+|----------|------|
+| Q10 | NOFO matches AND valid service area from SAAT |
+| Q11 | Form 1A patients ≥ 75% of SAAT Patient Target |
+| Q12 | Applicant proposes ALL SAAT Service Types |
+| Q13 | Annual SAC funding ≤ SAAT Total Funding |
+| Q14 | Funding distribution matches SAAT (CHC/MSAW/HP/RPH) |
+| Q15 | All SAAT population types served |
+| Q16 | Form 5B zip codes cover ≥ 75% of SAAT patient percentage |
+
+**Method tag:** `rules_saat_ai`
+
+#### 4. `ai_focused` — AI + Targeted Pages Only
+
+**Used by:** Q5-Q9, Q17-Q19 (questions requiring interpretation)
+
+Instead of sending the entire 160-page document, the system extracts **only the 2-10 pages** relevant to each question and sends those to the AI.
+
+**Logic:**
+1. Parse `suggestedResources` from checklist question → look up pages in `formPageMap`
+2. Fall back to `rule.focusPages` / `rule.lookFor`
+3. Expand pages using `formPageRanges` (multi-page form awareness):
+   - If a form spans multiple pages (e.g., Form 5A: pages 143-145), include ALL pages
+   - If no range found, include target page + next page as fallback
+4. Cap at 10 pages per question
+5. Group questions into batches of 4 to minimize AI calls
+6. Each batch gets a focused system prompt with writing style instructions
+7. AI returns JSON array with answer, evidence, reasoning per question
+
+**Method tag:** `rules_focused_ai`
+
+---
+
+### Application Index (`buildApplicationIndex`)
+
+The foundation of the rules engine. Built once per application, it maps every form/attachment to its physical page number(s).
+
+**Three data structures:**
+
+| Structure | Type | Purpose |
+|-----------|------|---------|
+| `formPageMap` | `Map<string, number>` | Canonical form key → first physical page number |
+| `formPageRanges` | `Map<string, {start, end}>` | Canonical form key → full page range |
+| `pages` | `Array<{pageNum, text}>` | All page text for extraction |
+
+**Index building priority (highest to lowest):**
+
+1. **PDF TOC hyperlinks** (`pdfLinkExtractor.js`) — Exact link destinations from the PDF's clickable Table of Contents. Most accurate source.
+2. **Text-based TOC entries** — Parsed from TOC pages by matching `N. Name ... PageNum` patterns.
+3. **Page header scanning** — Fallback: scan each page's first few lines for form/attachment headers.
+4. **Alias resolution** — Copy missing canonical keys from alternative names (e.g., "Services Provided" → `form 5a`).
+
+**Multi-page form awareness:**
+When multiple TOC entries share the same canonical key (e.g., "Form 5A - Required Services" on page 143, "Form 5A - Additional Services" on page 144, "Form 5A - Specialty Services" on page 145):
+- `formPageMap` stores the **first** (lowest) page: `form 5a → 143`
+- `formPageRanges` stores the **full range**: `form 5a → { start: 143, end: 145 }`
+
+**Canonical key normalization** uses `formPatterns` — a list of ~40 regex patterns that map document text to normalized keys:
+```
+"Application for Federal Assistance" → 'sf-424'
+"Services Provided"                  → 'form 5a'
+"Service Sites"                      → 'form 5b'
+"Evidence of Nonprofit..."           → 'attachment 11'
+"Operational Plan"                   → 'operational plan'
+```
+
+---
+
+### Page Offset (`pageOffset`)
+
+HRSA application PDFs often have a cover page, so physical page 2 may show "Page Number: 1" in the footer. The system detects this offset:
+
+- **Backend:** `pageOffset` is calculated by comparing physical page numbers with footer "Page Number: N" text. Stored in the index and returned in API responses.
+- **Frontend:** Page reference badges display `physicalPage - pageOffset` (the footer number) but navigate to the physical page in the PDF viewer.
+
+---
+
+### Page Reference Resolution (`resolvePageRefsFromIndex`)
+
+After the AI returns evidence text, page references are resolved **server-side** (not from AI-provided page numbers, which are unreliable):
+
+1. Scan evidence + reasoning text for form/attachment mentions (e.g., "Form 5A", "Attachment 11")
+2. Look up each mention in `formPageRanges`:
+   - **Compact forms (≤5 pages):** Include full page range (e.g., Form 5A → pages 143, 144, 145)
+   - **Large sections (>5 pages):** Include only start page (e.g., Project Narrative → page 12)
+3. Also extract explicit "page N" references from the AI text
+4. Cap at 5 page references per question
+
+---
+
+### Standard Checklist (`/api/qa-comparison/standard-analyze`)
+
+The standard checklist uses a **simpler pipeline** — all questions go directly to AI with a full application summary (no rules-based dispatch). This is because standard checklist questions are broad and don't map cleanly to specific forms.
+
+**Pipeline:**
+1. Parse checklist questions from `checklistQuestions/FY26/StandardChecklist_structured.json`
+2. Filter out metadata sections (e.g., "Other comments", "GMS Recommendation")
+3. Build application summary text
+4. Send all questions to AI in a single call
+5. Parse AI JSON response (with fallback strategies for malformed JSON)
+6. Resolve page references server-side via `buildPageIndex`
+
+---
+
+### AI Response Parsing (`parseAIResponse`)
+
+The AI returns JSON arrays, but responses can be malformed. The parser uses 5 fallback strategies:
+
+1. **Direct parse** — Clean markdown fences, fix malformed `pageReferences` arrays (e.g., `[SF-424, 11]` → `[]`), then `JSON.parse`
+2. **Regex array extraction** — Find `[...]` in the response and parse it
+3. **Truncated JSON repair** — If braces are unbalanced, truncate to last complete object and close the array
+4. **Individual object extraction** — Regex-match each `{"questionNumber":...}` object separately
+5. **Failure** — Log raw response for debugging, return empty array
+
+The `pageReferences` sanitization is critical: the AI sometimes puts form names like `[SF-424, 11]` instead of page numbers `[4, 11]`, which breaks JSON parsing. Since page refs are resolved server-side anyway, these are safely replaced with `[]`.
+
+---
+
+### Question Flow Summary (Program-Specific, 19 Questions)
+
+| Q# | Strategy | Condition | What It Checks |
+|----|----------|-----------|----------------|
+| Q1 | `presence` | — | Project Narrative exists |
+| Q2 | `presence` | Public agency only | Attachment 6 (Co-Applicant Agreement) |
+| Q3 | `presence` | New applicants only | Attachment 11 (Nonprofit/Agency Status) |
+| Q4 | `presence` | New/competing only | Attachment 12 (Operational Plan) |
+| Q5 | `ai_focused` | New applicants only | Entity type verification from Attachment 11 |
+| Q6 | `ai_focused` | — | Substantive role (Budget Narrative + Form 5A) |
+| Q7 | `ai_focused` | — | All required primary health care services |
+| Q8 | `ai_focused` | — | Form 5A: General Primary Medical Care in Column I/II |
+| Q9 | `ai_focused` | — | Services accessible to all populations |
+| Q10 | `saat_compare` | — | NOFO match + valid SAAT service area |
+| Q11 | `saat_compare` | Q10=Yes | Patient target ≥ 75% of SAAT |
+| Q12 | `saat_compare` | Q10=Yes | All SAAT service types proposed |
+| Q13 | `saat_compare` | Q10=Yes | Funding ≤ SAAT total |
+| Q14 | `saat_compare` | Q10=Yes | Funding distribution matches SAAT |
+| Q15 | `saat_compare` | Q10=Yes | All SAAT population types served |
+| Q16 | `saat_compare` | New/competing only | Zip codes cover ≥ 75% of SAAT patients |
+| Q17 | `ai_focused` | New/competing only | Full-time permanent site on Form 5B |
+| Q18 | `ai_focused` | RPH funding only | Public housing resident consultation |
+| Q19 | `ai_focused` | HP/RPH funding only | Supplement-not-supplant attestation |
+
+### Adding or Modifying Rules
+
+To add a new question rule, edit `PROGRAM_SPECIFIC_RULES` in `server/services/checklistRules.js`:
+
+```js
+{
+  questionNumber: 20,                    // Must match checklist Q number
+  answerStrategy: 'ai_focused',          // 'presence' | 'saat_compare' | 'ai_focused'
+  lookFor: ['Form 12'],                  // Forms to find in the index
+  condition: null,                       // Or: { type: 'applicant_status', value: 'new', naIfNot: true }
+  focusPages: ['Form 12'],              // Pages to send to AI
+  aiQuestion: 'Does Form 12 show...',   // Clear question for AI
+  description: 'Check Form 12 for...'   // Human-readable summary
+}
+```
+
+To add a new form pattern for index recognition, add to `formPatterns` in `buildApplicationIndex`:
+
+```js
+{ regex: /New\s+Form\s+Name/i, key: 'new form name' }
+```
+
+---
+
 ## Logs
 
 ### UI Log Viewer

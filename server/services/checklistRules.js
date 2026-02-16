@@ -1,0 +1,951 @@
+/**
+ * Checklist Rules Engine
+ * 
+ * Instead of sending the entire 50-page application to AI and hoping it finds evidence,
+ * this module defines structured rules for each checklist question:
+ *   - What to look for (attachment, form, field)
+ *   - Where to look (specific pages via application TOC index)
+ *   - What condition makes the question applicable
+ *   - How to determine Yes/No/N/A deterministically
+ * 
+ * For questions that can't be answered deterministically, we send ONLY the relevant
+ * 2-3 pages to AI instead of the entire document.
+ */
+
+// ─── Question Rules ─────────────────────────────────────────────────────────
+
+/**
+ * Each rule defines:
+ *   questionNumber: matches the checklist Q number
+ *   answerStrategy: 'presence' | 'saat_compare' | 'ai_focused'
+ *   lookFor: array of form/attachment names to find in the application index
+ *   condition: applicant type condition for N/A (null = always applicable)
+ *   conditionField: which profile field to check for the condition
+ *   saatField: for SAAT questions, which SAAT field to compare
+ *   description: human-readable summary of the rule
+ */
+const PROGRAM_SPECIFIC_RULES = [
+  {
+    questionNumber: 1,
+    answerStrategy: 'presence',
+    lookFor: ['Project Narrative'],
+    condition: null,
+    description: 'Check if Project Narrative is included in the application'
+  },
+  {
+    questionNumber: 2,
+    answerStrategy: 'presence',
+    lookFor: ['Attachment 6', 'Co-Applicant Agreement'],
+    condition: { type: 'applicant_type', value: 'public_agency', naIfNot: true },
+    description: 'Public Agencies only: Check if Attachment 6 (Co-Applicant Agreement) is included'
+  },
+  {
+    questionNumber: 3,
+    answerStrategy: 'presence',
+    lookFor: ['Attachment 11', 'Evidence of Nonprofit', 'Public Agency Status'],
+    condition: { type: 'applicant_status', value: 'new', naIfNot: true },
+    description: 'New applicants only: Check if Attachment 11 (Evidence of Nonprofit/Public Agency Status) is included'
+  },
+  {
+    questionNumber: 4,
+    answerStrategy: 'presence',
+    lookFor: ['Attachment 12', 'Operational Plan'],
+    condition: { type: 'applicant_status', value: 'new_or_competing', naIfNot: true },
+    description: 'New/Competing Supplement only: Check if Attachment 12 (Operational Plan) is included'
+  },
+  {
+    questionNumber: 5,
+    answerStrategy: 'ai_focused',
+    lookFor: ['Attachment 11', 'Evidence of Nonprofit', 'Public Agency Status'],
+    condition: { type: 'applicant_status', value: 'new', naIfNot: true },
+    focusPages: ['Attachment 11'],
+    aiQuestion: 'Based on Attachment 11, is the applicant a private nonprofit entity or a public agency (including Tribal and urban Indian organizations) in the United States?',
+    description: 'New applicants: Verify entity type from Attachment 11'
+  },
+  {
+    questionNumber: 6,
+    answerStrategy: 'ai_focused',
+    lookFor: ['Budget Narrative', 'Attachment 2', 'Bylaws', 'Form 5A', 'Form 8'],
+    condition: null,
+    focusPages: ['Budget Narrative', 'Form 5A'],
+    aiQuestion: 'Does the applicant propose to perform a substantive role in the project (not applying on behalf of another organization)? Look for evidence in the Budget Narrative and Form 5A.',
+    description: 'Check if applicant performs substantive role (not on behalf of another org)'
+  },
+  {
+    questionNumber: 7,
+    answerStrategy: 'ai_focused',
+    lookFor: ['Project Narrative', 'Form 5A'],
+    condition: null,
+    focusPages: ['Project Narrative', 'Form 5A'],
+    aiQuestion: 'Does the applicant propose to operate a health center that makes ALL required primary health care services available and accessible, either directly or through established arrangements, without regard for ability to pay? They may NOT propose ONLY a single service or subset.',
+    description: 'Check if all required primary health care services are proposed'
+  },
+  {
+    questionNumber: 8,
+    answerStrategy: 'ai_focused',
+    lookFor: ['Form 5A'],
+    condition: null,
+    focusPages: ['Form 5A'],
+    aiQuestion: 'On Form 5A: Services Provided, does the applicant propose to make General Primary Medical Care available directly (Column I) and/or through formal written contractual agreements (Column II)?',
+    description: 'Check Form 5A for General Primary Medical Care availability'
+  },
+  {
+    questionNumber: 9,
+    answerStrategy: 'ai_focused',
+    lookFor: ['Project Narrative'],
+    condition: null,
+    focusPages: ['Project Narrative'],
+    aiQuestion: 'Does the applicant propose to make services accessible to all? If a sub-population is targeted, will health center services be available and accessible to others seeking services at the proposed site(s)?',
+    description: 'Check if services are accessible to all populations'
+  },
+  {
+    questionNumber: 10,
+    answerStrategy: 'saat_compare',
+    lookFor: ['Summary Page', 'Project Abstract', 'Project Narrative', 'Form 5B'],
+    saatCheck: 'nofo_match',
+    description: 'Check if applicant proposes a service area announced under this NOFO number (if No, Q11-Q15 are N/A)'
+  },
+  {
+    questionNumber: 11,
+    answerStrategy: 'saat_compare',
+    lookFor: ['Form 1A'],
+    saatCheck: 'patient_target_75pct',
+    dependsOn: { question: 10, requiredAnswer: 'Yes' },
+    description: 'Form 1A patients >= 75% of SAAT Patient Target'
+  },
+  {
+    questionNumber: 12,
+    answerStrategy: 'saat_compare',
+    lookFor: ['Form 1A'],
+    saatCheck: 'service_types_match',
+    dependsOn: { question: 10, requiredAnswer: 'Yes' },
+    description: 'Applicant proposes to serve patients for each SAAT Service Type'
+  },
+  {
+    questionNumber: 13,
+    answerStrategy: 'saat_compare',
+    lookFor: ['SF-424A', 'Budget Narrative'],
+    saatCheck: 'funding_not_exceed',
+    dependsOn: { question: 10, requiredAnswer: 'Yes' },
+    description: 'Annual SAC funding request does NOT exceed SAAT Total Funding'
+  },
+  {
+    questionNumber: 14,
+    answerStrategy: 'saat_compare',
+    lookFor: ['SF-424A'],
+    saatCheck: 'funding_distribution',
+    dependsOn: { question: 10, requiredAnswer: 'Yes' },
+    description: 'Maintains current funding distribution (CHC, MSAW, HP, RPH) from SAAT'
+  },
+  {
+    questionNumber: 15,
+    answerStrategy: 'saat_compare',
+    lookFor: ['SF-424A', 'Form 1A'],
+    saatCheck: 'population_types',
+    dependsOn: { question: 10, requiredAnswer: 'Yes' },
+    description: 'Proposes to serve patients for each population type listed in SAAT'
+  },
+  {
+    questionNumber: 16,
+    answerStrategy: 'saat_compare',
+    lookFor: ['Form 5B'],
+    saatCheck: 'zip_codes_75pct',
+    condition: { type: 'applicant_status', value: 'new_or_competing', naIfNot: true },
+    description: 'Form 5B zip codes cover >= 75% of SAAT patient percentage'
+  },
+  {
+    questionNumber: 17,
+    answerStrategy: 'ai_focused',
+    lookFor: ['Form 5B'],
+    condition: { type: 'applicant_status', value: 'new_or_competing', naIfNot: true },
+    focusPages: ['Form 5B'],
+    aiQuestion: 'On Form 5B: Service Sites, is at least one new full-time (operational 40+ hours/week) permanent, fixed building site with a verifiable street address proposed? (If funding is only for MSAW, a seasonal site is acceptable.)',
+    description: 'Check Form 5B for full-time permanent site'
+  },
+  {
+    questionNumber: 18,
+    answerStrategy: 'ai_focused',
+    lookFor: ['Project Narrative'],
+    condition: { type: 'funding_type', value: 'rph', naIfNot: true },
+    focusPages: ['Project Narrative'],
+    aiQuestion: 'Does the applicant demonstrate consultation with residents of public housing in the preparation of the SAC application and ensure ongoing consultation with residents regarding planning and administration of the health center?',
+    description: 'RPH funding: Public housing resident consultation'
+  },
+  {
+    questionNumber: 19,
+    answerStrategy: 'ai_focused',
+    lookFor: ['Summary Page'],
+    condition: { type: 'funding_type', value: 'hp_or_rph', naIfNot: true },
+    focusPages: ['Summary Page'],
+    aiQuestion: 'Does the applicant attest on the Summary Page that HP/RPH funding will be utilized to supplement, and not supplant, the expenditures of the health center and the value of in-kind contributions for the delivery of services to these populations?',
+    description: 'HP/RPH funding: Supplement not supplant attestation on Summary Page'
+  }
+]
+
+const STANDARD_RULES = [
+  {
+    questionNumber: 1,
+    answerStrategy: 'ai_focused',
+    lookFor: [],
+    condition: null,
+    focusPages: [],
+    aiQuestion: 'Does the application contain all required attachments listed in the guidance? Check the Table of Contents for completeness.',
+    description: 'Check if all required attachments are present'
+  },
+  {
+    questionNumber: 2,
+    answerStrategy: 'ai_focused',
+    lookFor: ['Attachment 11', 'SF-424'],
+    condition: null,
+    focusPages: ['SF-424', 'Attachment 11'],
+    aiQuestion: 'Is the applicant an eligible entity as mentioned in the guidance (e.g., non-profit, governmental unit)?',
+    description: 'Check applicant eligibility type'
+  },
+  {
+    questionNumber: 3,
+    answerStrategy: 'ai_focused',
+    lookFor: [],
+    condition: null,
+    focusPages: [],
+    aiQuestion: 'Are there any other comments or concerns about this application?',
+    description: 'Other comments'
+  }
+]
+
+// ─── Application Index Builder ──────────────────────────────────────────────
+
+/**
+ * Build a structured index of the application document.
+ * Parses the Table of Contents to map each form/attachment to its exact page.
+ * This is the foundation for precise page references.
+ * 
+ * @param {Object} applicationData - The parsed application data with pages, sections, etc.
+ * @returns {Object} { tocEntries: [{name, page, tocIndex}], formPageMap: Map<normalizedName, page>, pages: [{pageNum, text}] }
+ */
+function buildApplicationIndex(applicationData) {
+  const pages = []
+  const formPageMap = new Map()
+  const tocEntries = []
+
+  if (!applicationData?.pages) return { tocEntries, formPageMap, pages }
+
+  // Step 1: Collect all page text
+  for (const p of applicationData.pages) {
+    const pageNum = p.pageNumber || p.page || 0
+    const lines = (p.lines || []).map(l => l.content || '')
+    const fullText = lines.join('\n')
+    if (fullText.trim()) {
+      pages.push({ pageNum, text: fullText, lines })
+    }
+  }
+
+  // Step 2: Collect the FULL Table of Contents across ALL pages it spans.
+  // HRSA applications can have 37+ TOC entries spanning 2-3 pages.
+  // Strategy: find the first page with "Table of Contents" header, then
+  // continue collecting from consecutive pages that have numbered TOC entries.
+  const tocPageNums = new Set()
+  let tocStartPage = null
+
+  // 2a. Find the first TOC page
+  for (const p of pages) {
+    const lowerText = p.text.toLowerCase()
+    if (lowerText.includes('table of contents') || lowerText.includes('table of content')) {
+      tocStartPage = p.pageNum
+      tocPageNums.add(p.pageNum)
+      break
+    }
+  }
+
+  // 2b. Helper: count numbered TOC-like lines on a page
+  const countTocLines = (p) => {
+    return p.lines.filter(l => /^\d{1,2}\.\s+\S/.test(l.trim())).length
+  }
+
+  // 2c. If we found a TOC start, also collect continuation pages.
+  // A continuation page is the next consecutive page(s) that still have
+  // multiple numbered entries (3+) and no form/attachment header of their own.
+  if (tocStartPage) {
+    for (const p of pages) {
+      if (p.pageNum <= tocStartPage) continue
+      // Stop collecting once we hit a page that doesn't look like TOC anymore
+      const tocLineCount = countTocLines(p)
+      if (tocLineCount >= 3) {
+        tocPageNums.add(p.pageNum)
+      } else {
+        // Allow one gap page (sometimes a page break has few entries), but
+        // stop if two consecutive non-TOC pages appear
+        const nextPage = pages.find(np => np.pageNum === p.pageNum + 1)
+        if (nextPage && countTocLines(nextPage) >= 3) {
+          tocPageNums.add(p.pageNum) // sparse TOC page
+          continue
+        }
+        break
+      }
+    }
+  }
+
+  // 2d. Parse TOC entries from ALL collected TOC pages.
+  // TOC lines typically look like:
+  //   "12. Attachment 12: Operational Plan ............. 125"
+  //   "5. Scope of Project                              23"
+  // We extract: tocIndex (12), name ("Attachment 12: Operational Plan"), destPage (125)
+  const tocPagesSorted = [...tocPageNums].sort((a, b) => a - b)
+  for (const tocPN of tocPagesSorted) {
+    const p = pages.find(pg => pg.pageNum === tocPN)
+    if (!p) continue
+    for (const rawLine of p.lines) {
+      const line = rawLine.trim()
+      // Match TOC entries: "N. Name ... PageNum" or "N. Name PageNum"
+      const tocMatch = line.match(/^(\d{1,2})\.\s+(.+)/)
+      if (tocMatch) {
+        const tocIndex = parseInt(tocMatch[1])
+        // Skip noise like dates "1/22/2026"
+        if (/^\d+\/\d+/.test(line)) continue
+        let remainder = tocMatch[2].trim()
+
+        // Extract trailing page number (after dots, spaces, or at end)
+        // Patterns: "Name ........... 125", "Name    125", "Name 125"
+        let destPage = null
+        const pageNumMatch = remainder.match(/[.\s]{2,}(\d{1,3})\s*$/)
+        if (pageNumMatch) {
+          destPage = parseInt(pageNumMatch[1])
+          remainder = remainder.substring(0, pageNumMatch.index).trim()
+        } else {
+          // Try just trailing number after space
+          const trailingNum = remainder.match(/\s+(\d{1,3})\s*$/)
+          if (trailingNum) {
+            destPage = parseInt(trailingNum[1])
+            remainder = remainder.substring(0, trailingNum.index).trim()
+          }
+        }
+
+        // Clean up the name: remove trailing dots, parenthetical notes
+        const name = remainder.replace(/[.…]+$/, '').replace(/\s*\(.*$/, '').trim()
+
+        // Avoid duplicate TOC entries (same index)
+        if (name.length > 2 && !tocEntries.find(e => e.tocIndex === tocIndex && e.name === name)) {
+          tocEntries.push({ tocIndex, name, destPage, rawLine: line, tocPage: tocPN })
+        }
+      }
+    }
+  }
+
+  if (tocPagesSorted.length > 0) {
+    console.log(`📋 Table of Contents spans ${tocPagesSorted.length} page(s), ${tocEntries.length} entries`)
+  }
+
+  // ── Step 3: Build formPageMap ──
+  // PRIORITY ORDER:
+  //   0. PDF TOC hyperlinks (exact link destinations — 100% accurate)
+  //   1. Text-based TOC entries with destination page numbers
+  //   2. Page header scanning (fallback for items not in TOC)
+  //   3. Alias resolution (copy missing canonical keys from alternative names)
+
+  // Patterns that map document text → canonical key.
+  const formPatterns = [
+    { regex: /Application\s+for\s+Federal\s+Assistance/i, key: 'sf-424' },
+    { regex: /SF[-\s]?424\s*A/i, key: 'sf-424a' },
+    { regex: /SF[-\s]?424(?!\s*A)/i, key: 'sf-424' },
+    { regex: /Project\s+Abstract\s+Summary/i, key: 'project abstract' },
+    { regex: /Project\s+Abstract/i, key: 'project abstract' },
+    { regex: /Key\s+Contacts/i, key: 'key contacts' },
+    { regex: /Project.*Performance\s+Site/i, key: 'project/performance site locations' },
+    { regex: /Project\s+Narrative/i, key: 'project narrative' },
+    { regex: /Scope\s+of\s+Project/i, key: 'project narrative' },
+    { regex: /Budget\s+Information/i, key: 'sf-424a' },
+    { regex: /Budget\s+Narrative/i, key: 'budget narrative' },
+    { regex: /Disclosure\s+of\s+Lobbying/i, key: 'sf-lll' },
+    { regex: /Summary\s+Page/i, key: 'summary page' },
+    { regex: /Form\s+1A/i, key: 'form 1a' },
+    { regex: /Form\s+1C/i, key: 'form 1c' },
+    { regex: /Form\s+2\b/i, key: 'form 2' },
+    { regex: /Form\s+3\b/i, key: 'form 3' },
+    { regex: /Form\s+5A/i, key: 'form 5a' },
+    { regex: /Form\s+5B/i, key: 'form 5b' },
+    { regex: /Form\s+5C/i, key: 'form 5c' },
+    { regex: /Form\s+6A/i, key: 'form 6a' },
+    { regex: /Form\s+6B/i, key: 'form 6b' },
+    { regex: /Form\s+7\b/i, key: 'form 7' },
+    { regex: /Form\s+8\b/i, key: 'form 8' },
+    { regex: /Form\s+9\b/i, key: 'form 9' },
+    { regex: /Form\s+10\b/i, key: 'form 10' },
+    { regex: /Form\s+11\b/i, key: 'form 11' },
+    { regex: /Form\s+12\b/i, key: 'form 12' },
+    { regex: /Organizational\s+Chart/i, key: 'organizational chart' },
+    { regex: /Position\s+Descriptions/i, key: 'position descriptions' },
+    { regex: /Biographical\s+Sketches/i, key: 'biographical sketches' },
+    { regex: /Co-?Applicant\s+Agreement/i, key: 'co-applicant agreement' },
+    { regex: /Operational\s+Plan/i, key: 'operational plan' },
+    { regex: /Evidence\s+of\s+(?:Nonprofit|Non-?Profit|Public\s+Agency)/i, key: 'attachment 11' },
+    { regex: /Bylaws/i, key: 'bylaws' },
+    { regex: /Articles\s+of\s+Incorporation/i, key: 'articles of incorporation' },
+    { regex: /IRS\s+(?:Determination|Tax)/i, key: 'irs determination' },
+    { regex: /Needs\s+Assessment/i, key: 'needs assessment' },
+    { regex: /Service\s+Area\s+Map/i, key: 'service area map' },
+    { regex: /Staffing\s+Profile/i, key: 'form 2' },
+    { regex: /Income\s+Analysis/i, key: 'form 3' },
+    { regex: /Services\s+Provided/i, key: 'form 5a' },
+    { regex: /Service\s+Sites/i, key: 'form 5b' },
+    { regex: /Other\s+Activities/i, key: 'form 5c' },
+    { regex: /Board\s+Member\s+Characteristics/i, key: 'form 6a' },
+    { regex: /Health\s+Center\s+Agreements/i, key: 'form 8' },
+    { regex: /General\s+Information\s+Worksheet/i, key: 'form 1a' },
+    { regex: /Documents\s+on\s+File/i, key: 'form 1c' },
+    { regex: /Sliding\s+Fee/i, key: 'form 11' },
+    { regex: /QI\/?QA\s+Plan/i, key: 'form 12' },
+    { regex: /Board\s+of\s+Directors/i, key: 'board of directors' },
+  ]
+
+  // 3-ZERO. HIGHEST PRIORITY: PDF TOC hyperlinks (exact link destinations)
+  // These come from actual clickable links in the PDF's Table of Contents.
+  // Each link has a text label and an exact physical page number (1-indexed).
+  //
+  // We store PHYSICAL page numbers because the PDF viewer (react-pdf) navigates
+  // by physical page index. The footer "Page Number: N" may differ due to a
+  // cover page, but the viewer needs the physical page to navigate correctly.
+  //
+  // MULTI-PAGE FORM AWARENESS: Forms like "Form 5A" may have multiple TOC entries
+  // (e.g., "Form 5A - Required Services", "Form 5A - Additional Services",
+  // "Form 5A - Specialty Services"). We store the FIRST page as the canonical
+  // entry and build a formPageRanges map with the full page range.
+  const tocLinks = applicationData.tocLinks || []
+  const formPageRanges = new Map() // key → { start, end } page range
+
+  if (tocLinks.length > 0) {
+    console.log(`🔗 Using ${tocLinks.length} PDF TOC hyperlinks as primary page source`)
+
+    // First pass: collect all pages per canonical key to detect multi-page forms
+    const keyPages = new Map() // canonical key → [page1, page2, ...]
+
+    for (const link of tocLinks) {
+      const text = link.text
+      if (!text || !link.destPage) continue
+      const page = link.destPage
+
+      // Store raw text as key (each sub-section gets its own entry)
+      if (text.length > 3) {
+        formPageMap.set(text.toLowerCase().trim(), page)
+      }
+
+      // Collect pages per canonical key for range detection
+      const addToKeyPages = (key) => {
+        if (!keyPages.has(key)) keyPages.set(key, [])
+        keyPages.get(key).push(page)
+        // formPageMap stores the FIRST (lowest) page for each canonical key
+        if (!formPageMap.has(key) || page < formPageMap.get(key)) {
+          formPageMap.set(key, page)
+        }
+      }
+
+      // Normalize to canonical keys using formPatterns
+      for (const pattern of formPatterns) {
+        const m = text.match(pattern.regex)
+        if (m) {
+          addToKeyPages(pattern.key)
+          break
+        }
+      }
+
+      // Check "Attachment N"
+      const attMatch = text.match(/Attachment\s+(\d+)/i)
+      if (attMatch) {
+        addToKeyPages(`attachment ${attMatch[1]}`)
+      }
+
+      // Check "Form N[A-Z]?"
+      const formMatch = text.match(/Form\s+(\d+[A-Za-z]?)/i)
+      if (formMatch) {
+        addToKeyPages(`form ${formMatch[1].toLowerCase()}`)
+      }
+    }
+
+    // Second pass: build page ranges from collected pages
+    // For each canonical key, the range is from the first page to just before
+    // the next different form/section starts (detected from sorted TOC links)
+    const allDestPages = tocLinks
+      .filter(l => l.destPage)
+      .map(l => l.destPage)
+      .sort((a, b) => a - b)
+
+    for (const [key, keyPageList] of keyPages) {
+      const sortedPages = [...new Set(keyPageList)].sort((a, b) => a - b)
+      const startPage = sortedPages[0]
+      const lastExplicitPage = sortedPages[sortedPages.length - 1]
+
+      // Find the next TOC entry that starts AFTER our last explicit page
+      // to determine where this form ends
+      const nextStart = allDestPages.find(p => p > lastExplicitPage)
+      const endPage = nextStart ? nextStart - 1 : lastExplicitPage + 1
+
+      formPageRanges.set(key, { start: startPage, end: endPage })
+    }
+
+    // Log multi-page forms for debugging
+    for (const [key, range] of formPageRanges) {
+      if (range.end > range.start) {
+        console.log(`   📄 ${key}: pages ${range.start}-${range.end} (${range.end - range.start + 1} pages)`)
+      }
+    }
+  }
+
+  // 3a. SECONDARY: Populate from text-based TOC entries that have destination pages.
+  // Only fills gaps not already covered by PDF links.
+  for (const entry of tocEntries) {
+    if (!entry.destPage) continue // skip entries without page numbers
+
+    const entryName = entry.name
+    let matchedKey = null
+
+    // Normalize the TOC entry name to a canonical key
+    for (const pattern of formPatterns) {
+      if (entryName.match(pattern.regex)) {
+        matchedKey = pattern.key
+        break
+      }
+    }
+    // Also check "Attachment N"
+    const attMatch = entryName.match(/Attachment\s+(\d+)/i)
+    if (attMatch) matchedKey = `attachment ${attMatch[1]}`
+
+    if (matchedKey) {
+      entry.normalizedKey = matchedKey
+      entry.resolvedPage = entry.destPage
+      // Only fill gaps — PDF links (3-ZERO) take priority
+      if (!formPageMap.has(matchedKey)) {
+        formPageMap.set(matchedKey, entry.destPage)
+      }
+    }
+
+    // Also store the raw TOC entry name as a lowercase key (only if not already set)
+    if (entryName.length > 3 && !formPageMap.has(entryName.toLowerCase())) {
+      formPageMap.set(entryName.toLowerCase(), entry.destPage)
+    }
+  }
+
+  console.log(`📋 TOC-based index: ${formPageMap.size} entries from TOC destination pages`)
+
+  // 3b. SECONDARY: Scan non-TOC page headers to fill gaps.
+  // Only add entries that are NOT already in formPageMap (TOC takes priority).
+  for (const p of pages) {
+    if (tocPageNums.has(p.pageNum)) continue
+
+    const headerLines = p.lines.slice(0, 5)
+    const headerText = headerLines.join('\n')
+
+    for (const pattern of formPatterns) {
+      if (!formPageMap.has(pattern.key) && headerText.match(pattern.regex)) {
+        formPageMap.set(pattern.key, p.pageNum)
+      }
+    }
+
+    // "Attachment N" — only from short title lines in first 3 lines
+    for (const line of p.lines.slice(0, 3)) {
+      if (line.length > 80) continue
+      const attRegex = /Attachment\s+(\d+)/gi
+      let am
+      while ((am = attRegex.exec(line)) !== null) {
+        const key = `attachment ${am[1]}`
+        if (!formPageMap.has(key)) {
+          formPageMap.set(key, p.pageNum)
+        }
+      }
+    }
+  }
+
+  // 3c. Alias map: common alternative names → canonical key
+  const aliases = {
+    'project narrative': ['scope of project', 'narrative attachment', 'project narrative attachment'],
+    'attachment 11': ['evidence of nonprofit', 'evidence of non-profit', 'nonprofit status', 'public agency status'],
+    'attachment 12': ['operational plan'],
+    'attachment 6': ['co-applicant agreement'],
+    'sf-424a': ['budget information', 'sf-424 a'],
+    'sf-424': ['application for federal assistance'],
+    'summary page': ['summary'],
+    'form 5a': ['services provided'],
+    'form 5b': ['service sites'],
+    'form 1a': ['general information worksheet'],
+    'form 2': ['staffing profile'],
+    'form 3': ['income analysis'],
+    'form 8': ['health center agreements'],
+  }
+
+  for (const [canonical, alts] of Object.entries(aliases)) {
+    if (formPageMap.has(canonical)) continue
+    for (const alt of alts) {
+      if (formPageMap.has(alt)) {
+        formPageMap.set(canonical, formPageMap.get(alt))
+        break
+      }
+    }
+  }
+
+  // Detect page offset: physical page vs footer "Page Number: N"
+  // This offset is used by the frontend to display footer page numbers
+  // while navigating to physical pages in the PDF viewer.
+  let pageOffset = 0
+  for (const p of pages) {
+    for (const line of p.lines) {
+      const m = line.match(/Page\s+Number:\s*(\d+)/i)
+      if (m) {
+        pageOffset = p.pageNum - parseInt(m[1])
+        break
+      }
+    }
+    if (pageOffset !== 0) break
+  }
+
+  // Log the index (concise)
+  console.log(`📑 Application Index: ${formPageMap.size} entries${tocLinks.length > 0 ? ` (${tocLinks.length} from PDF links)` : ''}, pageOffset=${pageOffset}`)
+
+  return { tocEntries, formPageMap, formPageRanges, pages, tocPageNums, pageOffset }
+}
+
+// ─── Applicant Profile Analyzer ─────────────────────────────────────────────
+
+/**
+ * Determine applicant characteristics needed for conditional question rules.
+ * Returns flags like isNew, isPublicAgency, isCompetingSupplement, requestsRPH, etc.
+ */
+function analyzeApplicantType(applicantProfile, applicationData) {
+  const flags = {
+    isNew: false,
+    isCompetingSupplement: false,
+    isPublicAgency: false,
+    isNonprofit: false,
+    requestsRPH: false,
+    requestsHP: false,
+    requestsMSAW: false,
+  }
+
+  const orgType = (applicantProfile?.organizationType || '').toLowerCase()
+  const allText = applicationData?.pages?.map(p => (p.lines || []).map(l => l.content).join(' ')).join(' ').toLowerCase() || ''
+
+  // Determine new vs competing continuation
+  // "New" applicants are those not currently receiving HRSA funding
+  // "Competing Supplement" applicants are adding to existing funding
+  // "Competing Continuation" applicants are renewing existing funding
+  if (/\bnew\s+access\s+point\b/i.test(allText) || /\bnew\s+applicant\b/i.test(allText)) {
+    flags.isNew = true
+  }
+  if (/\bcompeting\s+supplement\b/i.test(allText)) {
+    flags.isCompetingSupplement = true
+  }
+  // If neither explicitly new nor competing supplement, check SF-424 for clues
+  if (!flags.isNew && !flags.isCompetingSupplement) {
+    if (/\bnew\b/i.test(orgType)) flags.isNew = true
+  }
+
+  // Public agency check
+  if (/public\s*agency/i.test(orgType) || /government/i.test(orgType) || /\btribal\b/i.test(orgType)) {
+    flags.isPublicAgency = true
+  }
+
+  // Nonprofit check
+  if (/non-?profit/i.test(orgType) || /501\s*\(?c\)?\s*\(?3\)?/i.test(allText)) {
+    flags.isNonprofit = true
+  }
+
+  // Funding type checks (RPH, HP, MSAW)
+  if (/\brph\b/i.test(allText) || /residents?\s+of\s+public\s+housing/i.test(allText)) {
+    flags.requestsRPH = true
+  }
+  if (/\bhomeless\s+population\b/i.test(allText) || /\bhp\b.*funding/i.test(allText)) {
+    flags.requestsHP = true
+  }
+  if (/\bmsaw\b/i.test(allText) || /migratory.*seasonal.*agricultural/i.test(allText)) {
+    flags.requestsMSAW = true
+  }
+
+  console.log(`👤 Applicant flags: new=${flags.isNew}, competing=${flags.isCompetingSupplement}, publicAgency=${flags.isPublicAgency}, nonprofit=${flags.isNonprofit}, RPH=${flags.requestsRPH}, HP=${flags.requestsHP}`)
+
+  return flags
+}
+
+// ─── Condition Evaluator ────────────────────────────────────────────────────
+
+/**
+ * Check if a question's condition is met.
+ * Returns: { applicable: true } or { applicable: false, reason: '...' }
+ */
+function evaluateCondition(rule, applicantFlags) {
+  if (!rule.condition) return { applicable: true }
+
+  const { type, value, naIfNot } = rule.condition
+
+  let conditionMet = false
+
+  switch (type) {
+    case 'applicant_type':
+      if (value === 'public_agency') conditionMet = applicantFlags.isPublicAgency
+      break
+    case 'applicant_status':
+      if (value === 'new') conditionMet = applicantFlags.isNew
+      if (value === 'new_or_competing') conditionMet = applicantFlags.isNew || applicantFlags.isCompetingSupplement
+      break
+    case 'funding_type':
+      if (value === 'rph') conditionMet = applicantFlags.requestsRPH
+      if (value === 'hp_or_rph') conditionMet = applicantFlags.requestsHP || applicantFlags.requestsRPH
+      break
+    default:
+      conditionMet = true
+  }
+
+  if (!conditionMet && naIfNot) {
+    // Human-friendly reason
+    const reasons = {
+      'applicant_type:public_agency': 'This question applies only to public agency applicants. The applicant is not a public agency.',
+      'applicant_status:new': 'This question applies only to new applicants. The applicant is not a new applicant.',
+      'applicant_status:new_or_competing': 'This question applies only to new or competing supplement applicants.',
+      'funding_type:rph': 'This question applies only to applicants requesting RPH (Residents of Public Housing) funding. The applicant is not requesting RPH funding.',
+      'funding_type:hp_or_rph': 'This question applies only to applicants requesting HP (Homeless Population) and/or RPH funding. The applicant is not requesting HP or RPH funding.',
+    }
+    const reason = reasons[`${type}:${value}`] || `This question does not apply to this applicant (${type}: ${value}).`
+    return { applicable: false, reason }
+  }
+
+  return { applicable: true }
+}
+
+// ─── Suggested Resources Parser ─────────────────────────────────────────────
+
+/**
+ * Parse the "Suggested Resources" string from a checklist question to extract
+ * canonical form/attachment lookup names.
+ * 
+ * Examples:
+ *   "Attachment 11: Evidence of Nonprofit or Public Agency Status ("
+ *     → ['attachment 11']
+ *   "Form 1A - General Information Worksheet on page 135"
+ *     → ['form 1a']
+ *   "Budget Narrative, Form 5A"
+ *     → ['budget narrative', 'form 5a']
+ *   "Attachment 12: Operational Plan"
+ *     → ['attachment 12', 'operational plan']
+ */
+function parseSuggestedResources(suggestedResources) {
+  if (!suggestedResources) return []
+  const names = []
+
+  // Match "Attachment N" patterns
+  const attRegex = /Attachment\s+(\d+)/gi
+  let m
+  while ((m = attRegex.exec(suggestedResources)) !== null) {
+    names.push(`attachment ${m[1]}`)
+  }
+
+  // Match "Form N[A-Z]?" patterns
+  const formRegex = /Form\s+(\d+[A-Za-z]?)/gi
+  while ((m = formRegex.exec(suggestedResources)) !== null) {
+    names.push(`form ${m[1].toLowerCase()}`)
+  }
+
+  // Match known document names
+  const knownDocs = [
+    { regex: /Project\s+Narrative/i, key: 'project narrative' },
+    { regex: /Scope\s+of\s+Project/i, key: 'project narrative' },
+    { regex: /Budget\s+Narrative/i, key: 'budget narrative' },
+    { regex: /Operational\s+Plan/i, key: 'operational plan' },
+    { regex: /Summary\s+Page/i, key: 'summary page' },
+    { regex: /SF[-\s]?424\s*A/i, key: 'sf-424a' },
+    { regex: /SF[-\s]?424(?!\s*A)/i, key: 'sf-424' },
+    { regex: /Bylaws/i, key: 'bylaws' },
+    { regex: /Organizational\s+Chart/i, key: 'organizational chart' },
+    { regex: /Evidence\s+of\s+(?:Nonprofit|Non-?Profit|Public\s+Agency)/i, key: 'attachment 11' },
+    { regex: /Co-?Applicant\s+Agreement/i, key: 'co-applicant agreement' },
+    { regex: /Board\s+(?:of\s+)?Directors/i, key: 'board of directors' },
+    { regex: /Articles\s+of\s+Incorporation/i, key: 'articles of incorporation' },
+    { regex: /IRS\s+(?:Determination|Tax)/i, key: 'irs determination' },
+    { regex: /Needs\s+Assessment/i, key: 'needs assessment' },
+    { regex: /Service\s+Area\s+Map/i, key: 'service area map' },
+    { regex: /Project\s+Abstract/i, key: 'project abstract' },
+  ]
+  for (const doc of knownDocs) {
+    if (doc.regex.test(suggestedResources) && !names.includes(doc.key)) {
+      names.push(doc.key)
+    }
+  }
+
+  return [...new Set(names)]
+}
+
+// ─── Form Page Lookup ───────────────────────────────────────────────────────
+
+/**
+ * Look up a list of form/attachment names in the formPageMap.
+ * Returns array of { name, page } for each found item.
+ * Tries exact match, then partial match.
+ */
+function lookupFormPages(names, formPageMap) {
+  const foundItems = []
+  for (const name of names) {
+    const normalized = name.toLowerCase()
+    // Exact match
+    if (formPageMap.has(normalized)) {
+      foundItems.push({ name, page: formPageMap.get(normalized) })
+      continue
+    }
+    // Partial match (either direction)
+    for (const [key, page] of formPageMap) {
+      if (key.includes(normalized) || normalized.includes(key)) {
+        foundItems.push({ name, page })
+        break
+      }
+    }
+  }
+  return foundItems
+}
+
+// ─── Presence Check Engine ──────────────────────────────────────────────────
+
+/**
+ * Answer a 'presence' question by checking if the required form/attachment exists
+ * in the application index.
+ * 
+ * Priority order for lookup:
+ *   1. suggestedResources from the checklist question (most reliable)
+ *   2. rule.lookFor from the rules engine (fallback)
+ */
+function answerPresenceQuestion(rule, appIndex, suggestedResources) {
+  const { formPageMap } = appIndex
+
+  // 1. Parse suggestedResources for lookup names (primary)
+  const srNames = parseSuggestedResources(suggestedResources)
+  // 2. Also use rule.lookFor as fallback
+  const ruleNames = (rule.lookFor || []).map(n => n.toLowerCase())
+  // Combine: suggestedResources first, then rule.lookFor (deduplicated)
+  const allNames = [...new Set([...srNames, ...ruleNames])]
+
+  const foundItems = lookupFormPages(allNames, formPageMap)
+
+  if (foundItems.length > 0) {
+    const primary = foundItems[0]
+    const pageList = [...new Set(foundItems.map(f => f.page))].sort((a, b) => a - b).slice(0, 3)
+    const nameList = foundItems.map(f => f.name).join(', ')
+    // Build a friendly display name from the suggestedResources if available
+    const displayName = suggestedResources
+      ? suggestedResources.split('|')[0].trim().replace(/\s*\($/, '').trim()
+      : nameList
+    return {
+      aiAnswer: 'Yes',
+      confidence: 'high',
+      evidence: `The application includes ${displayName}. Located starting on page ${primary.page} of the application document.`,
+      pageReferences: pageList,
+      reasoning: `The required document "${displayName}" was found in the application starting at page ${primary.page}. The applicant has included this required component.`
+    }
+  }
+
+  const searchedFor = suggestedResources
+    ? suggestedResources.split('|')[0].trim().replace(/\s*\($/, '').trim()
+    : rule.lookFor.join(' or ')
+  return {
+    aiAnswer: 'No',
+    confidence: 'medium',
+    evidence: `The application does not appear to include ${searchedFor}. This required document was not found in the application's Table of Contents or page headers.`,
+    pageReferences: [],
+    reasoning: `The required document "${searchedFor}" was not located in the application. The application index was searched for matching form names, attachment numbers, and alternative names but no match was found.`
+  }
+}
+
+// ─── Page Extraction for Focused AI ─────────────────────────────────────────
+
+/**
+ * Extract the text of specific pages relevant to a question.
+ * Uses suggestedResources (primary) and rule.focusPages/lookFor (fallback)
+ * to find the right pages via the application index.
+ * Returns at most 10 pages of text to keep the AI prompt manageable while covering multi-page forms.
+ * 
+ * @param {Object} rule - The question rule (with focusPages, lookFor)
+ * @param {Object} appIndex - The application index (formPageMap, pages)
+ * @param {string} suggestedResources - The "Suggested Resources" string from the checklist question
+ */
+function extractRelevantPages(rule, appIndex, suggestedResources) {
+  const { formPageMap, formPageRanges, pages } = appIndex
+  const targetPages = new Set()
+  const lookupNames = [] // track which names we looked up for range expansion
+
+  // 1. Primary: parse suggestedResources for form/attachment names
+  const srNames = parseSuggestedResources(suggestedResources)
+  const srItems = lookupFormPages(srNames, formPageMap)
+  for (const item of srItems) {
+    targetPages.add(item.page)
+    lookupNames.push(item.name.toLowerCase())
+  }
+
+  // 2. Fallback: use rule.focusPages and rule.lookFor
+  if (targetPages.size === 0) {
+    const focusTargets = rule.focusPages || rule.lookFor || []
+    const normalizedTargets = focusTargets.map(n => n.toLowerCase())
+    const ruleItems = lookupFormPages(normalizedTargets, formPageMap)
+    for (const item of ruleItems) {
+      targetPages.add(item.page)
+      lookupNames.push(item.name.toLowerCase())
+    }
+  }
+
+  // If no specific pages found, return empty (will fall back to broader search)
+  if (targetPages.size === 0) return { pageTexts: [], pageNumbers: [] }
+
+  // Expand pages using formPageRanges (multi-page form awareness)
+  // If a form spans multiple pages (e.g., Form 5A: pages 143-145),
+  // include ALL pages in the range, not just the start page + 1
+  const expandedPages = new Set()
+  let usedRange = false
+
+  if (formPageRanges && formPageRanges.size > 0) {
+    for (const name of lookupNames) {
+      const range = formPageRanges.get(name)
+      if (range) {
+        for (let p = range.start; p <= range.end; p++) {
+          expandedPages.add(p)
+        }
+        usedRange = true
+      }
+    }
+  }
+
+  // If no ranges found, fall back to adding target pages + next page
+  if (!usedRange) {
+    for (const p of targetPages) {
+      expandedPages.add(p)
+      expandedPages.add(p + 1)
+    }
+  } else {
+    // Also include any target pages not covered by ranges
+    for (const p of targetPages) {
+      expandedPages.add(p)
+    }
+  }
+
+  // Extract text for these pages
+  const pageTexts = []
+  const pageNumbers = []
+  const sortedTargets = [...expandedPages].sort((a, b) => a - b)
+
+  for (const targetPageNum of sortedTargets) {
+    const pageData = pages.find(p => p.pageNum === targetPageNum)
+    if (pageData) {
+      pageTexts.push(`--- Page ${targetPageNum} ---\n${pageData.text}`)
+      pageNumbers.push(targetPageNum)
+    }
+  }
+
+  // Cap at 10 pages to keep prompt manageable but allow multi-page forms
+  return {
+    pageTexts: pageTexts.slice(0, 10),
+    pageNumbers: pageNumbers.slice(0, 10)
+  }
+}
+
+// ─── Exports ────────────────────────────────────────────────────────────────
+
+export {
+  PROGRAM_SPECIFIC_RULES,
+  STANDARD_RULES,
+  buildApplicationIndex,
+  analyzeApplicantType,
+  evaluateCondition,
+  answerPresenceQuestion,
+  extractRelevantPages,
+  parseSuggestedResources,
+  lookupFormPages
+}

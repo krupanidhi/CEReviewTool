@@ -8,6 +8,7 @@ import { dirname, join } from 'path'
 import { analyzeDocumentEnhanced } from '../services/enhancedDocumentIntelligence.js'
 import { transformToStructured } from '../services/structuredDocumentTransformer.js'
 import cacheService from '../services/cacheService.js'
+import { extractTocLinks, buildMapFromTocLinks } from '../services/pdfLinkExtractor.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -74,6 +75,19 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     // Analyze document with Enhanced Azure Document Intelligence
     const analysisResult = await analyzeDocumentEnhanced(fileBuffer, req.file.mimetype)
+
+    // Extract PDF TOC hyperlinks for exact page mapping (PDF files only)
+    if (req.file.mimetype === 'application/pdf') {
+      try {
+        const tocLinks = await extractTocLinks(fileBuffer)
+        if (tocLinks.length > 0) {
+          analysisResult.data.tocLinks = tocLinks
+          console.log(`🔗 Stored ${tocLinks.length} TOC links in application data`)
+        }
+      } catch (linkErr) {
+        console.warn(`⚠️ PDF link extraction skipped: ${linkErr.message}`)
+      }
+    }
 
     const documentId = req.file.filename.split('-')[0]
     

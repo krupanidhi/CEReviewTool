@@ -7,6 +7,13 @@ import { promises as fs } from 'fs'
 import { loadSAATData, matchApplicantToServiceArea, buildSAATSummary, deriveFiscalYear } from '../services/saatService.js'
 import { analyzeDocumentEnhanced } from '../services/enhancedDocumentIntelligence.js'
 import { transformToStructured } from '../services/structuredDocumentTransformer.js'
+import {
+  PROGRAM_SPECIFIC_RULES, STANDARD_RULES,
+  buildApplicationIndex, analyzeApplicantType, evaluateCondition,
+  answerPresenceQuestion, extractRelevantPages,
+  parseSuggestedResources, lookupFormPages
+} from '../services/checklistRules.js'
+import { extractTocLinks } from '../services/pdfLinkExtractor.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -311,8 +318,12 @@ function parseChecklistQuestions(data) {
     // Determine page reference
     const pageRef = findPageRef(rawBlock, allTextBlocks)
 
-    // Only add if we have meaningful question text (skip noise like dates, page headers)
-    if (questionText.length > 10) {
+    // Only add if we have meaningful question text (skip noise like dates, page headers, metadata sections)
+    const isMetadata = /^Other\s+comments\b/i.test(questionText) ||
+      /^Completion\s+Status/i.test(questionText) ||
+      /^Program\s+Specific\s+(Checklist|Recommendation)/i.test(questionText) ||
+      /^GMS\s+Recommendation/i.test(questionText)
+    if (!isMetadata && questionText.length > 10) {
       // Keep the better version if duplicate (longer question text wins)
       const existing = questions.get(qs.num)
       if (!existing || questionText.length > existing.question.length) {
@@ -398,26 +409,48 @@ router.post('/analyze', async (req, res) => {
       return res.status(400).json({ error: 'Application data is required' })
     }
 
-    console.log('\n🔍 ===== QA COMPARISON ANALYSIS START =====')
+    console.log('\n🔍 ===== RULES-BASED QA COMPARISON START =====')
+    console.log(`📦 applicationData: ${applicationData.pages?.length || 0} pages, ${applicationData.sections?.length || 0} sections`)
 
     // 0. Extract Funding Opportunity Number and derive fiscal year
     const fundingOppNumber = extractFundingOppNumber(applicationData)
     const fiscalYear = fundingOppNumber ? deriveFiscalYear(fundingOppNumber) : null
     console.log(`🔢 Funding Opportunity: ${fundingOppNumber || 'Not found'}, Fiscal Year: ${fiscalYear || 'Unknown'}`)
 
-    // 1. Parse checklist questions (dynamic path resolution using fiscal year)
+    // 1. Parse checklist questions
     const dataPath = await resolveChecklistPath('programspecific', fiscalYear, req.body.checklistPath)
     const raw = await fs.readFile(dataPath, 'utf-8')
     const psqData = JSON.parse(raw)
     const { questions: userQuestions } = parseChecklistQuestions(psqData)
+    console.log(`📋 Parsed ${userQuestions.length} questions`)
 
-    console.log(`📋 Parsed ${userQuestions.length} questions from ${dataPath}`)
+    // 2. Extract PDF TOC links if not already present in applicationData
+    //    These give us exact hyperlink destinations from the PDF's Table of Contents.
+    if (!applicationData.tocLinks) {
+      try {
+        const pdfPath = await findApplicationPdf(applicationData)
+        if (pdfPath) {
+          const pdfBuffer = await fs.readFile(pdfPath)
+          const tocLinks = await extractTocLinks(pdfBuffer)
+          if (tocLinks.length > 0) {
+            applicationData.tocLinks = tocLinks
+            console.log(`🔗 Lazy-extracted ${tocLinks.length} TOC links from ${basename(pdfPath)}`)
+          }
+        }
+      } catch (linkErr) {
+        console.warn(`⚠️ Lazy PDF link extraction skipped: ${linkErr.message}`)
+      }
+    }
 
-    // 2. Extract applicant profile for SAAT matching and AI context
+    // 3. Build application index (TOC → page map) — deterministic, no AI
+    const appIndex = buildApplicationIndex(applicationData)
+
+    // 4. Extract applicant profile and analyze type flags
     const applicantProfile = extractApplicantProfile(applicationData)
-    console.log(`👤 Applicant: ${applicantProfile.organizationName || 'Unknown'}, Type: ${applicantProfile.organizationType || 'Unknown'}, Zips: ${applicantProfile.zipCodesFromApp.length}`)
+    const applicantFlags = analyzeApplicantType(applicantProfile, applicationData)
+    console.log(`👤 Applicant: ${applicantProfile.organizationName || 'Unknown'}`)
 
-    // 3. Load SAAT data and match to applicant's service area
+    // 4. Load SAAT data
     let saatData = null
     let saatSummary = ''
     const saatQuestionNums = userQuestions.filter(q => q.requiresSAAT).map(q => q.number)
@@ -425,79 +458,159 @@ router.post('/analyze', async (req, res) => {
       try {
         saatData = await loadSAATData(fiscalYear, fundingOppNumber)
         if (saatData.found) {
-          // Match applicant to the correct service area before building summary
           matchApplicantToServiceArea(saatData, applicantProfile, applicationData)
           saatSummary = buildSAATSummary(saatData)
           const matched = saatData.matchedArea
-          if (matched) {
-            console.log(`📊 SAAT matched: SA ${matched.id} (${matched.city}, ${matched.state}) — ${saatData.matchMethod}`)
-          } else {
-            console.log(`📊 SAAT: ${saatData.serviceAreas.length} service areas loaded, but NO match to applicant — ${saatData.matchMethod}`)
-          }
-        } else {
-          console.warn(`⚠️ SAAT data not found for ${fundingOppNumber} in ${fiscalYear}`)
+          console.log(matched
+            ? `📊 SAAT matched: SA ${matched.id} (${matched.city}, ${matched.state}) — ${saatData.matchMethod}`
+            : `📊 SAAT: ${saatData.serviceAreas.length} areas loaded, NO match — ${saatData.matchMethod}`)
         }
       } catch (saatErr) {
-        console.warn(`⚠️ SAAT data load failed: ${saatErr.message}`)
+        console.warn(`⚠️ SAAT load failed: ${saatErr.message}`)
       }
     }
 
-    // 4. Prepare application evidence summary for AI (uses same applicantProfile)
-    const applicationSummary = buildApplicationSummary(applicationData, applicantProfile)
+    // 5. Process each question using rules engine
+    const comparisonResults = []
+    const aiQuestionsToAsk = [] // Collect questions that need AI
 
-    // 4. Build AI prompt
-    console.log(`📊 SAAT questions: [${saatQuestionNums.join(', ')}]`)
+    // Track Q10 answer for dependency chain (Q11-Q15 depend on Q10=Yes)
+    let q10Answer = null
 
-    const questionsForAI = userQuestions.map(q => {
-      let line = `Q${q.number}: ${q.question}`
-      const qualifier = detectConditionalQualifier(q.question)
-      if (qualifier) line += `\n  ⚠️ CONDITIONAL: ${qualifier}`
-      if (q.suggestedResources) line += `\n  → Look in: ${q.suggestedResources}`
-      if (q.requiresSAAT) line += `\n  → [REQUIRES SAAT DATA]`
-      return line
-    }).join('\n\n')
+    for (const q of userQuestions) {
+      const rule = PROGRAM_SPECIFIC_RULES.find(r => r.questionNumber === q.number)
 
-    const { systemPrompt, userPrompt } = buildAnalysisPrompt({
-      questionsForAI,
-      applicationSummary,
-      saatQuestionNums,
-      saatData,
-      saatSummary,
-      fundingOppNumber,
-      fiscalYear,
-      checklistType: 'Program-Specific'
-    })
+      if (!rule) {
+        // No rule defined — fall back to AI
+        aiQuestionsToAsk.push(q)
+        continue
+      }
 
-    console.log(`📝 Sending ${userQuestions.length} questions to AI (${saatQuestionNums.length} SAAT-tagged)`)
-    console.log(`📄 Application summary: ${applicationSummary.length} chars`)
-    console.log(`📊 SAAT data included: ${saatData?.found ? 'Yes' : 'No'}`)
+      // Check condition (applicant type, funding type, etc.)
+      const condResult = evaluateCondition(rule, applicantFlags)
+      if (!condResult.applicable) {
+        comparisonResults.push({
+          questionNumber: q.number,
+          question: q.question,
+          aiAnswer: 'N/A',
+          confidence: 'high',
+          evidence: condResult.reason,
+          pageReferences: [],
+          reasoning: condResult.reason,
+          suggestedResources: q.suggestedResources || '',
+          requiresSAAT: q.requiresSAAT || false,
+          method: 'rules_condition'
+        })
+        if (q.number === 10) q10Answer = 'N/A'
+        continue
+      }
 
-    // 5. Call Azure OpenAI
-    const response = await client.getChatCompletions(deployment, [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
-    ], {
-      temperature: 0.1,
-      maxTokens: 12000
-    })
+      // Check dependency (Q11-Q15 depend on Q10=Yes)
+      if (rule.dependsOn) {
+        const depAnswer = q10Answer || comparisonResults.find(r => r.questionNumber === rule.dependsOn.question)?.aiAnswer
+        if (depAnswer && depAnswer.toLowerCase() !== rule.dependsOn.requiredAnswer.toLowerCase()) {
+          comparisonResults.push({
+            questionNumber: q.number,
+            question: q.question,
+            aiAnswer: 'N/A',
+            confidence: 'high',
+            evidence: `Per the checklist instructions, since Question ${rule.dependsOn.question} was answered "${depAnswer}", this question is not applicable.`,
+            pageReferences: [],
+            reasoning: `The checklist states that if Question ${rule.dependsOn.question} is answered "No", then Questions 11 through 15 should be marked N/A.`,
+            suggestedResources: q.suggestedResources || '',
+            requiresSAAT: q.requiresSAAT || false,
+            method: 'rules_dependency'
+          })
+          continue
+        }
+      }
 
-    const aiResponseText = response.choices[0]?.message?.content || ''
-    console.log(`🤖 AI response length: ${aiResponseText.length} chars`)
+      // Apply answer strategy — pass suggestedResources as primary lookup hint
+      if (rule.answerStrategy === 'presence') {
+        const result = answerPresenceQuestion(rule, appIndex, q.suggestedResources)
+        comparisonResults.push({
+          questionNumber: q.number,
+          question: q.question,
+          ...result,
+          suggestedResources: q.suggestedResources || '',
+          requiresSAAT: q.requiresSAAT || false,
+          method: 'rules_presence'
+        })
+        console.log(`   Q${q.number}: ${result.aiAnswer} (presence check) → pages [${result.pageReferences.join(', ')}]`)
+      } else if (rule.answerStrategy === 'saat_compare') {
+        // SAAT questions — collect for focused AI call with SAAT data
+        aiQuestionsToAsk.push({ ...q, rule, isSAAT: true })
+        if (q.number === 10) {
+          // We need Q10 answered before Q11-Q15, so mark it for priority
+          aiQuestionsToAsk[aiQuestionsToAsk.length - 1].priority = true
+        }
+      } else if (rule.answerStrategy === 'ai_focused') {
+        // Focused AI — collect with relevant pages
+        aiQuestionsToAsk.push({ ...q, rule })
+      }
+    }
 
-    // 6. Parse AI response and build comparison results
-    const aiAnswers = parseAIResponse(aiResponseText)
-    const comparisonResults = buildComparisonResults(userQuestions, aiAnswers)
+    // 6. Process AI questions in batches — focused prompts with only relevant pages
+    if (aiQuestionsToAsk.length > 0) {
+      console.log(`\n🤖 Sending ${aiQuestionsToAsk.length} questions to AI (focused prompts)...`)
 
-    // 7. Calculate summary stats
+      // Separate SAAT questions from non-SAAT for different prompt strategies
+      const saatQuestions = aiQuestionsToAsk.filter(q => q.isSAAT)
+      const focusedQuestions = aiQuestionsToAsk.filter(q => !q.isSAAT)
+
+      // 6a. Handle SAAT questions as a batch (they share SAAT data context)
+      if (saatQuestions.length > 0) {
+        const saatResults = await answerSAATQuestionsBatch(saatQuestions, appIndex, saatData, saatSummary, applicantProfile)
+        for (const r of saatResults) {
+          if (r.questionNumber === 10) q10Answer = r.aiAnswer
+          comparisonResults.push(r)
+        }
+
+        // Re-evaluate Q11-Q15 dependencies now that Q10 is answered
+        if (q10Answer && q10Answer.toLowerCase() !== 'yes') {
+          for (const q of saatQuestions) {
+            if (q.rule?.dependsOn?.question === 10 && !comparisonResults.find(r => r.questionNumber === q.number)) {
+              comparisonResults.push({
+                questionNumber: q.number,
+                question: q.question,
+                aiAnswer: 'N/A',
+                confidence: 'high',
+                evidence: `Q10 answered "${q10Answer}" — questions 11-15 are N/A per checklist instructions.`,
+                pageReferences: [],
+                reasoning: `Dependency: Q10=${q10Answer}, so this question is automatically N/A.`,
+                suggestedResources: q.suggestedResources || '',
+                requiresSAAT: q.requiresSAAT || false,
+                method: 'rules_dependency'
+              })
+            }
+          }
+        }
+      }
+
+      // 6b. Handle focused AI questions — each gets only its relevant pages
+      if (focusedQuestions.length > 0) {
+        const focusedResults = await answerFocusedQuestionsBatch(focusedQuestions, appIndex, applicantProfile)
+        comparisonResults.push(...focusedResults)
+      }
+    }
+
+    // 7. Sort results by question number and calculate summary
+    comparisonResults.sort((a, b) => a.questionNumber - b.questionNumber)
     const summary = calculateSummary(comparisonResults)
 
-    console.log(`\n📊 QA Comparison Summary: ${summary.totalQuestions} questions — Yes: ${summary.yesCount}, No: ${summary.noCount}, N/A: ${summary.naCount}`)
-    console.log('🔍 ===== QA COMPARISON ANALYSIS COMPLETE =====\n')
+    // Log results
+    console.log('\n� Final Results:')
+    comparisonResults.forEach(r => {
+      console.log(`   Q${r.questionNumber}: ${r.aiAnswer} (${r.method || 'ai'}) → pages [${(r.pageReferences || []).join(', ')}]`)
+    })
+    console.log(`\n📊 Summary: ${summary.totalQuestions} questions — Yes: ${summary.yesCount}, No: ${summary.noCount}, N/A: ${summary.naCount}`)
+    console.log('🔍 ===== RULES-BASED QA COMPARISON COMPLETE =====\n')
 
     res.json({
       success: true,
       summary,
       results: comparisonResults,
+      pageOffset: appIndex.pageOffset || 0,
       saatInfo: saatData?.found ? {
         available: true,
         fundingOppNumber,
@@ -573,6 +686,23 @@ router.post('/standard-analyze', async (req, res) => {
 
     console.log(`📋 Parsed ${userQuestions.length} standard checklist questions from ${dataPath}`)
 
+    // 1b. Extract PDF TOC links if not already present
+    if (!applicationData.tocLinks) {
+      try {
+        const pdfPath = await findApplicationPdf(applicationData)
+        if (pdfPath) {
+          const pdfBuffer = await fs.readFile(pdfPath)
+          const tocLinks = await extractTocLinks(pdfBuffer)
+          if (tocLinks.length > 0) {
+            applicationData.tocLinks = tocLinks
+            console.log(`🔗 Lazy-extracted ${tocLinks.length} TOC links for standard checklist from ${basename(pdfPath)}`)
+          }
+        }
+      } catch (linkErr) {
+        console.warn(`⚠️ Lazy PDF link extraction skipped: ${linkErr.message}`)
+      }
+    }
+
     // 2. Prepare application evidence
     const applicationSummary = buildApplicationSummary(applicationData)
 
@@ -608,11 +738,15 @@ router.post('/standard-analyze', async (req, res) => {
     })
 
     const aiResponseText = response.choices[0]?.message?.content || ''
-    console.log(`🤖 AI response length: ${aiResponseText.length} chars`)
+    const finishReason2 = response.choices[0]?.finishReason || 'unknown'
+    console.log(`🤖 Standard AI response length: ${aiResponseText.length} chars, finishReason: ${finishReason2}`)
+    console.log(`🤖 Standard AI response last 100 chars: ...${aiResponseText.slice(-100)}`)
 
-    // 5. Parse AI response and build comparison results
+    // 5. Parse AI response and build comparison results with server-side page resolution
     const aiAnswers = parseAIResponse(aiResponseText)
-    const comparisonResults = buildComparisonResults(userQuestions, aiAnswers)
+    console.log(`🤖 Standard parsed ${aiAnswers.length} AI answers`)
+    const pageIndex = buildPageIndex(applicationData)
+    const comparisonResults = buildComparisonResults(userQuestions, aiAnswers, pageIndex)
 
     // 6. Summary
     const summary = calculateSummary(comparisonResults)
@@ -624,7 +758,8 @@ router.post('/standard-analyze', async (req, res) => {
       success: true,
       summary,
       metadata,
-      results: comparisonResults
+      results: comparisonResults,
+      pageOffset: pageIndex.pageOffset || 0
     })
 
   } catch (error) {
@@ -690,7 +825,400 @@ function detectConditionalQualifier(questionText) {
   return null
 }
 
-// ─── Shared AI helpers ───────────────────────────────────────────────────────
+/**
+ * Find the application PDF on disk by extracting the application number
+ * from the applicationData content and searching documents directories.
+ * 
+ * @param {Object} applicationData - The parsed application data with pages
+ * @returns {Promise<string|null>} Full path to the PDF, or null if not found
+ */
+async function findApplicationPdf(applicationData) {
+  // Extract application number from page content (e.g., "EHB Application Number: 242645")
+  let appNumber = null
+  for (const p of (applicationData.pages || []).slice(0, 5)) {
+    for (const line of (p.lines || [])) {
+      const content = line.content || line
+      const m = content.match(/(?:EHB\s+)?Application\s+(?:Number|#):\s*(\d{5,7})/i)
+      if (m) { appNumber = m[1]; break }
+    }
+    if (appNumber) break
+  }
+
+  if (!appNumber) {
+    console.log(`🔗 findApplicationPdf: could not extract application number from data`)
+    return null
+  }
+
+  console.log(`🔗 findApplicationPdf: looking for Application-${appNumber}.pdf`)
+
+  const docsRoot = join(__dirname, '../../documents')
+
+  // Search recursively: check root and all subdirectories
+  async function searchDir(dir) {
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        const fullPath = join(dir, entry.name)
+        if (entry.isFile() && entry.name.endsWith('.pdf') && entry.name.includes(appNumber)) {
+          return fullPath
+        }
+        if (entry.isDirectory()) {
+          const found = await searchDir(fullPath)
+          if (found) return found
+        }
+      }
+    } catch { /* ignore unreadable dirs */ }
+    return null
+  }
+
+  return searchDir(docsRoot)
+}
+
+// ─── Rules-Based AI Helpers ──────────────────────────────────────────────────
+
+/**
+ * Answer SAAT-related questions (Q10-Q16) as a focused batch.
+ * Sends only SAAT data + relevant form pages (Form 1A, SF-424A, Form 5B) to AI.
+ */
+async function answerSAATQuestionsBatch(saatQuestions, appIndex, saatData, saatSummary, applicantProfile) {
+  const results = []
+
+  // Extract pages relevant to SAAT questions — use suggestedResources as primary hint
+  const targetPageNums = new Set()
+
+  // Collect from each question's suggestedResources
+  for (const q of saatQuestions) {
+    const srNames = parseSuggestedResources(q.suggestedResources)
+    const items = lookupFormPages(srNames, appIndex.formPageMap)
+    for (const item of items) {
+      targetPageNums.add(item.page)
+      targetPageNums.add(item.page + 1) // next page for multi-page forms
+    }
+  }
+
+  // Also add standard SAAT-relevant forms as fallback
+  const relevantFormNames = ['form 1a', 'sf-424a', 'sf-424', 'form 5b', 'form 5a', 'summary page', 'project abstract', 'project narrative']
+  for (const [key, pageNum] of appIndex.formPageMap) {
+    if (relevantFormNames.some(f => key.includes(f) || f.includes(key))) {
+      targetPageNums.add(pageNum)
+      targetPageNums.add(pageNum + 1)
+    }
+  }
+
+  const relevantPages = []
+  const pageNumbers = []
+  for (const pn of [...targetPageNums].sort((a, b) => a - b)) {
+    const pageData = appIndex.pages.find(p => p.pageNum === pn)
+    if (pageData && !pageNumbers.includes(pn)) {
+      relevantPages.push(`--- Page ${pn} ---\n${pageData.text}`)
+      pageNumbers.push(pn)
+    }
+  }
+
+  // Build focused prompt with only SAAT questions + relevant pages
+  const questionsText = saatQuestions.map(q => {
+    let line = `Q${q.number}: ${q.question}`
+    if (q.rule?.description) line += `\n  Rule: ${q.rule.description}`
+    return line
+  }).join('\n\n')
+
+  const systemPrompt = `You are an expert HRSA grant reviewer. Answer ONLY the questions below using the SAAT data and application form data provided.
+
+RULES:
+- Q10: "Yes" if the applicant's NOFO matches AND proposes a valid service area from the SAAT. If "No", Q11-Q15 are all "N/A".
+- Q11: "Yes" if Form 1A patient projection >= 75% of SAAT Patient Target. Show the numbers.
+- Q12: "Yes" if applicant proposes ALL Service Types listed in SAAT.
+- Q13: "Yes" if annual SAC funding request (SF-424A) does NOT exceed SAAT Total Funding. Show the amounts.
+- Q14: "Yes" if funding distribution matches SAAT (CHC, MSAW, HP, RPH).
+- Q15: "Yes" if applicant proposes ALL population types listed in SAAT.
+- Q16: "Yes" if Form 5B zip codes cover >= 75% of SAAT patient percentage.
+
+WRITING STYLE:
+- Write "evidence" as a clear, descriptive paragraph a reviewer can read. Reference the specific page, form name, and values found.
+- Write "reasoning" as a brief explanation of how you reached your conclusion, not a numbered step list.
+- Always mention the page number where you found the data (e.g., "Form 1A on page 135 shows 5,200 projected patients").
+
+Return ONLY a JSON array:
+[{"questionNumber":10,"aiAnswer":"Yes","confidence":"high","evidence":"The applicant proposes to serve Service Area 154 in Philadelphia, PA, which is listed under NOFO HRSA-26-004 in the SAAT. The Project Abstract on page 5 confirms the applicant is applying for this service area.","pageReferences":[5],"reasoning":"The NOFO number matches and the proposed service area is listed in the SAAT, confirming the applicant is proposing a valid announced service area."}]`
+
+  const userPrompt = `SAAT QUESTIONS:\n${questionsText}\n\nSAAT REFERENCE DATA:\n${saatSummary || 'SAAT data not available — answer based on application evidence alone.'}\n\nAPPLICATION FORM DATA (relevant pages only):\n${relevantPages.slice(0, 12).join('\n\n')}\n\nAPPLICANT PROFILE:\nOrganization: ${applicantProfile.organizationName || 'Unknown'}\nType: ${applicantProfile.organizationType || 'Unknown'}\nCity/State: ${applicantProfile.city || ''}, ${applicantProfile.state || ''}`
+
+  try {
+    console.log(`   SAAT batch: ${saatQuestions.length} questions, ${relevantPages.length} pages, ${userPrompt.length} chars`)
+    const response = await client.getChatCompletions(deployment, [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ], { temperature: 0.1, maxTokens: 6000 })
+
+    const aiText = response.choices[0]?.message?.content || ''
+    console.log(`   SAAT AI response: ${aiText.length} chars, finishReason: ${response.choices[0]?.finishReason}`)
+    const aiAnswers = parseAIResponse(aiText)
+
+    for (const q of saatQuestions) {
+      const aiResult = aiAnswers.find(a => a.questionNumber === q.number)
+      if (aiResult) {
+        // Resolve page references from evidence text using the appIndex
+        const resolvedPages = resolvePageRefsFromIndex(aiResult.evidence, aiResult.reasoning, q.question, appIndex)
+        results.push({
+          questionNumber: q.number,
+          question: q.question,
+          aiAnswer: aiResult.aiAnswer || 'Unable to determine',
+          confidence: aiResult.confidence || 'medium',
+          evidence: aiResult.evidence || '',
+          pageReferences: resolvedPages.length > 0 ? resolvedPages : (aiResult.pageReferences || []),
+          reasoning: aiResult.reasoning || '',
+          suggestedResources: q.suggestedResources || '',
+          requiresSAAT: true,
+          method: 'rules_saat_ai'
+        })
+      } else {
+        results.push({
+          questionNumber: q.number,
+          question: q.question,
+          aiAnswer: 'Unable to determine',
+          confidence: 'low',
+          evidence: 'AI did not return an answer for this SAAT question.',
+          pageReferences: [],
+          reasoning: 'No analysis available',
+          suggestedResources: q.suggestedResources || '',
+          requiresSAAT: true,
+          method: 'rules_saat_ai'
+        })
+      }
+    }
+  } catch (err) {
+    console.error(`❌ SAAT batch AI error: ${err.message}`)
+    for (const q of saatQuestions) {
+      results.push({
+        questionNumber: q.number,
+        question: q.question,
+        aiAnswer: 'Unable to determine',
+        confidence: 'low',
+        evidence: `AI error: ${err.message}`,
+        pageReferences: [],
+        reasoning: 'AI call failed',
+        suggestedResources: q.suggestedResources || '',
+        requiresSAAT: true,
+        method: 'rules_saat_ai'
+      })
+    }
+  }
+
+  return results
+}
+
+/**
+ * Answer focused AI questions in a single batch.
+ * Each question gets only its relevant 2-6 pages instead of the entire document.
+ * Questions are grouped to minimize AI calls.
+ */
+async function answerFocusedQuestionsBatch(focusedQuestions, appIndex, applicantProfile) {
+  const results = []
+
+  // Group questions by similar focus pages to minimize AI calls
+  // But cap each group at 4 questions to keep responses manageable
+  const groups = []
+  let currentGroup = []
+  let currentPages = new Set()
+
+  for (const q of focusedQuestions) {
+    const { pageTexts, pageNumbers } = extractRelevantPages(q.rule || q, appIndex, q.suggestedResources)
+    const qEntry = { ...q, pageTexts, pageNumbers }
+
+    if (currentGroup.length >= 4) {
+      groups.push({ questions: currentGroup, allPages: [...currentPages] })
+      currentGroup = [qEntry]
+      currentPages = new Set(pageNumbers)
+    } else {
+      currentGroup.push(qEntry)
+      pageNumbers.forEach(p => currentPages.add(p))
+    }
+  }
+  if (currentGroup.length > 0) {
+    groups.push({ questions: currentGroup, allPages: [...currentPages] })
+  }
+
+  for (const group of groups) {
+    // Collect all unique page texts for this group
+    const allPageTexts = []
+    const allPageNums = new Set()
+    for (const q of group.questions) {
+      for (let i = 0; i < q.pageTexts.length; i++) {
+        if (!allPageNums.has(q.pageNumbers[i])) {
+          allPageNums.add(q.pageNumbers[i])
+          allPageTexts.push(q.pageTexts[i])
+        }
+      }
+    }
+
+    // If no relevant pages found, try to use first few pages as fallback
+    if (allPageTexts.length === 0 && appIndex.pages.length > 0) {
+      const fallbackPages = appIndex.pages.slice(0, 3)
+      for (const p of fallbackPages) {
+        allPageTexts.push(`--- Page ${p.pageNum} ---\n${p.text}`)
+        allPageNums.add(p.pageNum)
+      }
+    }
+
+    const questionsText = group.questions.map(q => {
+      const aiQ = q.rule?.aiQuestion || q.question
+      let line = `Q${q.number}: ${aiQ}`
+      if (q.suggestedResources) line += `\n  → Look in: ${q.suggestedResources}`
+      return line
+    }).join('\n\n')
+
+    const systemPrompt = `You are an expert HRSA grant reviewer. Answer ONLY the questions below using the application pages provided.
+
+For each question, answer "Yes", "No", or "N/A" with specific evidence from the pages.
+
+WRITING STYLE:
+- Write "evidence" as a clear, descriptive paragraph a reviewer can read. Mention the specific page number, document/form name, and what you found.
+- Write "reasoning" as a brief explanation of your conclusion, not a numbered step list.
+- Example evidence: "The Budget Narrative on page 55 describes the applicant's staffing plan and operational costs. Form 5A on page 143 lists General Primary Medical Care under Column I (direct services), confirming the applicant will provide this service directly."
+
+Return ONLY a JSON array:
+[{"questionNumber":6,"aiAnswer":"Yes","confidence":"high","evidence":"The Budget Narrative on page 55 describes the applicant's direct involvement in staffing and operations. Form 5A on page 143 shows services the applicant will provide directly.","pageReferences":[55,143],"reasoning":"The applicant demonstrates a substantive role through direct service delivery and budget management, not merely applying on behalf of another organization."}]`
+
+    const userPrompt = `QUESTIONS:\n${questionsText}\n\nAPPLICATION PAGES:\n${allPageTexts.join('\n\n')}\n\nAPPLICANT: ${applicantProfile.organizationName || 'Unknown'} (${applicantProfile.organizationType || 'Unknown'})`
+
+    try {
+      console.log(`   Focused batch: ${group.questions.length} questions, ${allPageTexts.length} pages, ${userPrompt.length} chars`)
+      const response = await client.getChatCompletions(deployment, [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ], { temperature: 0.1, maxTokens: 4000 })
+
+      const aiText = response.choices[0]?.message?.content || ''
+      console.log(`   Focused AI response: ${aiText.length} chars, finishReason: ${response.choices[0]?.finishReason}`)
+      const aiAnswers = parseAIResponse(aiText)
+
+      for (const q of group.questions) {
+        const aiResult = aiAnswers.find(a => a.questionNumber === q.number)
+        if (aiResult) {
+          const resolvedPages = resolvePageRefsFromIndex(aiResult.evidence, aiResult.reasoning, q.question, appIndex)
+          results.push({
+            questionNumber: q.number,
+            question: q.question,
+            aiAnswer: aiResult.aiAnswer || 'Unable to determine',
+            confidence: aiResult.confidence || 'medium',
+            evidence: aiResult.evidence || '',
+            pageReferences: resolvedPages.length > 0 ? resolvedPages : (aiResult.pageReferences || []),
+            reasoning: aiResult.reasoning || '',
+            suggestedResources: q.suggestedResources || '',
+            requiresSAAT: q.requiresSAAT || false,
+            method: 'rules_focused_ai'
+          })
+        } else {
+          results.push({
+            questionNumber: q.number,
+            question: q.question,
+            aiAnswer: 'Unable to determine',
+            confidence: 'low',
+            evidence: 'AI did not return an answer for this question.',
+            pageReferences: q.pageNumbers || [],
+            reasoning: 'No analysis available',
+            suggestedResources: q.suggestedResources || '',
+            requiresSAAT: q.requiresSAAT || false,
+            method: 'rules_focused_ai'
+          })
+        }
+      }
+    } catch (err) {
+      console.error(`❌ Focused batch AI error: ${err.message}`)
+      for (const q of group.questions) {
+        results.push({
+          questionNumber: q.number,
+          question: q.question,
+          aiAnswer: 'Unable to determine',
+          confidence: 'low',
+          evidence: `AI error: ${err.message}`,
+          pageReferences: [],
+          reasoning: 'AI call failed',
+          suggestedResources: q.suggestedResources || '',
+          requiresSAAT: q.requiresSAAT || false,
+          method: 'rules_focused_ai'
+        })
+      }
+    }
+  }
+
+  return results
+}
+
+/**
+ * Resolve page references from AI evidence text using the application index.
+ * Extracts form/attachment mentions and maps them to actual pages via formPageMap.
+ */
+function resolvePageRefsFromIndex(evidence, reasoning, question, appIndex) {
+  const { formPageMap, formPageRanges, pages } = appIndex
+  if (!formPageMap || formPageMap.size === 0) return []
+
+  const combinedText = [evidence || '', reasoning || '', question || ''].join(' ')
+  const foundPages = new Set()
+
+  // Extract form/attachment mentions
+  const patterns = [
+    { regex: /Attachment\s*(\d+)/gi, keyFn: m => `attachment ${m[1]}` },
+    { regex: /SF[-\s]?424\s*([A-Z]?)/gi, keyFn: m => `sf-424${(m[1]||'').toLowerCase()}`.trim() },
+    { regex: /Form\s+(\d+[A-Z]?)/gi, keyFn: m => `form ${m[1].toLowerCase()}` },
+    { regex: /Project\s+Narrative/gi, keyFn: () => 'project narrative' },
+    { regex: /Project\s+Abstract/gi, keyFn: () => 'project abstract' },
+    { regex: /Budget\s+Narrative/gi, keyFn: () => 'budget narrative' },
+    { regex: /Summary\s+Page/gi, keyFn: () => 'summary page' },
+    { regex: /Bylaws/gi, keyFn: () => 'bylaws' },
+    { regex: /Organizational\s+Chart/gi, keyFn: () => 'organizational chart' },
+    { regex: /Service\s+Area\s+Map/gi, keyFn: () => 'service area map' },
+  ]
+
+  for (const { regex, keyFn } of patterns) {
+    regex.lastIndex = 0
+    let m
+    while ((m = regex.exec(combinedText)) !== null) {
+      const key = keyFn(m)
+      // Use formPageRanges to include pages of multi-page forms
+      // For compact forms (≤5 pages), include the full range
+      // For large sections (>5 pages), include only the start page
+      if (formPageRanges && formPageRanges.has(key)) {
+        const range = formPageRanges.get(key)
+        const rangeSize = range.end - range.start + 1
+        if (rangeSize <= 5) {
+          for (let p = range.start; p <= range.end; p++) {
+            foundPages.add(p)
+          }
+        } else {
+          foundPages.add(range.start)
+        }
+        continue
+      }
+      // Fallback: try exact match from formPageMap (single page)
+      if (formPageMap.has(key)) {
+        foundPages.add(formPageMap.get(key))
+        continue
+      }
+      // Try partial match
+      for (const [mapKey, page] of formPageMap) {
+        if (mapKey.includes(key) || key.includes(mapKey)) {
+          foundPages.add(page)
+          break
+        }
+      }
+    }
+  }
+
+  // Also extract explicit "page X" references
+  const pageRegex = /\bpage\s*(\d+)/gi
+  let pm
+  while ((pm = pageRegex.exec(combinedText)) !== null) {
+    const num = parseInt(pm[1])
+    if (num > 0 && num <= (pages.length || 200)) {
+      foundPages.add(num)
+    }
+  }
+
+  return [...foundPages].filter(p => p > 0).sort((a, b) => a - b).slice(0, 5)
+}
+
+// ─── Shared AI helpers (legacy, used by standard-analyze) ───────────────────
 
 /**
  * Build the system + user prompts for checklist analysis.
@@ -698,105 +1226,23 @@ function detectConditionalQualifier(questionText) {
 function buildAnalysisPrompt({ questionsForAI, applicationSummary, saatQuestionNums, saatData, saatSummary, fundingOppNumber, fiscalYear, checklistType }) {
   const systemPrompt = `You are an expert HRSA grant application reviewer performing a ${checklistType} Checklist review for a Service Area Competition (SAC) application.
 
-You will receive checklist questions, an APPLICANT PROFILE, and evidence extracted from the grant application (and optionally SAAT data). For EACH question you must provide a thorough, evidence-based answer.
+For EACH question, follow this process:
 
-═══════════════════════════════════════════════════════════════
-CRITICAL: APPLICABILITY-FIRST REASONING (MUST FOLLOW FOR EVERY QUESTION)
-═══════════════════════════════════════════════════════════════
-Before answering Yes or No, you MUST FIRST determine if the question APPLIES to this applicant.
-Many checklist questions are conditional — they only apply to certain applicant types.
+1. APPLICABILITY CHECK: Questions marked ⚠️ CONDITIONAL have qualifiers (e.g., "Public Agencies:", "New applicant:", "requesting RPH funding:"). Check the APPLICANT PROFILE — if the applicant does NOT match the qualifier, answer "N/A".
 
-STEP 1: Read the question carefully for CONDITIONAL QUALIFIERS such as:
-  - "Public Agencies:" → ONLY applies if applicant IS a public agency
-  - "New applicant:" → ONLY applies if applicant IS a new applicant
-  - "New or competing supplement applicant:" → ONLY applies to new or competing supplement applicants
-  - "requesting RPH funding:" → ONLY applies if applicant requests RPH funding
-  - "requesting HP and/or RPH funding:" → ONLY applies if applicant requests HP or RPH funding
-  - "If funding is only requested for MSAW" → conditional on MSAW-only funding
+2. EVIDENCE SEARCH: If the question applies, search the application evidence for proof.
+   - Data priority: Forms (SF-424, Form 1A/5A/5B) > Attachments > Narrative > Abstract
+   - Answer "Yes" only with clear evidence. Answer "No" only after thorough search.
 
-STEP 2: Check the APPLICANT PROFILE at the top of the application evidence:
-  - Organization Type (Nonprofit, Public Agency, Tribal, etc.)
-  - Is New Applicant / Is Competing Supplement
-  - Funding Types Requested (CHC, MSAW, HP, RPH)
-
-STEP 3: Apply the rule:
-  - If the question has a conditional qualifier AND the applicant does NOT meet that condition → answer "N/A"
-  - Example: Q asks "Public Agencies: Does the application include Attachment 6: Co-Applicant Agreement?"
-    If applicant is "Nonprofit with 501C3" (NOT a public agency) → answer "N/A"
-    Reasoning: "This question applies only to public agencies. The applicant is a nonprofit (Type: M: Nonprofit with 501C3, page X), so Attachment 6 is not required."
-  - Example: Q asks "New or competing supplement applicant requesting RPH funding: Does the applicant demonstrate consultation with residents of public housing?"
-    If applicant does NOT request RPH funding → answer "N/A"
-    Reasoning: "This question applies only to applicants requesting RPH funding. The applicant does not request RPH funding."
-
-ONLY after confirming the question APPLIES should you evaluate Yes or No based on evidence.
-
-═══════════════════════════════════════════════════════════════
-EVIDENCE-BASED ANSWERING (when question DOES apply)
-═══════════════════════════════════════════════════════════════
-
-CRITICAL: DATA SOURCE PRIORITY (always follow this hierarchy):
-  1. ACTUAL SUBMITTED FORMS (highest authority): Summary Page, Form 1A, Form 5A, Form 5B, SF-424, SF-424A
-  2. Budget Narrative, Attachments
-  3. Project Narrative
-  4. Project Abstract (LOWEST authority — may contain outdated or draft values)
-  If a value in the Project Abstract conflicts with a value on an actual form (e.g., Service Area ID,
-  patient projections, funding amounts), ALWAYS use the value from the actual form.
-
-- Answer "Yes" ONLY if you find clear, specific evidence that the requirement is met.
-- Answer "No" ONLY if the question applies AND you find evidence the requirement is NOT met, or you thoroughly searched and found no evidence it is met.
-- "evidence" must cite SPECIFIC values, field names, form names, attachment names, or table data found in the application. Include page numbers.
-- "reasoning" must explain step-by-step WHY you reached your conclusion, referencing the evidence.
-- Each question may include "Look in:" hints telling you WHERE to search first (e.g., "Project Narrative", "Form 5A", "SF-424A", "SAAT"). Always search those sources first, then broaden.
-- For questions about whether forms/attachments are included, look for those specific document names, form headers, or attachment labels anywhere in the application.
-- For questions about patient numbers, funding amounts, or service types, look for specific numeric values in tables, forms, and narrative text. ALWAYS prefer Form 1A and SF-424A values over Project Abstract.
-- For questions about service areas or sites, look for Summary Page and Form 5B data, zip codes, and site addresses. The Service Area ID on the Summary Page is authoritative.
-- Do NOT answer "No" simply because an attachment is missing — first check if the attachment is even REQUIRED for this applicant type.
-- Only answer "Unable to determine" if you genuinely cannot find ANY relevant evidence after thorough search AND the question clearly applies to this applicant.
+3. In your "evidence" field, always mention the specific form names and attachment numbers where you found proof (e.g., "Attachment 11", "SF-424", "Form 5A"). Page numbers will be resolved automatically.
 ${saatQuestionNums.length > 0 ? `
-═══════════════════════════════════════════════════════════════
-SAAT DATA CROSS-REFERENCING (Questions ${saatQuestionNums.join(', ')})
-═══════════════════════════════════════════════════════════════
-These questions are marked [REQUIRES SAAT DATA].
+SAAT DATA (Questions ${saatQuestionNums.join(', ')}):
+- Q10: "Yes" if applicant's NOFO matches AND proposes a valid service area. If Q10="No", Q11-Q15 are all "N/A".
+- Q11-Q16: Compare SAAT values vs application values (Form 1A patients, SF-424A funding, Form 5A services, Form 5B zips). Show calculations. If no SAAT match, answer from application evidence alone.
+- Q16 zips: applicant must cover zips totaling ≥75% of SAAT patient percentage.` : ''}
 
-CRITICAL FOR Q10 ("Does the applicant propose a service area announced under this NOFO number?"):
-- Q10 is answered "Yes" if the applicant's Funding Opportunity Number (from SF-424) matches the NOFO
-  AND the applicant proposes a valid service area (identified by Service Area ID, city/state, or zip codes).
-- The SAAT data lists ALL service areas announced under this NOFO. The applicant does NOT need to match
-  a specific SAAT row — they just need to propose ANY service area announced under the NOFO.
-- If the applicant's service area is NOT in the SAAT CSV, that does NOT mean Q10 is "No" — the SAAT CSV
-  may be a partial export. Check the application's NOFO number and proposed Service Area ID instead.
-- If Q10 is "No", then Q11-Q15 must all be "N/A" per the checklist instructions.
-
-FOR Q11-Q16 (require matched SAAT service area data):
-1. Extract the relevant SAAT value from the MATCHED service area (e.g., "SAAT patient target: 19,137")
-2. Find the corresponding APPLICATION value by searching the actual forms:
-   - Patient counts: Search Form 1A tables for "total unduplicated patients" or similar
-   - Funding amounts: Search SF-424A tables for federal funding requested
-   - Service types: Search Form 5A for services listed as "Column I" (direct) or "Column II" (contract)
-   - Zip codes: Search Form 5B for proposed service site zip codes
-3. For ZIP CODE validation (Q16): Compare SAAT zip codes against the applicant's Form 5B zip codes.
-   The SAAT provides zip codes with patient percentages. The applicant must include zip codes where
-   the cumulative patient percentage reaches at least 75%, OR all zip codes if the total is less than 75%.
-4. Show the calculation or comparison (e.g., "15,617 / 19,137 = 81.6%, exceeds 75% threshold")
-5. Conclude based on the comparison
-6. If NO matched SAAT service area was found, note that SAAT cross-validation was not possible and
-   answer based on application evidence alone.
-
-For SAAT questions, do NOT just check if a form exists — you must find and compare the ACTUAL NUMERIC VALUES.` : ''}
-
-Return a JSON array with this EXACT structure (one entry per question):
-[
-  {
-    "questionNumber": 1,
-    "aiAnswer": "Yes",
-    "confidence": "high",
-    "evidence": "Found Project Narrative on pages 5-25, SF-424 on page 1, Budget on pages 30-35...",
-    "pageReferences": [1, 5, 25, 30, 35],
-    "reasoning": "Step 1: This question applies to all applicants (no conditional qualifier). Step 2: Searched application for Project Narrative — found on pages 5-25. Step 3: The requirement is met."
-  }
-]
-
-Return ONLY the JSON array, no other text.`
+Return ONLY a JSON array, one entry per question:
+[{"questionNumber":1,"aiAnswer":"Yes","confidence":"high","evidence":"Attachment 11 on page 42 contains IRS determination letter...","pageReferences":[42],"reasoning":"Step 1: Question applies. Step 2: Found evidence on page 42. Step 3: Requirement met."}]`
 
   let userPrompt = `${checklistType.toUpperCase()} CHECKLIST QUESTIONS:\n${questionsForAI}\n\nAPPLICATION EVIDENCE:\n${applicationSummary}`
 
@@ -810,26 +1256,294 @@ Return ONLY the JSON array, no other text.`
 }
 
 /**
- * Parse AI JSON response, handling markdown code blocks and malformed JSON.
+ * Parse AI JSON response with multiple fallback strategies.
+ * Handles: markdown fences, truncated JSON, malformed brackets, individual object extraction.
  */
 function parseAIResponse(aiResponseText) {
-  try {
-    const jsonMatch = aiResponseText.match(/\[[\s\S]*\]/)
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0])
-    }
-  } catch (parseError) {
-    console.error('❌ Failed to parse AI response:', parseError.message)
-    console.log('Raw AI response (first 500 chars):', aiResponseText.substring(0, 500))
+  if (!aiResponseText || aiResponseText.trim().length === 0) {
+    console.error('❌ Empty AI response')
+    return []
   }
+
+  // Step 1: Strip markdown code fences and fix common AI JSON errors
+  let cleaned = aiResponseText
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .trim()
+
+  // Fix malformed pageReferences: AI sometimes puts unquoted strings like [SF-424, 11]
+  // Convert to empty array since page refs are resolved server-side anyway
+  cleaned = cleaned.replace(/"pageReferences"\s*:\s*\[([^\]]*)\]/g, (match, inner) => {
+    // If the array contains non-numeric unquoted values, replace with empty array
+    if (/[a-zA-Z]/.test(inner) && !/^[\s\d,"]*$/.test(inner)) {
+      return '"pageReferences": []'
+    }
+    return match
+  })
+
+  // Step 2: Try direct parse of the full cleaned text
+  try {
+    const direct = JSON.parse(cleaned)
+    if (Array.isArray(direct)) {
+      console.log(`✅ Parsed ${direct.length} AI answers (direct)`)
+      return direct
+    }
+  } catch { /* continue to fallbacks */ }
+
+  // Step 3: Extract JSON array with greedy regex
+  try {
+    const arrayMatch = cleaned.match(/\[[\s\S]*\]/)
+    if (arrayMatch) {
+      const parsed = JSON.parse(arrayMatch[0])
+      if (Array.isArray(parsed)) {
+        console.log(`✅ Parsed ${parsed.length} AI answers (regex array)`)
+        return parsed
+      }
+    }
+  } catch { /* continue to repair */ }
+
+  // Step 4: Repair truncated JSON — find the opening '[', then try closing incomplete objects
+  try {
+    const bracketIdx = cleaned.indexOf('[')
+    if (bracketIdx >= 0) {
+      let fragment = cleaned.substring(bracketIdx)
+      // Close any open strings, objects, arrays
+      const openBraces = (fragment.match(/\{/g) || []).length
+      const closeBraces = (fragment.match(/\}/g) || []).length
+      if (openBraces > closeBraces) {
+        // Truncate to last complete object (last '}') and close the array
+        const lastClose = fragment.lastIndexOf('}')
+        if (lastClose > 0) {
+          fragment = fragment.substring(0, lastClose + 1) + ']'
+          const repaired = JSON.parse(fragment)
+          if (Array.isArray(repaired)) {
+            console.log(`⚠️ Parsed ${repaired.length} AI answers (repaired truncated JSON)`)
+            return repaired
+          }
+        }
+      }
+    }
+  } catch { /* continue to individual extraction */ }
+
+  // Step 5: Last resort — extract individual JSON objects by matching {"questionNumber":...}
+  try {
+    const objects = []
+    const objRegex = /\{\s*"questionNumber"\s*:\s*\d+[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g
+    let match
+    while ((match = objRegex.exec(cleaned)) !== null) {
+      try {
+        const obj = JSON.parse(match[0])
+        objects.push(obj)
+      } catch { /* skip malformed individual object */ }
+    }
+    if (objects.length > 0) {
+      console.log(`⚠️ Extracted ${objects.length} AI answers (individual object fallback)`)
+      return objects
+    }
+  } catch { /* all strategies failed */ }
+
+  console.error('❌ All parse strategies failed for AI response')
+  console.log('Raw AI response (first 500 chars):', aiResponseText.substring(0, 500))
+  console.log('Raw AI response (last 200 chars):', aiResponseText.slice(-200))
   return []
 }
 
 /**
- * Build analysis results: merge parsed checklist questions with AI answers.
+ * Build a form-to-page map from application data.
+ * Two-pass approach:
+ *   Pass 1: Scan each page's header lines, count how many distinct form names appear.
+ *           Pages with 3+ distinct names are TOC/index pages → skip for mapping.
+ *   Pass 2: For non-TOC pages, record the FIRST page where each form appears as a header.
+ *           This gives us the actual start page of each form/attachment.
+ *
+ * Returns { formMap: Map<normalizedKey, pageNum>, pages: [{pageNum, text}] }
  */
-function buildComparisonResults(questions, aiAnswers) {
-  return questions.map(q => {
+function buildPageIndex(applicationData) {
+  const pages = []
+  const formMap = new Map()
+
+  if (!applicationData?.pages) return { formMap, pages }
+
+  const headerPatterns = [
+    { regex: /\b(Attachment\s*(\d+)[A-Z]?)\b/i, keyFn: m => `attachment ${m[2]}` },
+    { regex: /\b(SF[-\s]?424\s*([A-Z]?))\b/i, keyFn: m => `sf-424${(m[2]||'').toLowerCase()}` },
+    { regex: /\b(Form\s*(\d+[A-Z]?))\b/i, keyFn: m => `form ${m[2].toLowerCase()}` },
+    { regex: /\b(Summary\s*Page)\b/i, keyFn: () => 'summary page' },
+    { regex: /\b(Project\s*Narrative)\b/i, keyFn: () => 'project narrative' },
+    { regex: /\b(Project\s*Abstract)\b/i, keyFn: () => 'project abstract' },
+    { regex: /\b(Budget\s*Narrative)\b/i, keyFn: () => 'budget narrative' },
+    { regex: /\b(Budget\s*Justification)\b/i, keyFn: () => 'budget justification' },
+    { regex: /\b(Organizational\s*Chart)\b/i, keyFn: () => 'organizational chart' },
+    { regex: /\b(Board\s*of\s*Directors)\b/i, keyFn: () => 'board of directors' },
+    { regex: /\b(Articles\s*of\s*Incorporation)\b/i, keyFn: () => 'articles of incorporation' },
+    { regex: /\b(Bylaws)\b/i, keyFn: () => 'bylaws' },
+    { regex: /\b(501\s*\(?c\)?\s*\(?3\)?)\b/i, keyFn: () => '501c3' },
+    { regex: /\b(IRS\s*(?:Determination|Tax.Exempt))\b/i, keyFn: () => 'irs determination' },
+    { regex: /\b(Co-?Applicant\s*Agreement)\b/i, keyFn: () => 'co-applicant agreement' },
+    { regex: /\b(Indirect\s*Cost\s*Rate)\b/i, keyFn: () => 'indirect cost rate' },
+    { regex: /\b(Needs\s*Assessment)\b/i, keyFn: () => 'needs assessment' },
+    { regex: /\b(Scope\s*of\s*Project)\b/i, keyFn: () => 'scope of project' },
+    { regex: /\b(Form\s*990)\b/i, keyFn: () => 'form 990' },
+  ]
+
+  // PRIORITY 0: Use PDF TOC hyperlinks if available (exact page destinations)
+  // Detect page offset: pdfjs returns physical pages, but footers show different numbers
+  const tocLinks = applicationData.tocLinks || []
+
+  // Collect page text first (needed for offset detection)
+  for (const p of applicationData.pages) {
+    const pageNum = p.pageNumber || p.page || 0
+    const lines = (p.lines?.map(l => l.content) || [])
+    const fullText = lines.join('\n')
+    if (fullText.trim()) pages.push({ pageNum, text: fullText, lines })
+  }
+
+  if (tocLinks.length > 0) {
+    console.log(`🔗 buildPageIndex: Using ${tocLinks.length} PDF TOC hyperlinks`)
+    for (const link of tocLinks) {
+      if (!link.text || !link.destPage) continue
+      // Use physical page directly (matches PDF viewer page index)
+      if (link.text.length > 3) formMap.set(link.text.toLowerCase().trim(), link.destPage)
+      for (const { regex, keyFn } of headerPatterns) {
+        const m = link.text.match(regex)
+        if (m) { formMap.set(keyFn(m), link.destPage); break }
+      }
+    }
+  }
+
+  // FALLBACK: Header scanning for entries not already in formMap from TOC links
+  const pageInfos = applicationData.pages.map(p => {
+    const pageNum = p.pageNumber || p.page || 0
+    const lines = (p.lines?.map(l => l.content) || [])
+    const fullText = lines.join('\n')
+    const headerText = lines.slice(0, 5).join('\n')
+    const foundKeys = new Set()
+    for (const { regex, keyFn } of headerPatterns) {
+      const m = headerText.match(regex)
+      if (m) foundKeys.add(keyFn(m))
+    }
+    const fullPageKeys = new Set()
+    for (const { regex, keyFn } of headerPatterns) {
+      const m = fullText.match(new RegExp(regex.source, 'gi'))
+      if (m) { for (const match of m) { const km = match.match(regex); if (km) fullPageKeys.add(keyFn(km)) } }
+    }
+    const isTOC = fullPageKeys.size >= 5
+    return { pageNum, headerKeys: foundKeys, isTOC }
+  })
+
+  const tocPages = pageInfos.filter(p => p.isTOC).map(p => p.pageNum)
+  if (tocPages.length > 0) {
+    console.log(`📋 Detected TOC/index pages (skipping for form mapping): ${tocPages.join(', ')}`)
+  }
+
+  for (const info of pageInfos) {
+    if (info.isTOC) continue
+    for (const key of info.headerKeys) {
+      if (!formMap.has(key)) formMap.set(key, info.pageNum)
+    }
+  }
+
+  // Detect page offset: physical page vs footer "Page Number: N"
+  let pageOffset = 0
+  for (const p of pages) {
+    for (const line of (p.lines || [])) {
+      const m = line.match(/Page\s+Number:\s*(\d+)/i)
+      if (m) {
+        pageOffset = p.pageNum - parseInt(m[1])
+        break
+      }
+    }
+    if (pageOffset !== 0) break
+  }
+
+  if (formMap.size > 0) {
+    console.log(`📑 Form/Attachment Index: ${formMap.size} entries${tocLinks.length > 0 ? ` (${tocLinks.length} from PDF links)` : ''}, pageOffset=${pageOffset}`)
+  }
+
+  return { formMap, pages, pageOffset }
+}
+
+/**
+ * Resolve page references server-side.
+ * Priority: evidence text > question text (evidence mentions are most relevant).
+ * Extracts form/attachment names, looks them up in formMap.
+ * Also extracts explicit "page X" references from AI evidence.
+ * Returns at most 3 page numbers.
+ */
+function resolvePageReferences(evidence, reasoning, question, pageIndex) {
+  const { formMap, pages } = pageIndex
+  if (!formMap || formMap.size === 0) return []
+
+  // Search evidence+reasoning first (higher priority), then question text
+  const evidenceText = [evidence || '', reasoning || ''].join(' ')
+  const questionText = question || ''
+  const foundFromEvidence = new Set()
+  const foundFromQuestion = new Set()
+
+  const mentionPatterns = [
+    { regex: /Attachment\s*(\d+)/gi, keyFn: m => `attachment ${m[1]}` },
+    { regex: /SF[-\s]?424\s*([A-Z]?)/gi, keyFn: m => `sf-424${(m[1]||'').toLowerCase()}` },
+    { regex: /Form\s*(\d+[A-Z]?)/gi, keyFn: m => `form ${m[1].toLowerCase()}` },
+    { regex: /Summary\s*Page/gi, keyFn: () => 'summary page' },
+    { regex: /Project\s*Narrative/gi, keyFn: () => 'project narrative' },
+    { regex: /Project\s*Abstract/gi, keyFn: () => 'project abstract' },
+    { regex: /Budget\s*(?:Narrative|Justification)/gi, keyFn: m => m[0].toLowerCase().includes('justification') ? 'budget justification' : 'budget narrative' },
+    { regex: /Organizational\s*Chart/gi, keyFn: () => 'organizational chart' },
+    { regex: /Board\s*of\s*Directors/gi, keyFn: () => 'board of directors' },
+    { regex: /Articles\s*of\s*Incorporation/gi, keyFn: () => 'articles of incorporation' },
+    { regex: /Bylaws/gi, keyFn: () => 'bylaws' },
+    { regex: /501\s*\(?c\)?\s*\(?3\)?/gi, keyFn: () => '501c3' },
+    { regex: /IRS\s*(?:Determination|Tax.Exempt)/gi, keyFn: () => 'irs determination' },
+    { regex: /Co-?Applicant\s*Agreement/gi, keyFn: () => 'co-applicant agreement' },
+    { regex: /Indirect\s*Cost\s*Rate/gi, keyFn: () => 'indirect cost rate' },
+    { regex: /Needs\s*Assessment/gi, keyFn: () => 'needs assessment' },
+    { regex: /Scope\s*of\s*Project/gi, keyFn: () => 'scope of project' },
+    { regex: /Form\s*990/gi, keyFn: () => 'form 990' },
+  ]
+
+  function extractFromText(text, targetSet) {
+    for (const { regex, keyFn } of mentionPatterns) {
+      // Reset regex lastIndex for each text
+      regex.lastIndex = 0
+      let m
+      while ((m = regex.exec(text)) !== null) {
+        const key = keyFn(m)
+        const pageNum = formMap.get(key)
+        if (pageNum) targetSet.add(pageNum)
+      }
+    }
+
+    // Also extract explicit "page X" or "pages X-Y" from AI evidence
+    const pageNumRegex = /\bpage\s*(\d+)/gi
+    let pm
+    while ((pm = pageNumRegex.exec(text)) !== null) {
+      const num = parseInt(pm[1])
+      if (num > 0 && num <= (pages.length || 200)) {
+        targetSet.add(num)
+      }
+    }
+  }
+
+  extractFromText(evidenceText, foundFromEvidence)
+  extractFromText(questionText, foundFromQuestion)
+
+  // Prefer evidence-derived pages; supplement with question-derived if needed
+  let result = [...foundFromEvidence].filter(p => p > 0)
+  if (result.length < 3) {
+    const extras = [...foundFromQuestion].filter(p => p > 0 && !foundFromEvidence.has(p))
+    result = result.concat(extras)
+  }
+
+  result.sort((a, b) => a - b)
+  return result.slice(0, 3)
+}
+
+/**
+ * Build analysis results: merge parsed checklist questions with AI answers.
+ * Uses server-side page reference resolution instead of AI-provided page numbers.
+ */
+function buildComparisonResults(questions, aiAnswers, pageIndex) {
+  const results = questions.map(q => {
     const aiResult = aiAnswers.find(a => a.questionNumber === q.number) || {
       aiAnswer: 'Unable to determine',
       confidence: 'low',
@@ -838,18 +1552,33 @@ function buildComparisonResults(questions, aiAnswers) {
       reasoning: 'No analysis available'
     }
 
+    // Resolve page references server-side from evidence text
+    const resolvedPages = pageIndex
+      ? resolvePageReferences(aiResult.evidence, aiResult.reasoning, q.question, pageIndex)
+      : (aiResult.pageReferences || [])
+
+    const finalPages = resolvedPages.length > 0 ? resolvedPages : (aiResult.pageReferences || [])
+
     return {
       questionNumber: q.number,
       question: q.question,
       aiAnswer: aiResult.aiAnswer,
       confidence: aiResult.confidence || 'low',
       evidence: aiResult.evidence || '',
-      pageReferences: aiResult.pageReferences || [],
+      pageReferences: finalPages,
       reasoning: aiResult.reasoning || '',
       suggestedResources: q.suggestedResources || '',
       requiresSAAT: q.requiresSAAT || false
     }
   })
+
+  // Log page resolution summary
+  console.log('📄 Page references resolved:')
+  results.forEach(r => {
+    console.log(`   Q${r.questionNumber}: ${r.aiAnswer} → pages [${r.pageReferences.join(', ')}]`)
+  })
+
+  return results
 }
 
 /**
@@ -860,7 +1589,9 @@ function calculateSummary(results) {
   const yesCount = results.filter(r => (r.aiAnswer || '').toLowerCase() === 'yes').length
   const noCount = results.filter(r => (r.aiAnswer || '').toLowerCase() === 'no').length
   const naCount = results.filter(r => { const v = (r.aiAnswer || '').toLowerCase(); return v === 'n/a' || v === 'not applicable' }).length
-  return { totalQuestions, yesCount, noCount, naCount }
+  const answeredCount = yesCount + noCount + naCount
+  const agreementRate = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0
+  return { totalQuestions, yesCount, noCount, naCount, agreementRate }
 }
 
 /**
@@ -913,16 +1644,30 @@ function extractApplicantProfile(applicationData) {
     serviceTypesFromApp: [],      // service types from Form 5A
     patientProjection: null,      // total unduplicated patients from Form 1A
     fundingRequested: null,       // total funding requested from SF-424A
+    sourcePages: {},              // tracks which page each fact was found on
   }
 
+  // Collect text per page (with page numbers) for source tracking
+  const pageTexts = [] // { pageNum, text }
   const allText = []
 
-  // Collect all text from pages
   if (applicationData.pages) {
-    applicationData.pages.slice(0, 20).forEach(p => {
+    applicationData.pages.slice(0, 50).forEach(p => {
+      const pageNum = p.pageNumber || p.page || 0
       const lineText = p.lines?.map(l => l.content).join('\n') || ''
-      if (lineText) allText.push(lineText)
+      if (lineText) {
+        allText.push(lineText)
+        pageTexts.push({ pageNum, text: lineText })
+      }
     })
+  }
+
+  // Helper: find which page a regex pattern matches on
+  function findPageForPattern(pattern) {
+    for (const pt of pageTexts) {
+      if (pattern.test(pt.text)) return pt.pageNum
+    }
+    return null
   }
 
   // Collect from key-value pairs
@@ -930,15 +1675,20 @@ function extractApplicantProfile(applicationData) {
     applicationData.keyValuePairs.forEach(kv => {
       const key = (kv.key || '').toLowerCase()
       const val = (kv.value || '').trim()
+      const kvPage = kv.pageNumber || kv.page || null
 
       if (key.includes('type of applicant') || key.includes('applicant type')) {
         profile.applicantType = val
+        if (kvPage) profile.sourcePages.organizationType = kvPage
         if (/nonprofit|non-profit|501c/i.test(val)) { profile.isNonprofit = true; profile.organizationType = val }
         if (/public\s*agency/i.test(val)) { profile.isPublicAgency = true; profile.organizationType = val }
         if (/tribal|indian/i.test(val)) { profile.isTribal = true; profile.organizationType = val }
       }
       if (key.includes('applicant name') || key.includes('organization name') || key.includes('legal name')) {
-        if (!profile.organizationName) profile.organizationName = val
+        if (!profile.organizationName) {
+          profile.organizationName = val
+          if (kvPage) profile.sourcePages.organizationName = kvPage
+        }
       }
     })
   }
@@ -955,6 +1705,9 @@ function extractApplicantProfile(applicationData) {
       if (/nonprofit|non-profit|501c/i.test(val)) profile.isNonprofit = true
       if (/public\s*agency/i.test(val)) profile.isPublicAgency = true
       if (/tribal|indian/i.test(val)) profile.isTribal = true
+      if (!profile.sourcePages.organizationType) {
+        profile.sourcePages.organizationType = findPageForPattern(/Type of Applicant/i)
+      }
     }
   }
 
@@ -966,18 +1719,32 @@ function extractApplicantProfile(applicationData) {
       if (/nonprofit|non-profit|501c/i.test(altMatch[1])) profile.isNonprofit = true
       if (/public\s*agency/i.test(altMatch[1])) profile.isPublicAgency = true
       if (/tribal|indian/i.test(altMatch[1])) profile.isTribal = true
+      if (!profile.sourcePages.organizationType) {
+        profile.sourcePages.organizationType = findPageForPattern(/[A-Z]:\s*(?:Nonprofit|Public Agency|Tribal)/i)
+      }
     }
   }
 
   // Organization name
   if (!profile.organizationName) {
     const nameMatch = fullText.match(/(?:Applicant|Organization|Legal)\s*Name[^:]*:\s*([^\n]+)/i)
-    if (nameMatch) profile.organizationName = nameMatch[1].trim()
+    if (nameMatch) {
+      profile.organizationName = nameMatch[1].trim()
+      if (!profile.sourcePages.organizationName) {
+        profile.sourcePages.organizationName = findPageForPattern(/(?:Applicant|Organization|Legal)\s*Name/i)
+      }
+    }
   }
 
   // New vs existing applicant
-  if (/new\s*(?:access\s*point|applicant)/i.test(fullText)) profile.isNewApplicant = true
-  if (/competing\s*supplement/i.test(fullText)) profile.isCompetingSupplement = true
+  if (/new\s*(?:access\s*point|applicant)/i.test(fullText)) {
+    profile.isNewApplicant = true
+    profile.sourcePages.isNewApplicant = findPageForPattern(/new\s*(?:access\s*point|applicant)/i)
+  }
+  if (/competing\s*supplement/i.test(fullText)) {
+    profile.isCompetingSupplement = true
+    profile.sourcePages.isCompetingSupplement = findPageForPattern(/competing\s*supplement/i)
+  }
 
   // Funding types requested — look in SF-424A, budget sections
   if (/\bCHC\b/.test(fullText)) profile.fundingTypesRequested.push('CHC')
@@ -998,6 +1765,7 @@ function extractApplicantProfile(applicationData) {
     const saMatch = fullText.match(pat)
     if (saMatch) {
       profile.serviceAreaId = saMatch[1]
+      profile.sourcePages.serviceAreaId = findPageForPattern(pat)
       break
     }
   }
@@ -1031,6 +1799,7 @@ function extractApplicantProfile(applicationData) {
     const patientMatch = fullText.match(pat)
     if (patientMatch) {
       profile.patientProjection = patientMatch[1].replace(/,/g, '')
+      profile.sourcePages.patientProjection = findPageForPattern(pat)
       break
     }
   }
@@ -1043,6 +1812,7 @@ function extractApplicantProfile(applicationData) {
         for (const [key, val] of vals) {
           if (/unduplicated\s*patients?|patient\s*(?:target|projection)/i.test(key) && /^\d[\d,]*$/.test((val || '').trim())) {
             profile.patientProjection = val.trim().replace(/,/g, '')
+            profile.sourcePages.patientProjection = table.pageNumber || null
             break
           }
         }
@@ -1054,7 +1824,10 @@ function extractApplicantProfile(applicationData) {
 
   // Funding requested from SF-424A
   const fundingMatch = fullText.match(/(?:total\s*(?:federal\s*)?(?:funding|funds?)\s*requested|federal\s*(?:funds?\s*)?requested)[^:]*:\s*\$?([\d,]+)/i)
-  if (fundingMatch) profile.fundingRequested = fundingMatch[1].replace(/,/g, '')
+  if (fundingMatch) {
+    profile.fundingRequested = fundingMatch[1].replace(/,/g, '')
+    profile.sourcePages.fundingRequested = findPageForPattern(/(?:total\s*(?:federal\s*)?(?:funding|funds?)\s*requested|federal\s*(?:funds?\s*)?requested)/i)
+  }
 
   return profile
 }
@@ -1070,7 +1843,7 @@ function buildApplicationSummary(applicationData, preExtractedProfile = null) {
   // Use pre-extracted profile if available, otherwise extract now
   const profile = preExtractedProfile || extractApplicantProfile(applicationData)
   const profileLines = [
-    '=== APPLICANT PROFILE (use these facts to determine question applicability) ===',
+    '=== APPLICANT PROFILE ===',
     `Organization Name: ${profile.organizationName || 'Unknown'}`,
     `Organization Type: ${profile.organizationType || 'Unknown'}`,
     `Is Nonprofit: ${profile.isNonprofit ? 'YES' : 'No'}`,
@@ -1078,15 +1851,15 @@ function buildApplicationSummary(applicationData, preExtractedProfile = null) {
     `Is Tribal/Urban Indian: ${profile.isTribal ? 'YES' : 'No'}`,
     `Is New Applicant: ${profile.isNewApplicant ? 'YES' : 'No'}`,
     `Is Competing Supplement: ${profile.isCompetingSupplement ? 'YES' : 'No'}`,
-    `Service Area ID (from Summary Page/Form 1A): ${profile.serviceAreaId || 'Not extracted — search Summary Page and Form 1A'}`,
-    `Service Area City/State: ${profile.serviceAreaCity && profile.serviceAreaState ? profile.serviceAreaCity + ', ' + profile.serviceAreaState : 'Not extracted — search Summary Page'}`,
-    `Funding Types Requested: ${profile.fundingTypesRequested.length > 0 ? profile.fundingTypesRequested.join(', ') : 'Not determined'}`,
-    `Requests RPH Funding: ${profile.requestsRPH ? 'YES' : 'No'}`,
-    `Requests HP Funding: ${profile.requestsHP ? 'YES' : 'No'}`,
-    `Requests MSAW Funding: ${profile.requestsMSAW ? 'YES' : 'No'}`,
-    `Patient Projection (Form 1A): ${profile.patientProjection || 'Not extracted — search Form 1A in application'}`,
-    `Funding Requested (SF-424A): ${profile.fundingRequested ? '$' + parseInt(profile.fundingRequested).toLocaleString() : 'Not extracted — search SF-424A in application'}`,
-    `Zip Codes Found in Application: ${profile.zipCodesFromApp.length > 0 ? profile.zipCodesFromApp.slice(0, 50).join(', ') + (profile.zipCodesFromApp.length > 50 ? ` ... (${profile.zipCodesFromApp.length} total)` : '') : 'Search Form 5B in application'}`,
+    `Service Area ID: ${profile.serviceAreaId || 'Unknown'}`,
+    `Service Area City/State: ${profile.serviceAreaCity && profile.serviceAreaState ? profile.serviceAreaCity + ', ' + profile.serviceAreaState : 'Unknown'}`,
+    `Funding Types: ${profile.fundingTypesRequested.length > 0 ? profile.fundingTypesRequested.join(', ') : 'Unknown'}`,
+    `Requests RPH: ${profile.requestsRPH ? 'YES' : 'No'}`,
+    `Requests HP: ${profile.requestsHP ? 'YES' : 'No'}`,
+    `Requests MSAW: ${profile.requestsMSAW ? 'YES' : 'No'}`,
+    `Patient Projection: ${profile.patientProjection || 'Unknown'}`,
+    `Funding Requested: ${profile.fundingRequested ? '$' + parseInt(profile.fundingRequested).toLocaleString() : 'Unknown'}`,
+    `Zip Codes: ${profile.zipCodesFromApp.length > 0 ? profile.zipCodesFromApp.slice(0, 30).join(', ') + (profile.zipCodesFromApp.length > 30 ? ` ... (${profile.zipCodesFromApp.length} total)` : '') : 'Unknown'}`,
     '=== END APPLICANT PROFILE ==='
   ]
   parts.push(profileLines.join('\n'))

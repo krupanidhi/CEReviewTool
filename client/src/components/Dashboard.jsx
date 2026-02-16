@@ -94,7 +94,7 @@ export default function Dashboard({ onViewResults }) {
     !searchQuery ||
     app.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     app.id?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  ).sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
 
   const totalPages = Math.ceil(filteredApps.length / itemsPerPage)
   const startIdx = (currentPage - 1) * itemsPerPage

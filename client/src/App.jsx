@@ -42,6 +42,20 @@ function App() {
     try { localStorage.removeItem('ce_review_logs') } catch {}
   }
 
+  // Listen for navigate-to-page events from checklist comparison — auto-open the page viewer
+  useEffect(() => {
+    const handler = (e) => {
+      const page = e.detail?.page
+      const pageOffset = e.detail?.pageOffset || 0
+      if (page && page >= 1 && comparisonResult) {
+        setPageViewerContext({ page, sectionPages: [page], sectionName: '', pageOffset })
+        setPageViewerOpen(true)
+      }
+    }
+    window.addEventListener('navigate-to-page', handler)
+    return () => window.removeEventListener('navigate-to-page', handler)
+  }, [comparisonResult])
+
   // Fetch and log server config (endpoints + folder paths) on first mount
   useEffect(() => {
     let mounted = true
