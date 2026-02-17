@@ -585,19 +585,65 @@ The `pageReferences` sanitization is critical: the AI sometimes puts form names 
 | Q18 | `ai_focused` | RPH funding only | Public housing resident consultation |
 | Q19 | `ai_focused` | HP/RPH funding only | Supplement-not-supplant attestation |
 
+### FY-Aware Rule Loading (`loadRulesForFiscalYear`)
+
+Rules are **not hardcoded per fiscal year**. Instead, they are stored as JSON files alongside the checklist questions they govern, and loaded dynamically based on the application's fiscal year.
+
+**File structure:**
+```
+checklistQuestions/
+├── FY26/
+│   ├── ProgramSpecificQuestions.pdf           (source checklist)
+│   ├── ProgramSpecificQuestions_structured.json (auto-extracted via Azure DI)
+│   ├── ProgramSpecificRules.json              ← rules for FY26
+│   ├── StandardChecklist.pdf
+│   ├── StandardChecklist_structured.json
+│   └── StandardRules.json                     ← rules for FY26
+├── FY27/
+│   ├── ProgramSpecificQuestions.pdf
+│   ├── ProgramSpecificRules.json              ← different rules for FY27 (auto-generated or manual)
+│   └── ...
+```
+
+**Resolution order** (in `loadRulesForFiscalYear()`):
+
+1. **Cached JSON** — Load `checklistQuestions/<FY>/ProgramSpecificRules.json` (or `StandardRules.json`). If found, use it immediately.
+2. **Auto-generate via AI** — If no cached JSON exists but the structured checklist questions JSON is available, use AI (`generateRulesFromChecklist()`) to analyze the questions and produce rules. The generated rules are then **cached to disk** so they're reused for all subsequent applications in that FY.
+3. **Hardcoded fallback** — If neither JSON nor structured questions exist, fall back to the `PROGRAM_SPECIFIC_RULES` / `STANDARD_RULES` arrays in `checklistRules.js` (originally written for FY26).
+
+**Auto-generation flow:**
+```
+New FY detected (e.g., FY27)
+  → No ProgramSpecificRules.json found
+  → ProgramSpecificQuestions_structured.json exists
+  → AI analyzes all questions:
+      - Determines answerStrategy (presence / saat_compare / ai_focused)
+      - Identifies forms/attachments to look for
+      - Detects applicant-type conditions (new, public agency, RPH, etc.)
+      - Identifies question dependencies (Q11-Q15 depend on Q10)
+      - Rewrites questions for AI clarity
+  → Saves ProgramSpecificRules.json
+  → All future FY27 applications use cached rules (no AI call)
+```
+
+**What this means for new fiscal years:**
+- **If questions are identical** — Drop the checklist PDF in `checklistQuestions/FY27/`, copy the previous FY's rules JSON. Done.
+- **If questions changed** — Drop the checklist PDF, let the system auto-extract questions via Azure DI, then auto-generate rules via AI on the first application. Review the generated `ProgramSpecificRules.json` and adjust if needed.
+- **Manual override** — You can always hand-edit the rules JSON. The system will use whatever is in the file.
+
 ### Adding or Modifying Rules
 
-To add a new question rule, edit `PROGRAM_SPECIFIC_RULES` in `server/services/checklistRules.js`:
+To manually add a new question rule, edit `checklistQuestions/<FY>/ProgramSpecificRules.json`:
 
-```js
+```json
 {
-  questionNumber: 20,                    // Must match checklist Q number
-  answerStrategy: 'ai_focused',          // 'presence' | 'saat_compare' | 'ai_focused'
-  lookFor: ['Form 12'],                  // Forms to find in the index
-  condition: null,                       // Or: { type: 'applicant_status', value: 'new', naIfNot: true }
-  focusPages: ['Form 12'],              // Pages to send to AI
-  aiQuestion: 'Does Form 12 show...',   // Clear question for AI
-  description: 'Check Form 12 for...'   // Human-readable summary
+  "questionNumber": 20,
+  "answerStrategy": "ai_focused",
+  "lookFor": ["Form 12"],
+  "condition": null,
+  "focusPages": ["Form 12"],
+  "aiQuestion": "Does Form 12 show...",
+  "description": "Check Form 12 for..."
 }
 ```
 

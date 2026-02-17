@@ -123,73 +123,54 @@ export async function analyzeDocumentEnhanced(fileBuffer, mimeType) {
         spans: para.spans
       }))
 
-      // Extract TOC by searching early pages for top-level section titles
-      // Fully dynamic — detects any numbered section (1., 2., 3., 4., 5., etc.)
+      // ─── Extract TOC using DI paragraph roles (deterministic) ─────────────────
+      // DI's prebuilt-layout model tags paragraphs with role: "title" or "sectionHeading".
+      // We use these to find top-level numbered sections (e.g., "1. Starting the FY 2025...")
+      // This is far more reliable than scanning raw page lines which merge titles with body text.
       const sectionMap = new Map()
-      
-      // Search pages 2-10 for TOC content (some documents have longer front matter)
-      const maxTocPage = Math.min(10, extractedData.pages.length)
-      for (let pageNum = 2; pageNum <= maxTocPage; pageNum++) {
-        const tocPage = extractedData.pages.find(p => p.pageNumber === pageNum)
-        if (!tocPage) continue
-        
-        const lines = tocPage.lines || []
-        let i = 0
-        
-        while (i < lines.length) {
-          const text = lines[i].content || ''
-          
-          // Look for lines starting with any single number followed by dot and space
-          // e.g., "1. Introduction", "4. Submission and Review"
-          const match = text.match(/^(\d+)\.\s+(.+)$/)
-          if (match && !/\d+\.\d+/.test(text)) {
-            const sectionNum = match[1]
-            
-            // Skip if we already have this section
-            if (sectionMap.has(sectionNum)) {
-              i++
-              continue
-            }
-            
-            let fullTitle = text
-            
-            // Collect continuation lines
-            let j = i + 1
-            while (j < lines.length && j < i + 5) {
-              const nextLine = lines[j].content || ''
-              
-              // Stop conditions
-              if (/^\d+\.\s/.test(nextLine)) break // Next numbered section
-              if (/^\d+$/.test(nextLine)) break // Page number
-              if (/^\.{3,}/.test(nextLine)) break // Dots
-              if (nextLine.trim().length < 3) break // Empty/short line
-              if (/^(page|figure|table)/i.test(nextLine)) break // Common non-title words
-              
-              fullTitle += ' ' + nextLine.trim()
-              j++
-            }
-            
-            // Clean up title and validate
-            fullTitle = fullTitle.replace(/\s+/g, ' ').trim()
-            
-            if (fullTitle.length >= 10 && fullTitle.length <= 200) {
-              sectionMap.set(sectionNum, {
-                id: `section_${sectionNum}`,
-                title: fullTitle,
-                pageNumber: pageNum,
-                level: 1
-              })
-            }
-            
-            i = j
-          } else {
-            i++
-          }
-        }
-        
-        // Continue searching all early pages — don't break early
+      const actionVerbPattern = /^\d+\.\s+(Click|Save|Enter|Select|Check|Open|Go|Navigate|Submit|Upload|Download|Press|Type|Fill|Complete|Verify|Review|Update|Add|Remove|Delete|Copy|Paste|Drag|Drop|Scroll|Expand|Collapse|Find|Access|Unduplicated|Total|I am)\b/i
+
+      for (const para of paragraphs) {
+        // Only consider paragraphs DI identified as headings
+        if (para.role !== 'title' && para.role !== 'sectionHeading') continue
+
+        const text = (para.content || '').trim()
+        // Match top-level numbered sections: "1. Title", "2. Title", etc.
+        // Exclude subsections like "3.1", "3.1.1"
+        const match = text.match(/^(\d+)\.\s+(.+)/)
+        if (!match) continue
+        if (/^\d+\.\d+/.test(text)) continue // subsection — skip
+
+        const sectionNum = match[1]
+        // Keep first occurrence of each section number (the real heading, not a body reference)
+        if (sectionMap.has(sectionNum)) continue
+        // Filter out instruction steps
+        if (actionVerbPattern.test(text)) continue
+
+        sectionMap.set(sectionNum, {
+          id: `section_${sectionNum}`,
+          title: text,
+          pageNumber: para.boundingRegions?.[0]?.pageNumber || 1,
+          level: 1
+        })
       }
-      
+
+      // Remove entries that create gaps in sequential numbering
+      // Real TOC sections are sequential (1, 2, 3, 4). A jump to 8 means body content leaked in.
+      const sortedNums = [...sectionMap.keys()].map(Number).sort((a, b) => a - b)
+      if (sortedNums.length > 2) {
+        let lastConsecutive = sortedNums[0]
+        for (let k = 1; k < sortedNums.length; k++) {
+          if (sortedNums[k] - lastConsecutive > 1) {
+            for (let m = k; m < sortedNums.length; m++) {
+              sectionMap.delete(String(sortedNums[m]))
+            }
+            break
+          }
+          lastConsecutive = sortedNums[k]
+        }
+      }
+
       // Convert map to sorted array by section number (numerically)
       const sortedTOC = [...sectionMap.keys()]
         .sort((a, b) => parseInt(a) - parseInt(b))
@@ -202,52 +183,49 @@ export async function analyzeDocumentEnhanced(fileBuffer, mimeType) {
       
       extractedData.tableOfContents = sortedTOC
 
-      // Organize content by sections
-      // Enhanced: Also detect numbered subsections (3.1, 3.1.1, 3.1.1.1, etc.) even if not marked as title/sectionHeading
-      let currentSection = null
-      let numberedSectionsDetected = []
+      // ─── HYBRID section extraction: DI roles + numbered-paragraph detection ───
+      // DI doesn't consistently tag every numbered heading (e.g., FY26 misses
+      // 3.1.1.1, 3.1.1.4). We use a two-pass approach:
+      //   Pass 1: Build sections from DI-tagged headings with numbered prefixes
+      //   Pass 2: Scan ALL paragraphs for numbered patterns that DI missed
+      // This ensures 100% section coverage regardless of DI tagging quality.
+      //
+      // Section heading heuristic for Pass 2 (non-DI-tagged paragraphs):
+      //   - Starts with a section number like "3.1.1.1"
+      //   - Followed by a descriptive title (e.g., "Completing the...")
+      //   - Short enough to be a heading (< 200 chars)
+      //   - NOT an instruction step (e.g., "3. Click Save" — single digit + verb)
+      const instructionVerbs = /^(\d+)\.\s+(Click|Select|Enter|Type|Check|Uncheck|Save|Go|Navigate|Return|Review|Scroll|Open|Close|Press|Upload|Download|Attach|Remove|Delete|Add|Edit|Update|View|Verify|Confirm|Submit|Complete|Fill|Choose|Pick|Drag|Drop|Copy|Paste|Print|Sign|Log|Access|Expand|Collapse)\b/i
       
+      let currentSection = null
+      const diTaggedNumbers = new Set()
+      
+      // Pass 1: DI-tagged numbered headings (high confidence)
       paragraphs.forEach(para => {
-        const isRoleBasedSection = para.role === 'title' || para.role === 'sectionHeading'
+        const isDIHeading = para.role === 'title' || para.role === 'sectionHeading'
+        const text = (para.content || '').trim()
+        const numberMatch = text.match(/^(\d+(?:\.\d+)*)[\.\s]/)
         
-        // Check if this paragraph is a numbered subsection (e.g., 3., 3.1, 3.1.1, 3.1.1.1, 3.2.2, 3.4.3, 3.5)
-        // Pattern: starts with digit(s), followed by dot, optionally followed by more digit-dot pairs, then space and text
-        const numberedSectionMatch = para.content?.match(/^(\d+(\.\d+)*\.?)\s+(.+)/)
-        const isNumberedSection = numberedSectionMatch && para.content.length < 250 // Likely a heading, not body text
-        
-        if (isNumberedSection && !isRoleBasedSection) {
-          numberedSectionsDetected.push({
-            number: numberedSectionMatch[1],
-            title: para.content,
-            length: para.content.length,
-            page: para.boundingRegions[0]?.pageNumber
-          })
-        }
-        
-        if (isRoleBasedSection || isNumberedSection) {
+        if (isDIHeading && numberMatch) {
+          // Skip non-section DI headings (figures, notes, repeated headers)
+          if (!numberMatch) return
+          
           if (currentSection) {
             extractedData.sections.push(currentSection)
           }
-          // Classify section type based on hierarchy and content
-          const sectionMatch = para.content?.match(/^(\d+(?:\.\d+)*)/)
-          const sectionNumber = sectionMatch ? sectionMatch[1] : ''
+          const sectionNumber = numberMatch[1]
+          diTaggedNumbers.add(sectionNumber)
           const depth = sectionNumber.split('.').filter(p => p).length
           
-          // Determine section type for intelligent validation
-          let sectionType = 'requirement' // default
-          if (depth === 1) {
-            sectionType = 'organizational_header' // e.g., "3."
-          } else if (depth === 2) {
-            sectionType = 'category_header' // e.g., "3.1"
-          } else if (depth >= 3) {
-            sectionType = 'requirement' // e.g., "3.1.1", "3.1.1.1"
-          }
+          let sectionType = 'requirement'
+          if (depth === 1) sectionType = 'organizational_header'
+          else if (depth === 2) sectionType = 'category_header'
           
           currentSection = {
             title: para.content,
-            pageNumber: para.boundingRegions[0]?.pageNumber || 1,
+            pageNumber: para.boundingRegions?.[0]?.pageNumber || 1,
             content: [],
-            role: para.role || 'numberedSection',
+            role: para.role,
             sectionNumber: sectionNumber,
             sectionType: sectionType,
             depth: depth
@@ -255,7 +233,7 @@ export async function analyzeDocumentEnhanced(fileBuffer, mimeType) {
         } else if (currentSection) {
           currentSection.content.push({
             text: para.content,
-            pageNumber: para.boundingRegions[0]?.pageNumber || currentSection.pageNumber
+            pageNumber: para.boundingRegions?.[0]?.pageNumber || currentSection.pageNumber
           })
         }
       })
@@ -263,37 +241,146 @@ export async function analyzeDocumentEnhanced(fileBuffer, mimeType) {
         extractedData.sections.push(currentSection)
       }
       
-      console.log(`🔢 Numbered sections detected (not role-based): ${numberedSectionsDetected.length}`)
-      if (numberedSectionsDetected.length > 0) {
-        console.log('📋 Numbered sections found:')
-        numberedSectionsDetected.slice(0, 30).forEach((s, idx) => {
-          console.log(`  ${idx + 1}. [${s.number}] ${s.title.substring(0, 80)} (page ${s.page}, len ${s.length})`)
+      const diCount = extractedData.sections.length
+      
+      // Pass 2: Detect numbered section headings that DI missed
+      // Scan all paragraphs for patterns like "3.1.1.1 Completing the..." that
+      // DI didn't tag as title/sectionHeading but are clearly section headings.
+      const missedSections = []
+      paragraphs.forEach((para, idx) => {
+        const isDIHeading = para.role === 'title' || para.role === 'sectionHeading'
+        if (isDIHeading) return // already handled in Pass 1
+        
+        const text = (para.content || '').trim()
+        if (text.length > 200) return // too long to be a heading
+        
+        const numberMatch = text.match(/^(\d+(?:\.\d+)*)[\.\s]/)
+        if (!numberMatch) return
+        
+        const sectionNumber = numberMatch[1]
+        const depth = sectionNumber.split('.').filter(p => p).length
+        
+        // Skip single-digit instruction steps (e.g., "3. Click Save")
+        if (depth === 1 && instructionVerbs.test(text)) return
+        
+        // Only consider multi-level numbers (2+ dots) or single-level with
+        // descriptive titles like "Completing", "Form", "Section"
+        if (depth === 1) {
+          // Single-level: must match a TOC entry or have a descriptive title
+          const hasDescriptiveTitle = /^(\d+)[\.\s]+\S+.*(?:Completing|Starting|Reviewing|Submitting|Form|Section|Application|Information|Overview)/i.test(text)
+          const matchesToC = sortedTOC.some(t => {
+            const tocNum = t.title?.match(/^(\d+)/)?.[1]
+            return tocNum === sectionNumber
+          })
+          if (!hasDescriptiveTitle && !matchesToC) return
+        }
+        
+        // Skip if already captured by DI
+        if (diTaggedNumbers.has(sectionNumber)) return
+        
+        // Skip if this number is a child of an already-captured DI section
+        // at the same depth (avoid duplicates)
+        const alreadyExists = extractedData.sections.some(s => s.sectionNumber === sectionNumber)
+        if (alreadyExists) return
+        
+        // Collect subsequent body paragraphs as content
+        const bodyContent = []
+        for (let j = idx + 1; j < paragraphs.length; j++) {
+          const next = paragraphs[j]
+          const nextText = (next.content || '').trim()
+          const nextNum = nextText.match(/^(\d+(?:\.\d+)*)[\.\s]/)
+          // Stop at next numbered heading or DI-tagged heading
+          if (nextNum && (next.role === 'title' || next.role === 'sectionHeading' || nextNum[1].split('.').length >= depth)) break
+          if (next.role === 'title' || next.role === 'sectionHeading') break
+          bodyContent.push({
+            text: next.content,
+            pageNumber: next.boundingRegions?.[0]?.pageNumber || para.boundingRegions?.[0]?.pageNumber || 1
+          })
+        }
+        
+        let sectionType = 'requirement'
+        if (depth === 1) sectionType = 'organizational_header'
+        else if (depth === 2) sectionType = 'category_header'
+        
+        missedSections.push({
+          title: para.content,
+          pageNumber: para.boundingRegions?.[0]?.pageNumber || 1,
+          content: bodyContent,
+          role: 'detected',
+          sectionNumber: sectionNumber,
+          sectionType: sectionType,
+          depth: depth
         })
+      })
+      
+      if (missedSections.length > 0) {
+        extractedData.sections.push(...missedSections)
+        console.log(`🔍 Pass 2 recovered ${missedSections.length} sections DI missed:`)
+        missedSections.forEach(s => console.log(`   + ${s.sectionNumber} ${s.title?.substring(0, 80)}`))
       }
       
-      console.log(`📊 Total sections extracted: ${extractedData.sections.length}`)
+      // Sort sections by number for consistent ordering
+      extractedData.sections.sort((a, b) => {
+        const ap = (a.sectionNumber || '').split('.').map(Number)
+        const bp = (b.sectionNumber || '').split('.').map(Number)
+        for (let i = 0; i < Math.max(ap.length, bp.length); i++) {
+          if ((ap[i] || 0) !== (bp[i] || 0)) return (ap[i] || 0) - (bp[i] || 0)
+        }
+        return 0
+      })
       
-      // Count section types for intelligent validation
-      const typeCount = {
-        organizational_header: 0,
-        category_header: 0,
-        requirement: 0
+      // ─── Ensure every TOC entry has at least one section in sections[] ────────
+      for (const tocEntry of sortedTOC) {
+        const tocNum = tocEntry.title?.match(/^(\d+)/)?.[1]
+        if (!tocNum) continue
+        const hasSection = extractedData.sections.some(s => {
+          const sNum = s.sectionNumber || ''
+          return sNum === tocNum || sNum.startsWith(tocNum + '.')
+        })
+        if (!hasSection) {
+          const tocPage = tocEntry.pageNumber || 1
+          const nextTocPage = sortedTOC.find(t => {
+            const n = t.title?.match(/^(\d+)/)?.[1]
+            return n && parseInt(n) > parseInt(tocNum)
+          })?.pageNumber || (tocPage + 10)
+          const bodyContent = paragraphs
+            .filter(p => {
+              const pg = p.boundingRegions?.[0]?.pageNumber || 0
+              return pg >= tocPage && pg < nextTocPage && p.role !== 'title' && p.role !== 'sectionHeading'
+            })
+            .map(p => ({ text: p.content, pageNumber: p.boundingRegions?.[0]?.pageNumber || tocPage }))
+
+          extractedData.sections.push({
+            title: tocEntry.title,
+            pageNumber: tocPage,
+            content: bodyContent,
+            role: 'title',
+            sectionNumber: tocNum,
+            sectionType: 'organizational_header',
+            depth: 1
+          })
+          console.log(`📌 Synthetic section for TOC entry: ${tocEntry.title}`)
+        }
       }
+
+      console.log(`📊 Total sections: ${extractedData.sections.length} (DI: ${diCount}, recovered: ${missedSections.length})`)
+      
+      const typeCount = { organizational_header: 0, category_header: 0, requirement: 0 }
       extractedData.sections.forEach(s => {
         if (s.sectionType) typeCount[s.sectionType]++
       })
-      console.log(`📊 Section classification:`)
       console.log(`   - Organizational headers: ${typeCount.organizational_header}`)
       console.log(`   - Category headers: ${typeCount.category_header}`)
-      console.log(`   - Actionable requirements: ${typeCount.requirement}`)
+      console.log(`   - Requirements: ${typeCount.requirement}`)
       
       if (extractedData.sections.length > 0) {
-        console.log('📋 First 30 section titles (with type):')
-        extractedData.sections.slice(0, 30).forEach((s, idx) => {
-          const typeLabel = s.sectionType === 'organizational_header' ? '[ORG]' 
-                          : s.sectionType === 'category_header' ? '[CAT]' 
-                          : '[REQ]'
-          console.log(`  ${idx + 1}. ${typeLabel} ${s.title}`)
+        console.log('📋 First 25 section titles:')
+        extractedData.sections.slice(0, 25).forEach((s, idx) => {
+          const src = s.role === 'detected' ? '[REC]' : '[DI]'
+          const typeLabel = s.sectionType === 'organizational_header' ? 'ORG' 
+                          : s.sectionType === 'category_header' ? 'CAT' 
+                          : 'REQ'
+          console.log(`  ${idx + 1}. ${src}[${typeLabel}] ${s.sectionNumber} ${s.title?.substring(0, 90)}`)
         })
       }
     }

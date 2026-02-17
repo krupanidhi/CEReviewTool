@@ -483,17 +483,32 @@ ${(() => {
     };
   }) || [];
   
-  // Include specific pages that commonly have forms (pages 1-50, 125-160)
+  // Include pages dynamically based on where tables and checklist sections are located.
+  // No hardcoded page ranges — works for any application regardless of page count.
+  const tablePages = new Set(relevantTables.map(t => t.pageNumber).filter(Boolean))
+  const sectionPages = new Set((checklistData.sections || []).map(s => s.pageNumber).filter(Boolean))
+  const allReferencedPages = new Set([...tablePages, ...sectionPages])
+  // Add surrounding pages (±2) for context around each referenced page
+  const expandedPages = new Set()
+  for (const pg of allReferencedPages) {
+    for (let offset = -2; offset <= 2; offset++) {
+      expandedPages.add(pg + offset)
+    }
+  }
+  // Always include first 10 pages (cover, TOC, general info) and pages with tables
+  for (let i = 1; i <= Math.min(10, applicationData.pages?.length || 0); i++) {
+    expandedPages.add(i)
+  }
+
   const relevantPages = applicationData.pages?.filter(p => 
-    (p.pageNumber >= 1 && p.pageNumber <= 50) || 
-    (p.pageNumber >= 125 && p.pageNumber <= 160)
+    expandedPages.has(p.pageNumber)
   ).map(p => ({
     pageNumber: p.pageNumber,
     text: compressText(p.lines?.map(l => l.content).join('\n') || '')
   })) || [];
   
   console.log(`📊 Filtered tables: ${relevantTables.length} of ${applicationData.tables?.length || 0} (form-related only)`);
-  console.log(`📄 Including pages: ${relevantPages.length} pages (1-50, 125-160)`);
+  console.log(`📄 Including pages: ${relevantPages.length} (dynamic: ${allReferencedPages.size} referenced + context)`);
   
   // DEBUG: Check if formQuestions were extracted for page 135
   const table135 = relevantTables.find(t => t.pageNumber === 135);

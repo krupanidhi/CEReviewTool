@@ -1,0 +1,295 @@
+[
+  {
+    "questionNumber": 1,
+    "answerStrategy": "presence",
+    "lookFor": [
+      "Project Narrative"
+    ],
+    "condition": null,
+    "description": "Check if Project Narrative is included in the application"
+  },
+  {
+    "questionNumber": 2,
+    "answerStrategy": "presence",
+    "lookFor": [
+      "Attachment 6",
+      "Co-Applicant Agreement"
+    ],
+    "condition": {
+      "type": "applicant_type",
+      "value": "public_agency",
+      "naIfNot": true
+    },
+    "description": "Public agencies only: Check if Attachment 6 (Co-Applicant Agreement) is included for new applicants with a co-applicant board"
+  },
+  {
+    "questionNumber": 3,
+    "answerStrategy": "presence",
+    "lookFor": [
+      "Attachment 11",
+      "Evidence of Nonprofit",
+      "Public Center Status"
+    ],
+    "condition": {
+      "type": "applicant_status",
+      "value": "new",
+      "naIfNot": true
+    },
+    "description": "New applicants only: Check if Attachment 11 (Evidence of Nonprofit or Public Center Status) is included"
+  },
+  {
+    "questionNumber": 4,
+    "answerStrategy": "ai_focused",
+    "lookFor": [
+      "Attachment 11",
+      "Evidence of Nonprofit",
+      "Public Center Status"
+    ],
+    "condition": null,
+    "focusPages": [
+      "Attachment 11"
+    ],
+    "aiQuestion": "Is the applicant organization a domestic public or private nonprofit entity, including faith-based and community-based organizations, Tribes, and tribal organizations?",
+    "description": "Verify entity type from Attachment 11"
+  },
+  {
+    "questionNumber": 5,
+    "answerStrategy": "ai_focused",
+    "lookFor": [
+      "SF-424A",
+      "Project Narrative",
+      "Budget Narrative",
+      "Attachment 2",
+      "Bylaws",
+      "Attachment 3",
+      "Project Organizational Chart",
+      "Form 5A",
+      "Form 8"
+    ],
+    "condition": null,
+    "focusPages": [
+      "Project Narrative",
+      "SF-424A",
+      "Budget Narrative",
+      "Attachment 2",
+      "Attachment 3",
+      "Form 5A",
+      "Form 8"
+    ],
+    "aiQuestion": "Does the applicant propose to perform a substantive role in the project and not apply on behalf of another organization?",
+    "description": "Verify applicant's substantive role in the project"
+  },
+  {
+    "questionNumber": 6,
+    "answerStrategy": "ai_focused",
+    "lookFor": [
+      "Project Narrative"
+    ],
+    "condition": null,
+    "focusPages": [
+      "Project Narrative"
+    ],
+    "aiQuestion": "Does the applicant propose to operate a health center that makes all required primary health care services available and accessible in the service area, either directly or through established arrangements, without regard for ability to pay?",
+    "description": "Verify provision of all required primary health care services"
+  },
+  {
+    "questionNumber": 7,
+    "answerStrategy": "ai_focused",
+    "lookFor": [
+      "Form 5A"
+    ],
+    "condition": null,
+    "focusPages": [
+      "Form 5A"
+    ],
+    "aiQuestion": "Does the applicant propose to make General Primary Medical Care available directly (Column I) and/or through formal written contractual agreements in which the health center pays for the service (Column II)?",
+    "description": "Verify provision of General Primary Medical Care directly or via contract"
+  },
+  {
+    "questionNumber": 8,
+    "answerStrategy": "ai_focused",
+    "lookFor": [
+      "Project Narrative"
+    ],
+    "condition": null,
+    "focusPages": [
+      "Project Narrative"
+    ],
+    "aiQuestion": "Does the applicant propose to provide access to services for all individuals in the service area and target population, and if a sub-population is targeted, are services available to others seeking services at the proposed site(s)?",
+    "description": "Verify access to services for all individuals in the service area and target population"
+  },
+  {
+    "questionNumber": 9,
+    "answerStrategy": "saat_compare",
+    "lookFor": [
+      "Summary Page",
+      "SAAT",
+      "Abstract",
+      "Project Narrative",
+      "Form 5B"
+    ],
+    "condition": null,
+    "saatCheck": "nofo_match",
+    "description": "Check if applicant proposes a service area announced under the NOFO number"
+  },
+  {
+    "questionNumber": 10,
+    "answerStrategy": "saat_compare",
+    "lookFor": [
+      "SAAT",
+      "Form 1A"
+    ],
+    "condition": null,
+    "saatCheck": "patient_target_75pct",
+    "description": "Check if projected unduplicated patients on Form 1A are at least 75% of the SAAT Patient Target"
+  },
+  {
+    "questionNumber": 11,
+    "answerStrategy": "saat_compare",
+    "lookFor": [
+      "SAAT",
+      "Form 1A"
+    ],
+    "condition": null,
+    "saatCheck": "service_types_match",
+    "description": "Check if applicant proposes to serve patients for each Service Type listed in the SAAT"
+  },
+  {
+    "questionNumber": 12,
+    "answerStrategy": "saat_compare",
+    "lookFor": [
+      "SF-424A",
+      "Budget Narrative",
+      "SAAT"
+    ],
+    "condition": null,
+    "saatCheck": "funding_not_exceed",
+    "description": "Check if annual SAC funding requested does not exceed SAAT Total Funding for the service area"
+  },
+  {
+    "questionNumber": 13,
+    "answerStrategy": "saat_compare",
+    "lookFor": [
+      "SF-424A",
+      "SAAT"
+    ],
+    "condition": null,
+    "saatCheck": "population_types",
+    "description": "Check if applicant proposes to serve all currently targeted population types (CHC, MHC, HCH, PHPC) from the SAAT"
+  },
+  {
+    "questionNumber": 14,
+    "answerStrategy": "saat_compare",
+    "lookFor": [
+      "SF-424A",
+      "SAAT"
+    ],
+    "condition": null,
+    "saatCheck": "funding_distribution",
+    "description": "Check if applicant maintains current funding distribution (CHC, MHC, HCH, PHPC) from the SAAT"
+  },
+  {
+    "questionNumber": 15,
+    "answerStrategy": "presence",
+    "lookFor": [
+      "Form 5B",
+      "SF-424A"
+    ],
+    "condition": {
+      "type": "applicant_status",
+      "value": "new_or_competing",
+      "naIfNot": true
+    },
+    "description": "New or competing supplement applicants: Check if at least one new full-time permanent, fixed building site with verifiable street address is proposed on Form 5B (or full-time seasonal site for MHC funding)"
+  },
+  {
+    "questionNumber": 16,
+    "answerStrategy": "saat_compare",
+    "lookFor": [
+      "Form 5B",
+      "SAAT"
+    ],
+    "condition": {
+      "type": "applicant_status",
+      "value": "new_or_competing",
+      "naIfNot": true
+    },
+    "saatCheck": "zip_codes_75pct",
+    "description": "New or competing supplement applicants: Check if Form 5B includes service area zip codes where patient percentages total at least 75% or all zip codes if sum is less than 75%"
+  },
+  {
+    "questionNumber": 17,
+    "answerStrategy": "ai_focused",
+    "lookFor": [
+      "SF-424A",
+      "Project Narrative"
+    ],
+    "condition": {
+      "type": "funding_type",
+      "value": "phpc",
+      "naIfNot": true
+    },
+    "focusPages": [
+      "Project Narrative",
+      "SF-424A"
+    ],
+    "aiQuestion": "Does the applicant demonstrate consultation with residents of public housing in the preparation of the SAC application and ensure ongoing consultation regarding planning and administration of the health center?",
+    "description": "PHPC funding: Verify consultation with public housing residents"
+  },
+  {
+    "questionNumber": 18,
+    "answerStrategy": "ai_focused",
+    "lookFor": [
+      "Summary Page"
+    ],
+    "condition": {
+      "type": "funding_type",
+      "value": "phpc_or_phpc",
+      "naIfNot": true
+    },
+    "focusPages": [
+      "Summary Page"
+    ],
+    "aiQuestion": "Does the applicant attest that PHPC funding will be used to supplement, not supplant, health center expenditures and in-kind contributions for delivery of services to these populations?",
+    "description": "PHPC/PHPC funding: Verify attestation regarding supplementing expenditures"
+  },
+  {
+    "questionNumber": 19,
+    "answerStrategy": "saat_compare",
+    "lookFor": [
+      "SF-424A",
+      "Budget Narrative",
+      "SAAT",
+      "Patient and Budget Calculator"
+    ],
+    "condition": null,
+    "saatCheck": "funding_reduction_95pct",
+    "description": "If Form 1A patient projection is less than 95% of SAAT Patient Target, check if annual SAC funding request is reduced accordingly"
+  },
+  {
+    "questionNumber": 20,
+    "answerStrategy": "presence",
+    "lookFor": [
+      "Project Narrative",
+      "Attachment 6",
+      "Attachment 11"
+    ],
+    "condition": null,
+    "description": "Check if application is complete based on required documents in Completeness Checklist"
+  },
+  {
+    "questionNumber": 21,
+    "answerStrategy": "ai_focused",
+    "lookFor": [
+      "Attachment 11",
+      "Project Narrative"
+    ],
+    "condition": null,
+    "focusPages": [
+      "Attachment 11",
+      "Project Narrative"
+    ],
+    "aiQuestion": "Based on BPHC OPPD review, is the applicant eligible?",
+    "description": "Verify applicant eligibility based on BPHC OPPD review"
+  }
+]

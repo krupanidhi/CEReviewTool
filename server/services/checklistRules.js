@@ -1,3 +1,7 @@
+import { promises as fs } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
 /**
  * Checklist Rules Engine
  * 
@@ -11,6 +15,10 @@
  * For questions that can't be answered deterministically, we send ONLY the relevant
  * 2-3 pages to AI instead of the entire document.
  */
+
+const __filename_rules = fileURLToPath(import.meta.url)
+const __dirname_rules = dirname(__filename_rules)
+const CHECKLIST_QUESTIONS_ROOT = join(__dirname_rules, '../../checklistQuestions')
 
 // ─── Question Rules ─────────────────────────────────────────────────────────
 
@@ -936,11 +944,226 @@ function extractRelevantPages(rule, appIndex, suggestedResources) {
   }
 }
 
+// ─── FY-Aware Rule Loading ───────────────────────────────────────────────────
+
+/**
+ * Load rules for a specific fiscal year and checklist type.
+ * 
+ * Resolution order:
+ *   1. Cached JSON in checklistQuestions/<FY>/<Type>Rules.json
+ *   2. Auto-generate from checklist questions using AI (then cache)
+ *   3. Hardcoded fallback (PROGRAM_SPECIFIC_RULES / STANDARD_RULES)
+ * 
+ * @param {string} fiscalYear - e.g. 'FY26'
+ * @param {'programspecific'|'standard'} checklistType
+ * @param {Object} [options] - Optional: { aiClient, deployment } for auto-generation
+ * @returns {Promise<Array>} Array of rule objects
+ */
+async function loadRulesForFiscalYear(fiscalYear, checklistType, options = {}) {
+  const jsonName = checklistType === 'programspecific'
+    ? 'ProgramSpecificRules.json'
+    : 'StandardRules.json'
+
+  const hardcodedFallback = checklistType === 'programspecific'
+    ? PROGRAM_SPECIFIC_RULES
+    : STANDARD_RULES
+
+  // 1. Try loading cached JSON from FY folder
+  if (fiscalYear) {
+    const jsonPath = join(CHECKLIST_QUESTIONS_ROOT, fiscalYear, jsonName)
+    try {
+      const raw = await fs.readFile(jsonPath, 'utf-8')
+      const rules = JSON.parse(raw)
+      if (Array.isArray(rules) && rules.length > 0) {
+        console.log(`📋 Loaded ${rules.length} ${checklistType} rules from ${jsonPath}`)
+        return rules
+      }
+    } catch {
+      // Not found — try auto-generation
+    }
+
+    // 2. Auto-generate from checklist questions if AI client is available
+    if (options.aiClient && options.deployment) {
+      try {
+        const structuredJsonName = checklistType === 'programspecific'
+          ? 'ProgramSpecificQuestions_structured.json'
+          : 'StandardChecklist_structured.json'
+        const questionsPath = join(CHECKLIST_QUESTIONS_ROOT, fiscalYear, structuredJsonName)
+        const questionsRaw = await fs.readFile(questionsPath, 'utf-8')
+        const questionsData = JSON.parse(questionsRaw)
+
+        console.log(`🔧 Auto-generating ${checklistType} rules for ${fiscalYear}...`)
+        const generatedRules = await generateRulesFromChecklist(
+          questionsData, checklistType, hardcodedFallback,
+          options.aiClient, options.deployment
+        )
+
+        if (generatedRules && generatedRules.length > 0) {
+          // Cache the generated rules
+          const savePath = join(CHECKLIST_QUESTIONS_ROOT, fiscalYear, jsonName)
+          await fs.writeFile(savePath, JSON.stringify(generatedRules, null, 2), 'utf-8')
+          console.log(`💾 Saved ${generatedRules.length} auto-generated rules to ${savePath}`)
+          return generatedRules
+        }
+      } catch (genErr) {
+        console.warn(`⚠️ Auto-generation failed for ${fiscalYear} ${checklistType}: ${genErr.message}`)
+      }
+    }
+  }
+
+  // 3. Hardcoded fallback
+  console.log(`📋 Using hardcoded ${checklistType} rules (${hardcodedFallback.length} rules)`)
+  return hardcodedFallback
+}
+
+/**
+ * Auto-generate rules JSON from checklist questions using AI.
+ * 
+ * The AI analyzes each question and determines:
+ *   - answerStrategy: 'presence' | 'saat_compare' | 'ai_focused'
+ *   - lookFor: which forms/attachments to search for
+ *   - condition: applicant-type conditions for N/A
+ *   - focusPages: which pages to send to AI
+ *   - aiQuestion: rewritten question for AI clarity
+ *   - dependsOn: question dependency chains
+ *   - saatCheck: SAAT comparison type
+ * 
+ * Uses the previous FY's rules as a reference example so the AI understands
+ * the expected output format and domain conventions.
+ * 
+ * @param {Object} checklistData - Structured JSON from Azure DI extraction
+ * @param {'programspecific'|'standard'} checklistType
+ * @param {Array} referenceRules - Previous FY rules as example
+ * @param {Object} aiClient - Azure OpenAI client
+ * @param {string} deployment - Azure OpenAI deployment name
+ * @returns {Promise<Array>} Generated rules array
+ */
+async function generateRulesFromChecklist(checklistData, checklistType, referenceRules, aiClient, deployment) {
+  // Extract question text from the structured JSON
+  const sections = checklistData?.document?.sections || []
+  const questionTexts = []
+
+  function collectQuestions(section) {
+    const title = (section.title || '').trim()
+    const content = (section.content || '').trim()
+    const combined = [title, content].filter(Boolean).join('\n')
+    if (combined) questionTexts.push(combined)
+    if (section.children) section.children.forEach(child => collectQuestions(child))
+  }
+  sections.forEach(s => collectQuestions(s))
+
+  const fullChecklistText = questionTexts.join('\n\n')
+
+  // Build the reference rules example (truncated to keep prompt manageable)
+  const referenceExample = JSON.stringify(referenceRules.slice(0, 5), null, 2)
+
+  const systemPrompt = `You are an expert at analyzing HRSA grant application review checklists and creating structured rules for automated processing.
+
+Your task: Given a checklist document with numbered questions, generate a JSON array of rule objects that define HOW to answer each question programmatically.
+
+RULE SCHEMA — each rule object must have these fields:
+{
+  "questionNumber": <integer>,        // The question number from the checklist
+  "answerStrategy": "<strategy>",     // One of: "presence", "saat_compare", "ai_focused"
+  "lookFor": ["<form/attachment>"],   // Form/attachment names to find in the application index
+  "condition": <null or object>,      // Applicant-type condition, or null if always applicable
+  "description": "<summary>"          // Human-readable summary of what the rule checks
+}
+
+OPTIONAL fields (include when applicable):
+  "focusPages": ["<form>"],           // For ai_focused: which pages to send to AI
+  "aiQuestion": "<rewritten question>", // For ai_focused: clear question for AI
+  "saatCheck": "<check_type>",        // For saat_compare: "nofo_match", "patient_target_75pct", etc.
+  "dependsOn": { "question": N, "requiredAnswer": "Yes" }  // Question dependency
+
+ANSWER STRATEGY SELECTION RULES:
+1. "presence" — Use when the question simply asks "Is [document/form/attachment] included?"
+   - These can be answered by checking the application's Table of Contents
+   - No AI needed
+
+2. "saat_compare" — Use when the question references SAAT data, service areas, zip codes, patient targets, funding amounts, or population types
+   - These need cross-referencing with SAAT CSV data
+   - saatCheck values: "nofo_match", "patient_target_75pct", "service_types_match", "funding_not_exceed", "funding_distribution", "population_types", "zip_codes_75pct"
+
+3. "ai_focused" — Use for all other questions that require reading and interpreting application content
+   - Set focusPages to the specific forms/attachments the AI should read
+   - Set aiQuestion to a clear, specific version of the question
+
+CONDITION TYPES (for questions that only apply to certain applicants):
+- { "type": "applicant_type", "value": "public_agency", "naIfNot": true }
+- { "type": "applicant_status", "value": "new", "naIfNot": true }
+- { "type": "applicant_status", "value": "new_or_competing", "naIfNot": true }
+- { "type": "funding_type", "value": "rph", "naIfNot": true }
+- { "type": "funding_type", "value": "hp_or_rph", "naIfNot": true }
+
+Look for phrases like "New applicants only", "Public agencies only", "If applicable", "For HP/RPH" to determine conditions.
+
+DEPENDENCY CHAINS:
+- If a question says "If Q10 is Yes" or "If the answer to question 10 is Yes", add: "dependsOn": { "question": 10, "requiredAnswer": "Yes" }
+
+FORM/ATTACHMENT RECOGNITION:
+Common forms: SF-424, SF-424A, Form 1A, Form 5A, Form 5B, Form 8
+Common attachments: Attachment 2 (Budget Narrative), Attachment 6 (Co-Applicant Agreement), Attachment 11 (Evidence of Nonprofit/Public Agency Status), Attachment 12 (Operational Plan)
+Common documents: Project Narrative, Summary Page, Project Abstract, Organizational Chart, Bylaws
+
+Return ONLY a valid JSON array. No markdown, no explanation.`
+
+  const userPrompt = `Here is a reference example of rules from a previous fiscal year (first 5 rules):
+
+${referenceExample}
+
+Now analyze this ${checklistType === 'programspecific' ? 'Program-Specific' : 'Standard'} checklist and generate rules for ALL questions:
+
+${fullChecklistText}`
+
+  const response = await aiClient.getChatCompletions(deployment, [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ], {
+    temperature: 0.1,
+    maxTokens: 8000
+  })
+
+  const aiText = response.choices[0]?.message?.content || ''
+
+  // Parse the AI response — strip markdown fences if present
+  let cleaned = aiText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
+
+  try {
+    const rules = JSON.parse(cleaned)
+    if (!Array.isArray(rules)) throw new Error('Expected JSON array')
+
+    // Validate each rule has required fields
+    const validated = rules.filter(r => {
+      if (!r.questionNumber || !r.answerStrategy) {
+        console.warn(`⚠️ Skipping invalid rule: missing questionNumber or answerStrategy`)
+        return false
+      }
+      if (!['presence', 'saat_compare', 'ai_focused'].includes(r.answerStrategy)) {
+        console.warn(`⚠️ Rule Q${r.questionNumber}: unknown strategy "${r.answerStrategy}", defaulting to ai_focused`)
+        r.answerStrategy = 'ai_focused'
+      }
+      if (!r.lookFor) r.lookFor = []
+      if (!r.description) r.description = `Auto-generated rule for question ${r.questionNumber}`
+      return true
+    })
+
+    console.log(`🔧 AI generated ${validated.length} rules (from ${rules.length} raw)`)
+    return validated
+  } catch (parseErr) {
+    console.error(`❌ Failed to parse AI-generated rules: ${parseErr.message}`)
+    console.error(`   Raw AI response (first 500 chars): ${aiText.substring(0, 500)}`)
+    return null
+  }
+}
+
 // ─── Exports ────────────────────────────────────────────────────────────────
 
 export {
   PROGRAM_SPECIFIC_RULES,
   STANDARD_RULES,
+  loadRulesForFiscalYear,
+  generateRulesFromChecklist,
   buildApplicationIndex,
   analyzeApplicantType,
   evaluateCondition,

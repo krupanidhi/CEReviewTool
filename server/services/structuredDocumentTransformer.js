@@ -45,11 +45,37 @@ export function transformToStructured(rawData) {
 }
 
 /**
- * Build clean TOC
+ * Build clean TOC — filters out instruction steps and non-sequential entries
  */
 function buildTOC(tocEntries) {
   if (!tocEntries || tocEntries.length === 0) return []
-  return tocEntries.map(entry => ({
+
+  // Filter out instruction steps (action verbs like "Click", "Save", etc.)
+  const actionVerbPattern = /^\d+\.\s+(Click|Save|Enter|Select|Check|Open|Go|Navigate|Submit|Upload|Download|Press|Type|Fill|Complete|Verify|Review|Update|Add|Remove|Delete|Copy|Paste|Drag|Drop|Scroll|Expand|Collapse)\b/i
+  let filtered = tocEntries.filter(entry => !actionVerbPattern.test(entry.title || ''))
+
+  // Remove entries that create gaps in sequential numbering
+  // Real TOC sections are sequential (1, 2, 3, 4). A jump to 8 means body content leaked in.
+  const withNums = filtered.map(entry => {
+    const m = (entry.title || '').match(/^(\d+)\./)
+    return { entry, num: m ? parseInt(m[1]) : null }
+  }).filter(x => x.num !== null)
+
+  if (withNums.length > 2) {
+    const sorted = [...withNums].sort((a, b) => a.num - b.num)
+    const validNums = new Set()
+    validNums.add(sorted[0].num)
+    for (let k = 1; k < sorted.length; k++) {
+      if (sorted[k].num - sorted[k - 1].num > 1) break // gap — stop here
+      validNums.add(sorted[k].num)
+    }
+    filtered = filtered.filter(entry => {
+      const m = (entry.title || '').match(/^(\d+)\./)
+      return !m || validNums.has(parseInt(m[1]))
+    })
+  }
+
+  return filtered.map(entry => ({
     id: entry.id,
     title: entry.title,
     pageReference: entry.pageNumber,

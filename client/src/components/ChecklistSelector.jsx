@@ -14,30 +14,16 @@ export default function ChecklistSelector({ checklists, onSelectionChange }) {
         const toc = checklist.data?.tableOfContents || []
         const extractedSections = checklist.data?.sections || []
         
-        // Show only top-level sections from TOC using level property
-        const mainSections = toc.length > 0 
-          ? toc.filter(item => {
-              // If level property exists, use it - only show level 1
-              if (item.level !== undefined) {
-                return item.level === 1
-              }
-              
-              // Otherwise, filter by pattern: single digit + period + space, no subsections
-              const title = item.title || ''
-              const startsWithSingleDigit = /^\d\.\s/.test(title)
-              const notSubsection = !/^\d+\.\d+/.test(title)
-              
-              return startsWithSingleDigit && notSubsection
-            })
+        // ─── Use DI-extracted TOC directly (clean, deterministic) ─────────────
+        // The TOC is built from DI paragraph roles (sectionHeading/title) in
+        // enhancedDocumentIntelligence.js — already filtered for top-level
+        // sections, action verbs, and sequential numbering. No regex needed here.
+        let mainSections = toc.length > 0 
+          ? toc.filter(item => item.level === 1 || item.level === undefined)
           : extractedSections
-              .filter(s => {
-                const title = s.title || ''
-                const startsWithSingleDigit = /^\d\.\s/.test(title)
-                const notSubsection = !/^\d+\.\d+/.test(title)
-                return startsWithSingleDigit && notSubsection
-              })
+              .filter(s => s.sectionType === 'organizational_header')
               .map((s, idx) => ({
-                id: `section_${idx}`,
+                id: `section_${idx + 1}`,
                 title: s.title,
                 pageNumber: s.pageNumber,
                 level: 1

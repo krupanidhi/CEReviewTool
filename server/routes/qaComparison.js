@@ -8,7 +8,7 @@ import { loadSAATData, matchApplicantToServiceArea, buildSAATSummary, deriveFisc
 import { analyzeDocumentEnhanced } from '../services/enhancedDocumentIntelligence.js'
 import { transformToStructured } from '../services/structuredDocumentTransformer.js'
 import {
-  PROGRAM_SPECIFIC_RULES, STANDARD_RULES,
+  loadRulesForFiscalYear,
   buildApplicationIndex, analyzeApplicantType, evaluateCondition,
   answerPresenceQuestion, extractRelevantPages,
   parseSuggestedResources, lookupFormPages
@@ -200,30 +200,386 @@ if (!endpoint || !key || !deployment) {
 const client = new OpenAIClient(endpoint, new AzureKeyCredential(key))
 
 /**
- * Universal checklist question parser.
- * Handles merged questions (multiple numbered Qs in one section's title+content),
- * extracts user answers per-question, and captures suggested resources.
+ * Deterministic question extraction from Document Intelligence structured JSON.
  *
- * Works for both ProgramSpecific and Standard checklists.
+ * Walks DI sections and extracts every checklist question:
+ *   - Numbered questions: section title starts with "N. ..."
+ *   - Unnumbered items: items in content with Yes/No/N/A checkboxes (e.g., Completeness Checklist items)
+ *   - Merged questions: additional numbered questions embedded in a section's content
  *
- * @param {Object} data - Structured JSON from Azure DI extraction
- * @returns {{ questions: Array, metadata: Object }}
+ * No AI/GPT involved — purely deterministic, stable, and cacheable.
+ *
+ * @param {Array} sections - DI structured sections (data.document.sections)
+ * @param {Array} parseLog - Log array for detailed output
+ * @returns {Array} Extracted questions
  */
-function parseChecklistQuestions(data) {
-  const questions = new Map() // keyed by question number to deduplicate
-  const metadata = {}
-  const sections = data?.document?.sections || []
+function extractQuestionsFromDI(sections, parseLog) {
+  const questions = []
+  // Track current section header (e.g., "Completeness Checklist", "Eligibility Checklist")
+  let currentSectionHeader = 'Unknown'
+  // Track which numbered questions we've already seen (to handle duplicate Q1 across sections)
+  const seenNumbers = new Set()
 
-  // Collect ALL text from sections (title + content) in document order,
-  // including children, so we can split on question boundaries.
-  const allTextBlocks = []
+  // Sections to skip entirely (only reviewer-level sections, NOT page-break artifacts)
+  const SKIP_TITLES = /^(Recommendations|GMS\s+Recommendation|Close\s+Window)$/i
+  const METADATA_LINE = /^(As of\s+\d|Action\s+Taken|Completion\s+Status|Other\s+comments)/i
+  const TIMESTAMP_TITLE = /^\d{1,2}\/\d{1,2}\/\d{2,4}/
 
-  function collectText(section) {
+  parseLog.push(`--- DI-Based Question Extraction ---`)
+  parseLog.push(`Source: Document Intelligence structured JSON (deterministic)`)
+  parseLog.push('')
+
+  function cleanQuestionText(text) {
+    return text
+      .replace(/\[\s*[X_\s]*\s*\]\s*(?:Yes|No|N\/?A)/gi, '')
+      .replace(/:selected:|:unselected:/gi, '')
+      .replace(/Suggested Resource\(?s?\)?:\s*[^\n]*/gi, '')
+      .replace(/View\[/gi, '')
+      .replace(/https?:\/\/\S+/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  function extractResourcesFromBlock(text) {
+    const resources = []
+    const regex = /Suggested Resource\(?s?\)?:\s*([^\n\[]*(?:\[[^\]]*\])?[^\n]*)/gi
+    let rm
+    while ((rm = regex.exec(text)) !== null) {
+      let res = rm[1]
+        .replace(/\[\s*X?\s*_?\s*\]\s*(Yes|No|N\/A)/gi, '')
+        .replace(/https?:\/\/\S+/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+      if (res && res.length > 2) resources.push(res)
+    }
+    return [...new Set(resources)].join(' | ')
+  }
+
+  /**
+   * Extract unnumbered checklist items from a section's content.
+   * These are items like "Project Narrative", "Attachment 6: ..." that have
+   * Yes/No/N/A checkboxes but no numbered prefix.
+   *
+   * Only extracts from known checklist header sections (Completeness, Eligibility, etc.)
+   * to avoid picking up reviewer comments from page-break artifact sections.
+   */
+  function extractUnnumberedItems(content, sectionName, pageRef) {
+    // Only extract unnumbered items from actual checklist sections, not page-break artifacts
+    if (!/checklist|eligibility|completeness/i.test(sectionName)) {
+      parseLog.push(`  (unnumbered scan skipped for non-checklist section: "${sectionName}")`)
+      return
+    }
+
+    const lines = content.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim()
+      if (!line || line.length < 5) continue
+      if (METADATA_LINE.test(line)) continue
+      if (TIMESTAMP_TITLE.test(line)) continue
+      if (/^Suggested Resource/i.test(line)) continue
+      if (/^\[\s*[X_\s]*\s*\]\s*(Yes|No|N\/?A)/i.test(line)) continue
+      if (/^(Eligibility|Completeness|Patient Projection)/i.test(line)) {
+        // This is a sub-header, update section name
+        currentSectionHeader = line.replace(/\s*Checklist\s*$/i, '').trim() + ' Checklist'
+        continue
+      }
+      // Skip reviewer narrative text (starts with "The applicant...", "Based on...", etc.)
+      if (/^(The applicant|Based on|A new budget|Close Window)/i.test(line)) continue
+      // Skip if it looks like a numbered question (will be handled separately)
+      if (/^\d{1,2}\.\s+/.test(line)) continue
+      // Skip sentence fragments (lines starting with lowercase or short fragments)
+      if (/^[a-z]/.test(line) && line.length < 60) continue
+
+      // Check if this line is DIRECTLY followed by a checkbox or Suggested Resource within next 2 lines
+      let hasCheckbox = false
+      for (let j = i + 1; j <= Math.min(i + 2, lines.length - 1); j++) {
+        if (/\[\s*[X_\s]*\s*\]\s*(Yes|No|N\/?A)/i.test(lines[j])) { hasCheckbox = true; break }
+        if (/Suggested Resource/i.test(lines[j])) { hasCheckbox = true; break }
+      }
+      if (!hasCheckbox) continue
+
+      const questionText = cleanQuestionText(line)
+      if (questionText.length < 5) continue
+
+      // Gather the full block for resource extraction
+      const blockLines = lines.slice(i, Math.min(i + 4, lines.length))
+      const block = blockLines.join('\n')
+
+      questions.push({
+        number: questions.length + 1,
+        question: questionText,
+        section: sectionName || currentSectionHeader,
+        originalNumber: null,
+        source: 'document_intelligence',
+        suggestedResources: extractResourcesFromBlock(block),
+        requiresSAAT: /\bSAAT\b/i.test(block),
+        pageReference: pageRef
+      })
+      parseLog.push(`  Q${questions.length} [${sectionName}] (unnumbered): "${questionText.substring(0, 100)}"`)
+    }
+  }
+
+  /**
+   * Extract a numbered question from a section title (and optionally its content).
+   */
+  function extractNumberedQuestion(title, content, sectionNumber, sectionName, pageRef) {
+    // Extract question text from title — strip the "N. " prefix
+    const titleMatch = title.match(/^(\d{1,2})\.\s+(.+)/)
+    if (!titleMatch) return
+    const origNum = parseInt(titleMatch[1])
+    let questionText = cleanQuestionText(titleMatch[2])
+
+    // Skip metadata/noise
+    if (questionText.length < 5) return
+    if (METADATA_LINE.test(questionText)) return
+
+    // Skip duplicate question numbers (e.g., second "1." from Patient Projection section)
+    // But track the section change
+    if (seenNumbers.has(origNum)) {
+      // This is a new section with restarted numbering — give it a unique sequential number
+      const fullBlock = [title, content].filter(Boolean).join('\n')
+      questions.push({
+        number: questions.length + 1,
+        question: questionText,
+        section: sectionName || currentSectionHeader,
+        originalNumber: origNum,
+        source: 'document_intelligence',
+        suggestedResources: extractResourcesFromBlock(fullBlock),
+        requiresSAAT: /\bSAAT\b/i.test(fullBlock),
+        pageReference: pageRef
+      })
+      parseLog.push(`  Q${questions.length} [${sectionName}] (orig#${origNum}, renumbered): "${questionText.substring(0, 100)}"`)
+      return
+    }
+
+    seenNumbers.add(origNum)
+    const fullBlock = [title, content].filter(Boolean).join('\n')
+
+    questions.push({
+      number: questions.length + 1,
+      question: questionText,
+      section: sectionName || currentSectionHeader,
+      originalNumber: origNum,
+      source: 'document_intelligence',
+      suggestedResources: extractResourcesFromBlock(fullBlock),
+      requiresSAAT: /\bSAAT\b/i.test(fullBlock),
+      pageReference: pageRef
+    })
+    parseLog.push(`  Q${questions.length} [${sectionName}] (orig#${origNum}): "${questionText.substring(0, 100)}"`)
+  }
+
+  /**
+   * Extract merged numbered questions from a section's content.
+   * These are additional "N. ..." patterns found in the content text.
+   * Also detects the "Patient Projection Funding Reduction Check" sub-section
+   * which may appear as unnumbered text after a recognizable header.
+   */
+  function extractMergedQuestions(content, sectionName, pageRef) {
+    if (!content) return
+
+    // Detect Patient Projection sub-header position (used for section assignment)
+    const ppHeaderIdx = content.search(/Patient Projection Funding Reduction Check/i)
+
+    // ─── Find all "N. <uppercase letter>" patterns (numbered merged questions) ──
+    const mergedRegex = /(?:^|\n)\s*(\d{1,2})\.\s+([A-Z])/g
+    let match
+    const mergedStarts = []
+    while ((match = mergedRegex.exec(content)) !== null) {
+      mergedStarts.push({ num: parseInt(match[1]), idx: match.index })
+    }
+
+    for (let i = 0; i < mergedStarts.length; i++) {
+      const ms = mergedStarts[i]
+      const textEnd = i + 1 < mergedStarts.length ? mergedStarts[i + 1].idx : content.length
+      const rawBlock = content.substring(ms.idx, textEnd).trim()
+
+      const afterPrefix = rawBlock.replace(/^\d{1,2}\.\s+/, '')
+      const checkboxIdx = afterPrefix.search(/\[\s*[X_\s]*\s*\]\s*(?:Yes|No|N\/?A)/i)
+      const suggestedIdx = afterPrefix.search(/Suggested Resource/i)
+      let cutoff = afterPrefix.length
+      if (checkboxIdx > 0) cutoff = Math.min(cutoff, checkboxIdx)
+      if (suggestedIdx > 0) cutoff = Math.min(cutoff, suggestedIdx)
+      let questionText = cleanQuestionText(afterPrefix.substring(0, cutoff))
+
+      if (questionText.length < 5) continue
+      if (METADATA_LINE.test(questionText)) continue
+
+      if (seenNumbers.has(ms.num)) {
+        parseLog.push(`  (merged) orig#${ms.num}: DUPLICATE SKIPPED`)
+        continue
+      }
+      seenNumbers.add(ms.num)
+
+      // Assign section: if after Patient Projection header, use that; otherwise use
+      // the last known checklist header (not page-break artifact names like "Print All")
+      let qSection = sectionName || currentSectionHeader
+      if (ppHeaderIdx >= 0 && ms.idx > ppHeaderIdx) {
+        qSection = 'Patient Projection Funding Reduction Check'
+      } else if (/print\s+all|HRSA\s+EHBs/i.test(qSection)) {
+        // Page-break artifact — use the previous checklist header instead
+        qSection = 'Completeness and Eligibility Checklist'
+      }
+
+      questions.push({
+        number: questions.length + 1,
+        question: questionText,
+        section: qSection,
+        originalNumber: ms.num,
+        source: 'document_intelligence',
+        suggestedResources: extractResourcesFromBlock(rawBlock),
+        requiresSAAT: /\bSAAT\b/i.test(rawBlock),
+        pageReference: pageRef
+      })
+      parseLog.push(`  Q${questions.length} [${qSection}] (merged, orig#${ms.num}): "${questionText.substring(0, 100)}"`)
+    }
+
+    // ─── Extract Patient Projection question (unnumbered, after sub-header) ───
+    if (ppHeaderIdx >= 0) {
+      parseLog.push(`  → Sub-header detected: "Patient Projection Funding Reduction Check"`)
+      const afterHeader = content.substring(ppHeaderIdx)
+      const ppMatch = afterHeader.match(/If the Form 1A[^[]*/)
+      if (ppMatch) {
+        const ppText = cleanQuestionText(ppMatch[0])
+        if (ppText.length > 10) {
+          questions.push({
+            number: questions.length + 1,
+            question: ppText,
+            section: 'Patient Projection Funding Reduction Check',
+            originalNumber: null,
+            source: 'document_intelligence',
+            suggestedResources: extractResourcesFromBlock(afterHeader),
+            requiresSAAT: /\bSAAT\b/i.test(afterHeader),
+            pageReference: pageRef
+          })
+          parseLog.push(`  Q${questions.length} [Patient Projection] (from sub-header): "${ppText.substring(0, 100)}"`)
+        }
+      }
+    }
+  }
+
+  // ─── Walk all sections ─────────────────────────────────────────────────────
+  function processSection(section, depth = 0) {
     const title = (section.title || '').trim()
     const content = (section.content || '').trim()
     const pageRef = section.pageReference || null
+    const secNum = section.sectionNumber
 
-    // Collect metadata from formFields
+    // Skip non-question sections
+    if (SKIP_TITLES.test(title)) {
+      parseLog.push(`${'  '.repeat(depth)}SKIP: "${title.substring(0, 80)}"`)
+      return
+    }
+    if (TIMESTAMP_TITLE.test(title)) {
+      parseLog.push(`${'  '.repeat(depth)}SKIP (timestamp): "${title.substring(0, 80)}"`)
+      return
+    }
+
+    parseLog.push(`${'  '.repeat(depth)}Processing: "${title.substring(0, 100)}" (sec#${secNum || '?'}, page ${pageRef || '?'})`)
+
+    // Detect section headers (non-numbered top-level sections)
+    const isHeader = !secNum && !(/^\d{1,2}\.\s+/.test(title))
+    if (isHeader && title.length > 3) {
+      // Update current section header name
+      currentSectionHeader = title
+        .replace(/\s*Checklist\s*$/i, '')
+        .replace(/\s*Check\s*$/i, '')
+        .trim()
+      // Append "Checklist" or "Check" back if it was there
+      if (/checklist/i.test(title)) currentSectionHeader += ' Checklist'
+      else if (/check/i.test(title)) currentSectionHeader += ' Check'
+
+      parseLog.push(`${'  '.repeat(depth)}  → Section header: "${currentSectionHeader}"`)
+
+      // Extract unnumbered items from this header section's content
+      if (content) {
+        extractUnnumberedItems(content, currentSectionHeader, pageRef)
+        // Also scan for merged numbered questions in header content
+        // (e.g., "Print All | SA | HRSA EHBs" section may contain Q19 in FY26)
+        extractMergedQuestions(content, currentSectionHeader, pageRef)
+      }
+    }
+
+    // Numbered question in title
+    if (/^\d{1,2}\.\s+/.test(title)) {
+      // Detect if this question's TITLE indicates Patient Projection section
+      // Only check the title — content may contain the PP header for a different section's merged questions
+      if (/patient\s+projection|funding\s+reduction/i.test(title)) {
+        currentSectionHeader = 'Patient Projection Funding Reduction Check'
+        parseLog.push(`${'  '.repeat(depth)}  → Detected Patient Projection section from title`)
+      }
+      extractNumberedQuestion(title, content, secNum, currentSectionHeader, pageRef)
+
+      // Check for merged questions in content
+      if (content) {
+        extractMergedQuestions(content, currentSectionHeader, pageRef)
+      }
+    }
+
+    // Process children
+    if (section.children) {
+      section.children.forEach(child => processSection(child, depth + 1))
+    }
+  }
+
+  sections.forEach(s => processSection(s))
+
+  parseLog.push('')
+  parseLog.push(`DI extraction complete: ${questions.length} questions found`)
+
+  return questions
+}
+
+/**
+ * Universal checklist question parser — Document Intelligence based.
+ *
+ * Extracts ALL questions deterministically from DI structured JSON:
+ *   - Numbered questions (e.g., "1. Did the applicant include...")
+ *   - Unnumbered items (e.g., "Project Narrative → Yes/No")
+ *   - Multiple sections (Completeness, Eligibility, Patient Projection, etc.)
+ *   - Merged questions in section content
+ *
+ * No AI/GPT involved — purely deterministic from DI extraction.
+ * DI extraction is done once per FY and cached forever.
+ *
+ * @param {Object} data - Structured JSON from Azure DI extraction
+ * @param {Object} [logOptions] - { logFile, fiscalYear, checklistType }
+ * @returns {Promise<{ questions: Array, metadata: Object }>}
+ */
+async function parseChecklistQuestions(data, logOptions = {}) {
+  const parseLog = []
+
+  // ─── Check for cached _questions.json ──────────────────────────────────────
+  // If a sourcePath is provided, derive a _questions.json cache path from it.
+  // If the cache exists, load directly — no re-parsing needed.
+  if (logOptions.sourcePath) {
+    const questionsCache = logOptions.sourcePath.replace(/_structured\.json$/i, '_questions.json')
+    try {
+      const cached = await fs.readFile(questionsCache, 'utf-8')
+      const parsed = JSON.parse(cached)
+      if (parsed.questions && parsed.questions.length > 0) {
+        console.log(`📋 Loaded ${parsed.questions.length} questions from cache: ${basename(questionsCache)}`)
+        return { questions: parsed.questions, metadata: parsed.metadata || {} }
+      }
+    } catch {
+      // Cache doesn't exist yet — will parse and create it below
+    }
+  }
+
+  const metadata = {}
+  const sections = data?.document?.sections || []
+
+  parseLog.push(`=== Checklist Question Parsing Log ===`)
+  parseLog.push(`Timestamp: ${new Date().toISOString()}`)
+  if (logOptions.fiscalYear) parseLog.push(`Fiscal Year: ${logOptions.fiscalYear}`)
+  if (logOptions.checklistType) parseLog.push(`Checklist Type: ${logOptions.checklistType}`)
+  parseLog.push(`Total top-level sections in JSON: ${sections.length}`)
+  parseLog.push('')
+
+  // ─── Collect metadata from formFields ──────────────────────────────────────
+  function collectMetadata(section) {
+    const title = (section.title || '').trim()
+    const content = (section.content || '').trim()
+
     if (section.formFields) {
       section.formFields.forEach(ff => {
         const key = (ff.field || '').trim()
@@ -236,7 +592,6 @@ function parseChecklistQuestions(data) {
       })
     }
 
-    // GMS Recommendation metadata
     if (title === 'GMS Recommendation') {
       metadata.gmsRecommendation = {}
       if (section.formFields) {
@@ -250,129 +605,47 @@ function parseChecklistQuestions(data) {
       }
     }
 
-    // Combine title + content as one text block
-    const combined = [title, content].filter(Boolean).join('\n')
-    if (combined) allTextBlocks.push({ text: combined, pageRef })
-
     if (section.children) {
-      section.children.forEach(child => collectText(child))
+      section.children.forEach(child => collectMetadata(child))
     }
   }
 
-  sections.forEach(s => collectText(s))
+  sections.forEach(s => collectMetadata(s))
 
-  // Join all text into one stream so we can split on question boundaries
-  const fullText = allTextBlocks.map(b => b.text).join('\n')
+  // ─── Extract questions using DI structured sections (deterministic) ────────
+  const questions = extractQuestionsFromDI(sections, parseLog)
 
-  // Split into individual questions using numbered pattern: "N. <question text>"
-  // We find all positions where a question starts, then extract text between them.
-  const questionStarts = []
-  const qStartRegex = /(?:^|\n)\s*(\d{1,2})\.\s+/g
-  let m
-  while ((m = qStartRegex.exec(fullText)) !== null) {
-    const num = parseInt(m[1])
-    // Filter out noise: only accept question numbers 1-30 and skip dates/page numbers
-    if (num >= 1 && num <= 30) {
-      // Make sure this isn't a date like "1/22/26" or page ref like "1/3"
-      const charAfterNum = fullText.substring(m.index + m[0].length, m.index + m[0].length + 1)
-      const charBeforeMatch = m.index > 0 ? fullText[m.index - 1] : '\n'
-      // Skip if preceded by "/" (date/page pattern)
-      if (charBeforeMatch === '/') continue
-      questionStarts.push({ num, startIdx: m.index, matchLen: m[0].length })
-    }
+  parseLog.push('')
+  parseLog.push(`--- Final Results ---`)
+  parseLog.push(`Total questions extracted: ${questions.length}`)
+  questions.forEach(q => {
+    parseLog.push(`  Q${q.number} [${q.section || '?'}] (${q.source || '?'}): "${q.question.substring(0, 100)}${q.question.length > 100 ? '...' : ''}"`)
+    parseLog.push(`    Page: ${q.pageReference || '?'}, SAAT: ${q.requiresSAAT || false}, OrigNum: ${q.originalNumber || 'n/a'}`)
+    if (q.suggestedResources) parseLog.push(`    Resources: ${q.suggestedResources}`)
+  })
+  parseLog.push(`Metadata: ${JSON.stringify(metadata, null, 2)}`)
+  parseLog.push('')
+
+  // Write log to file
+  if (logOptions.logFile) {
+    const logContent = parseLog.join('\n')
+    fs.appendFile(logOptions.logFile, logContent + '\n\n', 'utf-8')
+      .then(() => console.log(`📝 Question parsing log written to ${logOptions.logFile}`))
+      .catch(err => console.warn(`⚠️ Failed to write parsing log: ${err.message}`))
   }
 
-  // Extract each question's full text block (from its start to the next question's start)
-  for (let i = 0; i < questionStarts.length; i++) {
-    const qs = questionStarts[i]
-    const textStart = qs.startIdx + qs.matchLen
-    const textEnd = i + 1 < questionStarts.length ? questionStarts[i + 1].startIdx : fullText.length
-    const rawBlock = fullText.substring(qs.startIdx, textEnd).trim()
-
-    // The question text is everything from after "N. " up to the first answer checkbox or "Suggested Resource"
-    const afterNum = fullText.substring(textStart, textEnd).trim()
-
-    // Extract question text: everything before the first checkbox pattern or "Suggested Resource"
-    let questionText = afterNum
-      .split(/\n/)[0] // Take first line as primary question
-    // But some questions span multiple lines before the checkbox — grab until first checkbox
-    const checkboxIdx = afterNum.search(/\[\s*[X_\s]*\s*\]\s*(?:Yes|No|N\/?A)/i)
-    const suggestedIdx = afterNum.search(/Suggested Resource/i)
-    let cutoff = afterNum.length
-    if (checkboxIdx > 0) cutoff = Math.min(cutoff, checkboxIdx)
-    if (suggestedIdx > 0) cutoff = Math.min(cutoff, suggestedIdx)
-    questionText = afterNum.substring(0, cutoff)
-      .replace(/\[\s*X?\s*_?\s*\]\s*(Yes|No|N\/A)/gi, '')
-      .replace(/:unselected:/gi, '')
-      .replace(/:selected:/gi, '')
-      .replace(/https?:\/\/\S+/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-
-    // Extract suggested resources from this question's block
-    const suggestedResources = extractSuggestedResources(rawBlock)
-
-    // Detect SAAT requirement
-    const requiresSAAT = /\bSAAT\b/i.test(rawBlock)
-
-    // Determine page reference
-    const pageRef = findPageRef(rawBlock, allTextBlocks)
-
-    // Only add if we have meaningful question text (skip noise like dates, page headers, metadata sections)
-    const isMetadata = /^Other\s+comments\b/i.test(questionText) ||
-      /^Completion\s+Status/i.test(questionText) ||
-      /^Program\s+Specific\s+(Checklist|Recommendation)/i.test(questionText) ||
-      /^GMS\s+Recommendation/i.test(questionText)
-    if (!isMetadata && questionText.length > 10) {
-      // Keep the better version if duplicate (longer question text wins)
-      const existing = questions.get(qs.num)
-      if (!existing || questionText.length > existing.question.length) {
-        questions.set(qs.num, {
-          number: qs.num,
-          question: questionText,
-          suggestedResources,
-          requiresSAAT,
-          pageReference: pageRef
-        })
-      }
-    }
+  // ─── Cache parsed questions as _questions.json ─────────────────────────────
+  if (logOptions.sourcePath && questions.length > 0) {
+    const questionsCache = logOptions.sourcePath.replace(/_structured\.json$/i, '_questions.json')
+    const cacheData = { questions, metadata, parsedAt: new Date().toISOString() }
+    fs.writeFile(questionsCache, JSON.stringify(cacheData, null, 2), 'utf-8')
+      .then(() => console.log(`💾 Cached ${questions.length} questions to ${basename(questionsCache)}`))
+      .catch(err => console.warn(`⚠️ Failed to cache questions: ${err.message}`))
   }
 
-  return {
-    questions: [...questions.values()].sort((a, b) => a.number - b.number),
-    metadata
-  }
+  return { questions, metadata }
 }
 
-/**
- * Extract "Suggested Resource(s):" values from a question block
- */
-function extractSuggestedResources(block) {
-  const resources = []
-  const regex = /Suggested Resource\(?s?\)?:\s*([^\n\[]*(?:\[[^\]]*\])?[^\n]*)/gi
-  let rm
-  while ((rm = regex.exec(block)) !== null) {
-    let res = rm[1]
-      .replace(/\[\s*X?\s*_?\s*\]\s*(Yes|No|N\/A)/gi, '')
-      .replace(/https?:\/\/\S+/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-    if (res && res.length > 2) resources.push(res)
-  }
-  // Deduplicate and join
-  return [...new Set(resources)].join(' | ')
-}
-
-/**
- * Find the page reference for a question block by matching against source text blocks
- */
-function findPageRef(rawBlock, allTextBlocks) {
-  const snippet = rawBlock.substring(0, 80)
-  for (const b of allTextBlocks) {
-    if (b.text.includes(snippet.trim().substring(0, 40)) && b.pageRef) return b.pageRef
-  }
-  return null
-}
 
 /**
  * GET /api/qa-comparison/questions
@@ -383,7 +656,12 @@ router.get('/questions', async (req, res) => {
     const dataPath = await resolveChecklistPath('programspecific', null, req.query.path)
     const raw = await fs.readFile(dataPath, 'utf-8')
     const data = JSON.parse(raw)
-    const { questions, metadata } = parseChecklistQuestions(data)
+    const parseLogFile = join(__dirname, '../../logs/checklist_question_parsing.log')
+    const { questions, metadata } = await parseChecklistQuestions(data, {
+      logFile: parseLogFile,
+      checklistType: 'programspecific',
+      sourcePath: dataPath
+    })
 
     res.json({
       success: true,
@@ -421,8 +699,19 @@ router.post('/analyze', async (req, res) => {
     const dataPath = await resolveChecklistPath('programspecific', fiscalYear, req.body.checklistPath)
     const raw = await fs.readFile(dataPath, 'utf-8')
     const psqData = JSON.parse(raw)
-    const { questions: userQuestions } = parseChecklistQuestions(psqData)
+    const parseLogFile = join(__dirname, '../../logs/checklist_question_parsing.log')
+    const { questions: userQuestions } = await parseChecklistQuestions(psqData, {
+      logFile: parseLogFile,
+      fiscalYear: fiscalYear || 'Unknown',
+      checklistType: 'programspecific',
+      sourcePath: dataPath
+    })
     console.log(`📋 Parsed ${userQuestions.length} questions`)
+
+    // 1b. Load FY-aware rules (cached JSON → auto-generate → hardcoded fallback)
+    const programRules = await loadRulesForFiscalYear(fiscalYear, 'programspecific', {
+      aiClient: client, deployment
+    })
 
     // 2. Extract PDF TOC links if not already present in applicationData
     //    These give us exact hyperlink destinations from the PDF's Table of Contents.
@@ -450,7 +739,7 @@ router.post('/analyze', async (req, res) => {
     const applicantFlags = analyzeApplicantType(applicantProfile, applicationData)
     console.log(`👤 Applicant: ${applicantProfile.organizationName || 'Unknown'}`)
 
-    // 4. Load SAAT data
+    // 5. Load SAAT data
     let saatData = null
     let saatSummary = ''
     const saatQuestionNums = userQuestions.filter(q => q.requiresSAAT).map(q => q.number)
@@ -470,7 +759,7 @@ router.post('/analyze', async (req, res) => {
       }
     }
 
-    // 5. Process each question using rules engine
+    // 6. Process each question using rules engine
     const comparisonResults = []
     const aiQuestionsToAsk = [] // Collect questions that need AI
 
@@ -478,7 +767,7 @@ router.post('/analyze', async (req, res) => {
     let q10Answer = null
 
     for (const q of userQuestions) {
-      const rule = PROGRAM_SPECIFIC_RULES.find(r => r.questionNumber === q.number)
+      const rule = programRules.find(r => r.questionNumber === q.number)
 
       if (!rule) {
         // No rule defined — fall back to AI
@@ -645,7 +934,12 @@ router.get('/standard-questions', async (req, res) => {
     const dataPath = await resolveChecklistPath('standard', null, req.query.path)
     const raw = await fs.readFile(dataPath, 'utf-8')
     const data = JSON.parse(raw)
-    const { questions, metadata } = parseChecklistQuestions(data)
+    const standardLogFile = join(__dirname, '../../logs/checklist_question_parsing.log')
+    const { questions, metadata } = await parseChecklistQuestions(data, {
+      logFile: standardLogFile,
+      checklistType: 'standard',
+      sourcePath: dataPath
+    })
 
     res.json({
       success: true,
@@ -682,7 +976,13 @@ router.post('/standard-analyze', async (req, res) => {
     const dataPath = await resolveChecklistPath('standard', fiscalYear, req.body.checklistPath)
     const raw = await fs.readFile(dataPath, 'utf-8')
     const scData = JSON.parse(raw)
-    const { questions: userQuestions, metadata } = parseChecklistQuestions(scData)
+    const standardLogFile = join(__dirname, '../../logs/checklist_question_parsing.log')
+    const { questions: userQuestions, metadata } = await parseChecklistQuestions(scData, {
+      logFile: standardLogFile,
+      fiscalYear: fiscalYear || 'Unknown',
+      checklistType: 'standard',
+      sourcePath: dataPath
+    })
 
     console.log(`📋 Parsed ${userQuestions.length} standard checklist questions from ${dataPath}`)
 

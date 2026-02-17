@@ -1,0 +1,196 @@
+{
+  "questions": [
+    {
+      "number": 1,
+      "question": "Project Narrative",
+      "section": "Completeness Checklist",
+      "originalNumber": null,
+      "source": "document_intelligence",
+      "suggestedResources": "View[",
+      "requiresSAAT": false,
+      "pageReference": 1
+    },
+    {
+      "number": 2,
+      "question": "Attachment 6: Co-Applicant Agreement (required for new public center applicants that have a co-applicant board)",
+      "section": "Completeness Checklist",
+      "originalNumber": null,
+      "source": "document_intelligence",
+      "suggestedResources": "View[ :selected:",
+      "requiresSAAT": false,
+      "pageReference": 1
+    },
+    {
+      "number": 3,
+      "question": "Attachment 11: Evidence of Nonprofit or Public Center Status (new applicants)",
+      "section": "Completeness Checklist",
+      "originalNumber": null,
+      "source": "document_intelligence",
+      "suggestedResources": "View[",
+      "requiresSAAT": false,
+      "pageReference": 1
+    },
+    {
+      "number": 4,
+      "question": "Is the applicant organization a domestic public or private nonprofit entity, including faith-based, and community-based organizations, Tribes, and tribal organizations?",
+      "section": "Eligibility Checklist",
+      "originalNumber": 1,
+      "source": "document_intelligence",
+      "suggestedResources": "Attachment 11: Evidence of Nonprofit or Public Center Status [\"",
+      "requiresSAAT": false,
+      "pageReference": 2
+    },
+    {
+      "number": 5,
+      "question": "Does the applicant propose to perform a substantive role in the project (i.e., does not apply on behalf of another organization)?",
+      "section": "Eligibility Checklist",
+      "originalNumber": 2,
+      "source": "document_intelligence",
+      "suggestedResources": "SF-424A[ | Project Narrative[ | Budget Narrative[] | Attachment 2: Bylaws | Attachment 3: Project Organizational Charte? | Form 5A: Services Provided \" | Form 8: Health Center Agreements[\" | Project Narrative [",
+      "requiresSAAT": false,
+      "pageReference": 2
+    },
+    {
+      "number": 6,
+      "question": "Does the applicant propose to operate a health center that makes all required primary health care services available and accessible in the service area, either directly or through established arrangements, without regard for ability to pay? (Note that applicants may not propose to provide ONLY a single service or any subset of the required primary health care services.)",
+      "section": "Eligibility Checklist",
+      "originalNumber": 3,
+      "source": "document_intelligence",
+      "suggestedResources": "Project Narrative [",
+      "requiresSAAT": false,
+      "pageReference": 2
+    },
+    {
+      "number": 7,
+      "question": "Does the applicant propose to make General Primary Medical Care available directly (Column I) and/or through formal written contractual agreements in which the health center pays for the service (Column II)?",
+      "section": "Eligibility Checklist",
+      "originalNumber": 4,
+      "source": "document_intelligence",
+      "suggestedResources": "Form 5A: Services Provided [ | Project Narrative [",
+      "requiresSAAT": false,
+      "pageReference": 2
+    },
+    {
+      "number": 8,
+      "question": "Does the applicant propose to provide access to services for all individuals in the service area and target population? If a sub-population is targeted (e.g., a school-based site that targets school-aged children), will health center services be available and accessible to others seeking services at the proposed site(s)?",
+      "section": "Eligibility Checklist",
+      "originalNumber": 5,
+      "source": "document_intelligence",
+      "suggestedResources": "Project Narrative [",
+      "requiresSAAT": false,
+      "pageReference": 2
+    },
+    {
+      "number": 9,
+      "question": "Does the applicant propose a service area announced under this NOFO number?",
+      "section": "Eligibility Checklist",
+      "originalNumber": 6,
+      "source": "document_intelligence",
+      "suggestedResources": "Summary Pager\" | SAAT | Abstract[\" | Project Narrativer? | Form 5B: Service Sites\"",
+      "requiresSAAT": true,
+      "pageReference": 2
+    },
+    {
+      "number": 10,
+      "question": "Is the total number of unduplicated patients projected to be served in 2025 on Form 1A at least 75 percent of the SAAT Patient Target?",
+      "section": "Eligibility Checklist",
+      "originalNumber": 7,
+      "source": "document_intelligence",
+      "suggestedResources": "SAATE\" | Form 1A: General Information Worksheet [\"",
+      "requiresSAAT": true,
+      "pageReference": 3
+    },
+    {
+      "number": 11,
+      "question": "Does the applicant propose to serve patients for each Service Type listed in the SAAT?",
+      "section": "Eligibility Checklist",
+      "originalNumber": 8,
+      "source": "document_intelligence",
+      "suggestedResources": "SAATE\" | Form 1A: General Information Worksheet\"",
+      "requiresSAAT": true,
+      "pageReference": 3
+    },
+    {
+      "number": 12,
+      "question": "Does the applicant request annual SAC funding that does NOT exceed the SAAT Total Funding for the service area?",
+      "section": "Eligibility Checklist",
+      "originalNumber": 9,
+      "source": "document_intelligence",
+      "suggestedResources": "SF-424A[ | Budget Narrative[ | SAATE",
+      "requiresSAAT": true,
+      "pageReference": 3
+    },
+    {
+      "number": 13,
+      "question": "Does the applicant propose to serve all currently targeted population types (i.e., CHC, MHC, HCH, PHPC) from the SAAT?",
+      "section": "Eligibility Checklist",
+      "originalNumber": 10,
+      "source": "document_intelligence",
+      "suggestedResources": "SF-424A[ | SAATE",
+      "requiresSAAT": true,
+      "pageReference": 3
+    },
+    {
+      "number": 14,
+      "question": "Does the applicant maintain the current funding distribution (i.e., CHC, MHC, HCH, PHPC) from the SAAT?",
+      "section": "Eligibility Checklist",
+      "originalNumber": 11,
+      "source": "document_intelligence",
+      "suggestedResources": "SF-424A[ | SAATE\" | Form 5B: Service Sites[? | SF-424A[\"",
+      "requiresSAAT": true,
+      "pageReference": 3
+    },
+    {
+      "number": 15,
+      "question": "New or competing supplement applicant: Is at least one new full-time (operational 40 hours or more per week) permanent, fixed building site with a verifiable street address proposed on Form 5B? *If funding is only requested for MHC, the applicant may propose a new full-time seasonal (rather than permanent) service delivery site.",
+      "section": "Eligibility Checklist",
+      "originalNumber": 12,
+      "source": "document_intelligence",
+      "suggestedResources": "Form 5B: Service Sites[? | SF-424A[\"",
+      "requiresSAAT": false,
+      "pageReference": 3
+    },
+    {
+      "number": 16,
+      "question": "New or competing supplement applicant: For Form 5B: Service Sites, does the applicant include:",
+      "section": "Eligibility Checklist",
+      "originalNumber": 13,
+      "source": "document_intelligence",
+      "suggestedResources": "Form 5B: Service Sites[? | SAATE\" | SF-424A[ | Project Narrative[ | Summary Pager?",
+      "requiresSAAT": true,
+      "pageReference": 4
+    },
+    {
+      "number": 17,
+      "question": "New or competing supplement applicant requesting PHPC funding: Does the applicant demonstrate consultation with residents of public housing in the preparation of the SAC application, and ensure ongoing consultation with the residents regarding the planning and administration of the health center?",
+      "section": "Eligibility Checklist",
+      "originalNumber": 14,
+      "source": "document_intelligence",
+      "suggestedResources": "SF-424A[ | Project Narrative[",
+      "requiresSAAT": false,
+      "pageReference": 4
+    },
+    {
+      "number": 18,
+      "question": "New or competing supplement applicant requesting PHPC and/or PHPC funding: Does the applicant attest on the Summary Page that funding will be utilized to supplement, and not supplant, the expenditures of the health center and the value of in-kind contributions for the delivery of services to these populations?",
+      "section": "Eligibility Checklist",
+      "originalNumber": 15,
+      "source": "document_intelligence",
+      "suggestedResources": "Summary Pager?",
+      "requiresSAAT": false,
+      "pageReference": 4
+    },
+    {
+      "number": 19,
+      "question": "If the Form 1A patient projection is less than 95% of the SAAT Patient Target, is the annual SAC funding request reduced accordingly in the SF-424A and Budget Narrative? *This question does not impact application completeness or eligibility.",
+      "section": "Patient Projection Funding Reduction Check",
+      "originalNumber": 1,
+      "source": "document_intelligence",
+      "suggestedResources": "SF-424A[ | Budget Narrative[ | SAATE | Patient and Budget Calculator[?",
+      "requiresSAAT": true,
+      "pageReference": 4
+    }
+  ],
+  "metadata": {},
+  "parsedAt": "2026-02-17T01:15:14.575Z"
+}

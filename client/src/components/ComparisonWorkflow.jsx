@@ -257,35 +257,29 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
             }
           }
 
-          // Filter out junk sections: AI sometimes returns numbered sub-steps/instructions
-          // as separate sections (e.g., "39. 1. Starting the FY 2026..." or "1 Total :selected:").
-          // Valid sections match the leaf section titles we sent to the AI.
+          // Filter AI response sections: keep only sections that match leaf titles we sent.
+          // AI may return extra items (numbered instructions, merged sections, etc.)
           const leafTitleSet = new Set(leafSections.map(s => (s.title || '').trim().toLowerCase()))
+          const leafNumberSet = new Set(leafSections.map(s => {
+            const m = (s.title || '').match(/^(\d+(?:\.\d+)*)/)
+            return m ? m[1] : null
+          }).filter(Boolean))
+
           const filteredSections = allChunkSections.filter(section => {
             const title = (section.checklistSection || '').trim()
             if (!title) return false
-            // Direct match against leaf section titles
+            // Direct title match
             if (leafTitleSet.has(title.toLowerCase())) return true
-            // Match by section number prefix (e.g., "3.1.1.1" matches "3.1.1.1 Completing the Applicant...")
-            const numMatch = title.match(/^(\d+(?:\.\d+)+)/)
+            // Match by section number (e.g., AI returns "3.1.1.1" and we have "3.1.1.1 Completing...")
+            const numMatch = title.match(/^(\d+(?:\.\d+)*)/)
+            if (numMatch && leafNumberSet.has(numMatch[1])) return true
+            // Check if any leaf title starts with this section's number
             if (numMatch) {
-              const num = numMatch[1]
-              for (const leafTitle of leafTitleSet) {
-                if (leafTitle.startsWith(num.toLowerCase())) return true
+              for (const leafNum of leafNumberSet) {
+                if (leafNum.startsWith(numMatch[1] + '.') || leafNum === numMatch[1]) return true
               }
             }
-            // Match top-level sections (1-9 only, not 39, 40, etc.)
-            const topMatch = title.match(/^(\d+)\.\s/)
-            if (topMatch && parseInt(topMatch[1]) <= 9) {
-              for (const leafTitle of leafTitleSet) {
-                if (leafTitle.startsWith(topMatch[1] + '.') || leafTitle.startsWith(topMatch[1] + ' ')) return true
-              }
-              return true
-            }
-            // Reject anything starting with a high number (39+) — these are AI-generated sequential numbers
-            const leadingNum = title.match(/^(\d+)/)
-            if (leadingNum && parseInt(leadingNum[1]) > 9) return false
-            return true
+            return false
           })
           if (filteredSections.length < allChunkSections.length) {
             log('warn', `Filtered junk sections: ${allChunkSections.length} → ${filteredSections.length} (removed ${allChunkSections.length - filteredSections.length} non-section items)`)

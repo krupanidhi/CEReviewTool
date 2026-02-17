@@ -1,0 +1,29 @@
+[
+  {
+    "questionNumber": 1,
+    "answerStrategy": "ai_focused",
+    "lookFor": [],
+    "condition": null,
+    "focusPages": [],
+    "aiQuestion": "Does the application contain all required attachments listed in the guidance? Check the Table of Contents for completeness.",
+    "description": "Check if all required attachments are present"
+  },
+  {
+    "questionNumber": 2,
+    "answerStrategy": "ai_focused",
+    "lookFor": ["Attachment 11", "SF-424"],
+    "condition": null,
+    "focusPages": ["SF-424", "Attachment 11"],
+    "aiQuestion": "Is the applicant an eligible entity as mentioned in the guidance (e.g., non-profit, governmental unit)?",
+    "description": "Check applicant eligibility type"
+  },
+  {
+    "questionNumber": 3,
+    "answerStrategy": "ai_focused",
+    "lookFor": [],
+    "condition": null,
+    "focusPages": [],
+    "aiQuestion": "Are there any other comments or concerns about this application?",
+    "description": "Other comments"
+  }
+]
