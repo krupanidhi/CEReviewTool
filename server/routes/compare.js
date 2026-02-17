@@ -28,20 +28,27 @@ const client = new OpenAIClient(endpoint, new AzureKeyCredential(key))
 function compressText(text) {
   if (!text) return ''
   let c = text
+  // Remove decorative separators and noise
   c = c.replace(/={10,}/g, '')
-  c = c.replace(/PAGE \d+/gi, '')
-  c = c.replace(/Page Number:\s*\d+/gi, '')
-  c = c.replace(/Tracking Number[^\n]*/gi, '')
-  c = c.replace(/\n{3,}/g, '\n\n')
-  c = c.replace(/[ \t]{2,}/g, ' ')
-  c = c.replace(/^\s+$/gm, '')
-  c = c.replace(/Page \d+ of \d+/gi, '')
-  c = c.replace(/[│┤├┼─┌┐└┘]/g, ' ')
   c = c.replace(/_{5,}/g, '')
   c = c.replace(/-{5,}/g, '')
   c = c.replace(/\.{5,}/g, '')
-  c = c.replace(/  +/g, ' ')
+  c = c.replace(/[│┤├┼─┌┐└┘]/g, ' ')
+  // Remove page footers/headers noise
+  c = c.replace(/PAGE \d+/gi, '')
+  c = c.replace(/Page Number:\s*\d+/gi, '')
+  c = c.replace(/Page \d+ of \d+/gi, '')
+  c = c.replace(/Tracking Number[^\n]*/gi, '')
+  // Remove [TEXT] tags (no value for AI — headings/tables already labeled)
+  c = c.replace(/\[TEXT\]/gi, '')
+  // Remove :selected: and :unselected: markers (replace with readable format)
+  c = c.replace(/:selected:/g, '[X]')
+  c = c.replace(/:unselected:/g, '[ ]')
+  // Collapse whitespace
+  c = c.replace(/\n{3,}/g, '\n')
+  c = c.replace(/[ \t]{2,}/g, ' ')
   c = c.replace(/\n /g, '\n')
+  // Remove empty lines
   c = c.split('\n').filter(line => line.trim().length > 0).join('\n')
   return c.trim()
 }
@@ -475,40 +482,22 @@ ${(() => {
     return {
       id: t.id,
       pageNumber: t.pageNumber,
-      rowCount: t.rowCount,
-      columnCount: t.columnCount,
       structuredData: t.structuredData,
-      pageContext: compressText(pageText),
       formQuestions: formQuestions
     };
   }) || [];
   
-  // Include pages dynamically based on where tables and checklist sections are located.
-  // No hardcoded page ranges — works for any application regardless of page count.
-  const tablePages = new Set(relevantTables.map(t => t.pageNumber).filter(Boolean))
-  const sectionPages = new Set((checklistData.sections || []).map(s => s.pageNumber).filter(Boolean))
-  const allReferencedPages = new Set([...tablePages, ...sectionPages])
-  // Add surrounding pages (±2) for context around each referenced page
-  const expandedPages = new Set()
-  for (const pg of allReferencedPages) {
-    for (let offset = -2; offset <= 2; offset++) {
-      expandedPages.add(pg + offset)
-    }
-  }
-  // Always include first 10 pages (cover, TOC, general info) and pages with tables
-  for (let i = 1; i <= Math.min(10, applicationData.pages?.length || 0); i++) {
-    expandedPages.add(i)
-  }
-
+  // Include pages with forms: 1-50 (cover, TOC, general info, SF-424) and 125-160 (Form 1A, patient tables)
   const relevantPages = applicationData.pages?.filter(p => 
-    expandedPages.has(p.pageNumber)
+    (p.pageNumber >= 1 && p.pageNumber <= 50) || 
+    (p.pageNumber >= 125 && p.pageNumber <= 160)
   ).map(p => ({
     pageNumber: p.pageNumber,
     text: compressText(p.lines?.map(l => l.content).join('\n') || '')
-  })) || [];
+  })).filter(p => p.text.length > 20) || [];
   
   console.log(`📊 Filtered tables: ${relevantTables.length} of ${applicationData.tables?.length || 0} (form-related only)`);
-  console.log(`📄 Including pages: ${relevantPages.length} (dynamic: ${allReferencedPages.size} referenced + context)`);
+  console.log(`📄 Including pages: ${relevantPages.length} (pages 1-50, 125-160, full compressed text)`);
   
   // DEBUG: Check if formQuestions were extracted for page 135
   const table135 = relevantTables.find(t => t.pageNumber === 135);
@@ -526,26 +515,15 @@ ${(() => {
     }
   }
   
-  // Compress sections — only send title, sectionNumber, pageNumber, and compressed content text
-  const compressedSections = (applicationData.sections || []).slice(0, 30).map(s => ({
-    sectionNumber: s.sectionNumber || '',
-    title: s.title,
-    pageNumber: s.pageNumber,
-    content: compressText(s.content?.map(c => c.text).join('\n') || '')
-  }));
-  
   return JSON.stringify({
-    sections: compressedSections,
     tables: relevantTables,
     pages: relevantPages,
-    tableOfContents: applicationData.tableOfContents?.map(t => ({ title: t.title, pageNumber: t.pageNumber })) || [],
-    totalPages: applicationData.pages?.length || 0,
-    note: `Filtered to ${relevantTables.length} form-related tables and ${relevantPages.length} relevant pages`
-  }, null, 2);
+    totalPages: applicationData.pages?.length || 0
+  });
 })()}
 
-Checklist Sections (with hierarchy):
-${JSON.stringify(checklistData, null, 2).substring(0, 50000)}
+Checklist Sections to Validate:
+${(checklistData.sections || []).map((s, i) => `${i + 1}. [${s.sectionNumber || ''}] ${s.title}`).join('\n')}
 
 🚨 CRITICAL REQUIREMENT 🚨
 
@@ -599,56 +577,14 @@ APPLICABILITY STATUS RULES:
       { role: 'user', content: userPrompt }
     ]
 
-    const applicationDataStr = JSON.stringify(applicationData, null, 2).substring(0, 50000)
-    const checklistDataStr = JSON.stringify(checklistData, null, 2).substring(0, 50000)
-    
-    console.log('📤 Data being sent to AI:')
-    console.log('  - Application data length:', applicationDataStr.length, 'chars')
-    console.log('  - Checklist data length:', checklistDataStr.length, 'chars')
-    console.log('  - Application tables count:', applicationData.tables?.length || 0)
-    console.log('  - First 3 table IDs:', applicationData.tables?.slice(0, 3).map(t => t.id) || [])
-    
-    // DEBUG: Check if page 135 data contains the patient question
-    const page135 = applicationData.pages?.find(p => p.pageNumber === 135)
-    if (page135) {
-      const page135Text = page135.lines?.map(l => l.content).join('\n') || ''
-      console.log('\n🔍 DEBUG: Page 135 Content Check:')
-      console.log('  - Page 135 text length:', page135Text.length, 'chars')
-      const hasPatientQuestion = page135Text.includes('How many unduplicated patients')
-      console.log('  - Contains "How many unduplicated patients":', hasPatientQuestion)
-      if (hasPatientQuestion) {
-        const questionIndex = page135Text.indexOf('How many unduplicated patients')
-        console.log('  - Question context (200 chars):')
-        console.log('   ', page135Text.substring(questionIndex, questionIndex + 200))
-      } else {
-        console.log('  - ⚠️ Question text NOT FOUND on page 135')
-        console.log('  - Page 135 content preview (first 500 chars):')
-        console.log('   ', page135Text.substring(0, 500))
-      }
-    } else {
-      console.log('\n⚠️ DEBUG: Page 135 not found in application data')
-    }
-    
-    // Log sample of first table to verify data structure
-    if (applicationData.tables && applicationData.tables.length > 0) {
-      const firstTable = applicationData.tables[0]
-      console.log('📋 Sample table structure (first table):')
-      console.log('  - Table ID:', firstTable.id)
-      console.log('  - Page Number:', firstTable.pageNumber)
-      console.log('  - Row Count:', firstTable.rowCount)
-      console.log('  - Column Count:', firstTable.columnCount)
-      console.log('  - Has structuredData:', !!firstTable.structuredData)
-      if (firstTable.structuredData && firstTable.structuredData.length > 0) {
-        console.log('  - First row keys:', Object.keys(firstTable.structuredData[0]))
-        console.log('  - First row sample:', JSON.stringify(firstTable.structuredData[0]).substring(0, 200))
-      }
-    }
+    // Log ACTUAL prompt size for performance monitoring
+    const totalChars = systemPrompt.length + userPrompt.length
+    console.log(`📤 ACTUAL prompt: ${totalChars} chars (~${Math.ceil(totalChars / 4)} tokens)`)
     
     // Dynamic maxTokens and timeout based on section count
-    // Single-call mode may send 20-30 sections at once — needs higher limits
     const sectionCount = checklistData.sections?.length || 1
     const maxTokens = Math.min(32000, Math.max(4000, sectionCount * 600))
-    const timeoutMinutes = Math.min(10, Math.max(3, Math.ceil(sectionCount / 5)))
+    const timeoutMinutes = Math.min(8, Math.max(3, Math.ceil(sectionCount / 6)))
     const timeoutMs = timeoutMinutes * 60 * 1000
 
     console.log(`🤖 Sending to model: ${deployment}`)

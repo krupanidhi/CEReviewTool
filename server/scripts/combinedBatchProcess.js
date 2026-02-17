@@ -11,6 +11,7 @@
  * Usage:
  *   node server/scripts/combinedBatchProcess.js
  *   node server/scripts/combinedBatchProcess.js --mode both|ce-only|prefunding-only
+ *   node server/scripts/combinedBatchProcess.js --ce-scope compliance-only|checklist-only|both
  */
 
 import fs from 'fs/promises'
@@ -147,7 +148,12 @@ async function main() {
   let mode = getArg('mode') || await prompt('🔄 Mode (both|ce-only|prefunding-only) [both]: ') || 'both'
   const runCE = mode !== 'prefunding-only'
   const runPF = mode !== 'ce-only'
+  let ceScope = 'both'
+  if (runCE) {
+    ceScope = getArg('ce-scope') || await prompt('📋 CE Scope (both|compliance-only|checklist-only) [both]: ') || 'both'
+  }
   log(`🔄 Mode: ${mode} (CE: ${runCE ? 'YES' : 'NO'}, Prefunding: ${runPF ? 'YES' : 'NO'})`)
+  if (runCE) log(`📋 CE Scope: ${ceScope} (Compliance: ${ceScope !== 'checklist-only' ? 'YES' : 'NO'}, Checklist: ${ceScope !== 'compliance-only' ? 'YES' : 'NO'})`)
 
   // Verify applications folder
   if (!(await exists(APPLICATIONS_DIR))) { logE(`Applications folder not found: ${APPLICATIONS_DIR}`); process.exit(1) }
@@ -156,7 +162,7 @@ async function main() {
   log(`📄 ${appPDFs.length} application(s) in ${APPLICATIONS_DIR}`)
   appPDFs.forEach(f => log(`  - ${path.basename(f)}`))
 
-  const confirm = await prompt(`\n🚀 Process ${appPDFs.length} app(s) in "${mode}" mode? (y/n): `)
+  const confirm = await prompt(`\n🚀 Process ${appPDFs.length} app(s) in "${mode}" mode${runCE ? ` (ce-scope: ${ceScope})` : ''}? (y/n): `)
   if (confirm.toLowerCase() !== 'y') { log('Aborted.'); process.exit(0) }
 
   const batchResults = []
@@ -213,7 +219,8 @@ async function main() {
       try {
         await ceReview(ceData, appName, appPath, yearCode, fyLabel, fundingOpp, appResult, {
           CONFIG, retryF, log, logS, logE, logW, sleep, exists,
-          USER_GUIDES_ROOT, CHECKLISTS_ROOT, SAAT_ROOT, PROCESSED_APPS_DIR, findPDFs
+          USER_GUIDES_ROOT, CHECKLISTS_ROOT, SAAT_ROOT, PROCESSED_APPS_DIR, findPDFs,
+          ceScope
         })
       } catch (err) { logE(`CE Review failed: ${err.message}`); appResult.ceError = err.message }
     }

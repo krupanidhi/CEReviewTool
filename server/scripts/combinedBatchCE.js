@@ -20,7 +20,10 @@ const __dirname = dirname(__filename)
  */
 export async function ceReview(ceData, appName, appPath, yearCode, fyLabel, fundingOpp, appResult, ctx) {
   const { CONFIG, retryF, log, logS, logE, logW, sleep, exists,
-    USER_GUIDES_ROOT, CHECKLISTS_ROOT, SAAT_ROOT, PROCESSED_APPS_DIR, findPDFs } = ctx
+    USER_GUIDES_ROOT, CHECKLISTS_ROOT, SAAT_ROOT, PROCESSED_APPS_DIR, findPDFs,
+    ceScope = 'both' } = ctx
+  const runCompliance = ceScope !== 'checklist-only'
+  const runChecklist = ceScope !== 'compliance-only'
 
   // Step 0: Register the application PDF in documents/ so the page viewer can serve it
   let applicationId = null
@@ -57,17 +60,30 @@ export async function ceReview(ceData, appName, appPath, yearCode, fyLabel, fund
   }
   logS(`User guide: ${checklistData.sections.length} sections`)
 
-  // Run compliance comparison
-  const { result: ceResult, mainSectionNumbers } = await runCECompliance(ceData, checklistData, ctx)
-  appResult.ceCompliance = ceResult.comparison?.overallCompliance
-  appResult.ceSections = ceResult.comparison?.sections?.length
+  // Run compliance comparison (if scope includes it)
+  let ceResult = { success: true, comparison: { overallCompliance: 0, sections: [], summary: 'Skipped (ce-scope)' } }
+  let mainSectionNumbers = []
+  if (runCompliance) {
+    const compResult = await runCECompliance(ceData, checklistData, ctx)
+    ceResult = compResult.result
+    mainSectionNumbers = compResult.mainSectionNumbers
+    appResult.ceCompliance = ceResult.comparison?.overallCompliance
+    appResult.ceSections = ceResult.comparison?.sections?.length
+  } else {
+    log('⏭️  Skipping compliance report (ce-scope: checklist-only)')
+  }
 
-  // Run checklist Q&A
-  const qaResults = await runCEChecklist(ceData, ctx)
-  const stdSummary = qaResults.standard?.summary
-  const psqSummary = qaResults.programSpecific?.summary
-  appResult.ceStdSummary = stdSummary ? `Y:${stdSummary.yesCount || 0}/N:${stdSummary.noCount || 0}` : 'N/A'
-  appResult.cePsqSummary = psqSummary ? `Y:${psqSummary.yesCount || 0}/N:${psqSummary.noCount || 0}` : 'N/A'
+  // Run checklist Q&A (if scope includes it)
+  let qaResults = {}
+  if (runChecklist) {
+    qaResults = await runCEChecklist(ceData, ctx)
+    const stdSummary = qaResults.standard?.summary
+    const psqSummary = qaResults.programSpecific?.summary
+    appResult.ceStdSummary = stdSummary ? `Y:${stdSummary.yesCount || 0}/N:${stdSummary.noCount || 0}` : 'N/A'
+    appResult.cePsqSummary = psqSummary ? `Y:${psqSummary.yesCount || 0}/N:${psqSummary.noCount || 0}` : 'N/A'
+  } else {
+    log('⏭️  Skipping checklist comparison (ce-scope: compliance-only)')
+  }
 
   // Embed checklist comparison results inside the comparisonResult so the
   // ChecklistComparison tab can load them from cache (reads results[0].checklistComparison)
@@ -79,7 +95,7 @@ export async function ceReview(ceData, appName, appPath, yearCode, fyLabel, fund
 
   // Cache results for CE dashboard tiles
   const selSections = mainSectionNumbers.map(n => ({ sectionTitle: `${n}.`, checklistName: userGuideName }))
-  await cacheCEResults(appName, userGuideName, ceResult, selSections, qaResults, applicationId, ctx)
+  await cacheCEResults(appName, userGuideName, ceResult, selSections, runChecklist ? qaResults : null, applicationId, ctx)
 }
 
 /**
