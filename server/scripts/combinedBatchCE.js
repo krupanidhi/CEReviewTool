@@ -31,12 +31,11 @@ export async function ceReview(ceData, appName, appPath, yearCode, fyLabel, fund
     applicationId = await registerApplicationPDF(appPath, appName, ctx)
   }
 
-  // Resolve user guide folder: userGuides/HRSA-xx-004/
-  const fundingOppFull = fundingOpp?.full || `HRSA-${yearCode}-004`
-  const userGuideFolder = path.join(USER_GUIDES_ROOT, fundingOppFull)
+  // Resolve user guide folder: userGuides/FYxx/
+  const userGuideFolder = path.join(USER_GUIDES_ROOT, fyLabel)
   if (!(await exists(userGuideFolder))) {
     logW(`User guide folder not found: ${userGuideFolder}`)
-    appResult.ceError = `User guide folder missing: ${fundingOppFull}`
+    appResult.ceError = `User guide folder missing: ${fyLabel}`
     return
   }
 
