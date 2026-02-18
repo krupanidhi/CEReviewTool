@@ -1272,7 +1272,7 @@
               "y": 0.3247
             }
           ],
-          "confidence": 0.977
+          "confidence": 0.979
         },
         {
           "content": "2:34",
@@ -1602,7 +1602,7 @@
               "y": 0.8976
             }
           ],
-          "confidence": 0.98
+          "confidence": 0.979
         },
         {
           "content": "UPLIFT",
@@ -1932,7 +1932,7 @@
               "y": 1.5898
             }
           ],
-          "confidence": 0.99
+          "confidence": 0.989
         },
         {
           "content": "Program",
@@ -2086,7 +2086,7 @@
               "y": 1.9384
             }
           ],
-          "confidence": 0.955
+          "confidence": 0.954
         },
         {
           "content": "Action:",
@@ -3318,7 +3318,7 @@
               "y": 3.8958
             }
           ],
-          "confidence": 0.974
+          "confidence": 0.976
         },
         {
           "content": "include",
@@ -4330,7 +4330,7 @@
               "y": 5.3759
             }
           ],
-          "confidence": 0.943
+          "confidence": 0.942
         },
         {
           "content": "Supplement",
@@ -4352,7 +4352,7 @@
               "y": 5.3759
             }
           ],
-          "confidence": 0.988
+          "confidence": 0.989
         },
         {
           "content": "applicants:",
@@ -4374,7 +4374,7 @@
               "y": 5.3806
             }
           ],
-          "confidence": 0.962
+          "confidence": 0.961
         },
         {
           "content": "Does",
@@ -4396,7 +4396,7 @@
               "y": 5.3806
             }
           ],
-          "confidence": 0.989
+          "confidence": 0.99
         },
         {
           "content": "the",
@@ -4440,7 +4440,7 @@
               "y": 5.3806
             }
           ],
-          "confidence": 0.983
+          "confidence": 0.986
         },
         {
           "content": "include",
@@ -4616,7 +4616,7 @@
               "y": 5.6528
             }
           ],
-          "confidence": 0.948
+          "confidence": 0.942
         },
         {
           "content": "Yes",
@@ -4682,7 +4682,7 @@
               "y": 5.648
             }
           ],
-          "confidence": 0.776
+          "confidence": 0.777
         },
         {
           "content": "No",
@@ -4726,7 +4726,7 @@
               "y": 5.648
             }
           ],
-          "confidence": 0.641
+          "confidence": 0.64
         },
         {
           "content": "N/A",
@@ -4836,7 +4836,7 @@
               "y": 6.1159
             }
           ],
-          "confidence": 0.946
+          "confidence": 0.945
         },
         {
           "content": "the",
@@ -4880,7 +4880,7 @@
               "y": 6.1159
             }
           ],
-          "confidence": 0.986
+          "confidence": 0.984
         },
         {
           "content": "a",
@@ -5012,7 +5012,7 @@
               "y": 6.1207
             }
           ],
-          "confidence": 0.99
+          "confidence": 0.991
         },
         {
           "content": "public",
@@ -5034,7 +5034,7 @@
               "y": 6.1207
             }
           ],
-          "confidence": 0.993
+          "confidence": 0.992
         },
         {
           "content": "agency",
@@ -5078,7 +5078,7 @@
               "y": 6.1207
             }
           ],
-          "confidence": 0.986
+          "confidence": 0.985
         },
         {
           "content": "Tribal,",
@@ -5254,7 +5254,7 @@
               "y": 6.1159
             }
           ],
-          "confidence": 0.994
+          "confidence": 0.993
         },
         {
           "content": "States?",
@@ -5364,7 +5364,7 @@
               "y": 6.3355
             }
           ],
-          "confidence": 0.949
+          "confidence": 0.948
         },
         {
           "content": "Evidence",
@@ -5408,7 +5408,7 @@
               "y": 6.3355
             }
           ],
-          "confidence": 0.993
+          "confidence": 0.985
         },
         {
           "content": "Nonprofit",
@@ -5518,7 +5518,7 @@
               "y": 6.3355
             }
           ],
-          "confidence": 0.983
+          "confidence": 0.984
         },
         {
           "content": "[\"",
@@ -5606,7 +5606,7 @@
               "y": 6.5933
             }
           ],
-          "confidence": 0.95
+          "confidence": 0.945
         },
         {
           "content": "Yes",
@@ -5672,7 +5672,7 @@
               "y": 6.5933
             }
           ],
-          "confidence": 0.728
+          "confidence": 0.73
         },
         {
           "content": "]",
@@ -5738,7 +5738,7 @@
               "y": 6.5933
             }
           ],
-          "confidence": 0.644
+          "confidence": 0.643
         },
         {
           "content": "N/A",
@@ -5958,7 +5958,7 @@
               "y": 7.0612
             }
           ],
-          "confidence": 0.988
+          "confidence": 0.987
         },
         {
           "content": "role",
@@ -6068,7 +6068,7 @@
               "y": 7.0612
             }
           ],
-          "confidence": 0.981
+          "confidence": 0.98
         },
         {
           "content": "does",
@@ -6244,7 +6244,7 @@
               "y": 7.0612
             }
           ],
-          "confidence": 0.97
+          "confidence": 0.968
         },
         {
           "content": "Suggested",
@@ -8136,7 +8136,7 @@
               "y": 8.5126
             }
           ],
-          "confidence": 0.965
+          "confidence": 0.969
         },
         {
           "content": "Project",
@@ -8180,7 +8180,7 @@
               "y": 8.5126
             }
           ],
-          "confidence": 0.965
+          "confidence": 0.964
         },
         {
           "content": "[]",
@@ -8268,7 +8268,7 @@
               "y": 8.5126
             }
           ],
-          "confidence": 0.952
+          "confidence": 0.956
         },
         {
           "content": "Services",
@@ -8774,7 +8774,7 @@
               "y": 9.2478
             }
           ],
-          "confidence": 0.606
+          "confidence": 0.605
         },
         {
           "content": "and/or",
@@ -8796,7 +8796,7 @@
               "y": 9.2478
             }
           ],
-          "confidence": 0.984
+          "confidence": 0.986
         },
         {
           "content": "through",
@@ -8950,7 +8950,7 @@
               "y": 9.2478
             }
           ],
-          "confidence": 0.964
+          "confidence": 0.961
         },
         {
           "content": "the",
@@ -9148,7 +9148,7 @@
               "y": 9.3863
             }
           ],
-          "confidence": 0.684
+          "confidence": 0.685
         },
         {
           "content": "Suggested",
@@ -9192,7 +9192,7 @@
               "y": 9.6011
             }
           ],
-          "confidence": 0.971
+          "confidence": 0.972
         },
         {
           "content": "Form",
@@ -9214,7 +9214,7 @@
               "y": 9.6059
             }
           ],
-          "confidence": 0.984
+          "confidence": 0.983
         },
         {
           "content": "5A:",
@@ -9236,7 +9236,7 @@
               "y": 9.6059
             }
           ],
-          "confidence": 0.978
+          "confidence": 0.977
         },
         {
           "content": "Services",
@@ -9280,7 +9280,7 @@
               "y": 9.6011
             }
           ],
-          "confidence": 0.978
+          "confidence": 0.979
         },
         {
           "content": "[",
@@ -9346,7 +9346,7 @@
               "y": 9.8637
             }
           ],
-          "confidence": 0.93
+          "confidence": 0.932
         },
         {
           "content": "]",
@@ -9368,7 +9368,7 @@
               "y": 9.8637
             }
           ],
-          "confidence": 0.969
+          "confidence": 0.97
         },
         {
           "content": "Yes",
@@ -9412,7 +9412,7 @@
               "y": 9.8637
             }
           ],
-          "confidence": 0.602
+          "confidence": 0.601
         },
         {
           "content": "No",
@@ -9676,7 +9676,7 @@
               "y": 10.3364
             }
           ],
-          "confidence": 0.989
+          "confidence": 0.991
         },
         {
           "content": "If",
@@ -9698,7 +9698,7 @@
               "y": 10.3364
             }
           ],
-          "confidence": 0.897
+          "confidence": 0.896
         },
         {
           "content": "a",
@@ -9742,7 +9742,7 @@
               "y": 10.3364
             }
           ],
-          "confidence": 0.97
+          "confidence": 0.969
         },
         {
           "content": "is",
@@ -10226,7 +10226,7 @@
               "y": 10.4748
             }
           ],
-          "confidence": 0.946
+          "confidence": 0.947
         },
         {
           "content": "at",
@@ -10336,7 +10336,7 @@
               "y": 10.8043
             }
           ],
-          "confidence": 0.587
+          "confidence": 0.585
         },
         {
           "content": "...",
@@ -30098,38 +30098,13 @@
       ]
     }
   ],
-  "tableOfContents": [
-    {
-      "id": "section_12",
-      "title": "12. Does the applicant propose to serve patients for each Service Type listed in the SAAT? Suggested Resource(s): SAAT[ | Form 1A: General Information Worksheet[\" [ X ] Yes [ _] No [_] N/A",
-      "pageNumber": 2,
-      "level": 1
-    }
-  ],
+  "tableOfContents": [],
   "sections": [
-    {
-      "title": "Completeness and Eligibility Checklist",
-      "pageNumber": 1,
-      "content": [
-        {
-          "text": "Action Taken On: 1/16/2026 3:21:02 PM ET",
-          "pageNumber": 1
-        },
-        {
-          "text": "As of 01/22/2026 02:33:53 PM",
-          "pageNumber": 1
-        }
-      ],
-      "role": "sectionHeading",
-      "sectionNumber": "",
-      "sectionType": "requirement",
-      "depth": 0
-    },
     {
       "title": "1. Did the applicant include a Project Narrative? [ X ] Yes [_] No",
       "pageNumber": 1,
       "content": [],
-      "role": "numberedSection",
+      "role": "detected",
       "sectionNumber": "1",
       "sectionType": "organizational_header",
       "depth": 1
@@ -30143,7 +30118,7 @@
           "pageNumber": 1
         }
       ],
-      "role": "numberedSection",
+      "role": "detected",
       "sectionNumber": "2",
       "sectionType": "organizational_header",
       "depth": 1
@@ -30152,7 +30127,7 @@
       "title": "3. New applicant: Does the application include Attachment 11: Evidence of Nonprofit or Public Agency Status? [ X ] Yes [ _ ] No [_] N/A",
       "pageNumber": 1,
       "content": [],
-      "role": "numberedSection",
+      "role": "detected",
       "sectionNumber": "3",
       "sectionType": "organizational_header",
       "depth": 1
@@ -30160,13 +30135,8 @@
     {
       "title": "4. New and Competing Supplement applicants: Does the application include Attachment 12: Operational Plan? [ X ] Yes [ _] No [_] N/A",
       "pageNumber": 1,
-      "content": [
-        {
-          "text": "5. New applicant: Is the applicant a private, nonprofit entity or a public agency (including Tribal, and urban Indian organizations) in the United States? Suggested Resource(s): Attachment 11: Evidence of Nonprofit or Public Agency Status [\" [ X ] Yes [ _ ] No [_] N/A",
-          "pageNumber": 1
-        }
-      ],
-      "role": "numberedSection",
+      "content": [],
+      "role": "detected",
       "sectionNumber": "4",
       "sectionType": "organizational_header",
       "depth": 1
@@ -30182,64 +30152,10 @@
         {
           "text": "[ X ] Yes [_] No",
           "pageNumber": 1
-        },
-        {
-          "text": "7. Does the applicant propose to operate a health center that makes all required primary health care services available and accessible in the service area, either directly or through established arrangements, without regard for ability to pay? (Note that applicants may not propose to provide ONLY a single service or any subset of the required primary health care services.)",
-          "pageNumber": 1
-        },
-        {
-          "text": "Suggested Resource(s): Project Narrative [] | Form 5A: Services Provided[\" [ X ] Yes [_] No",
-          "pageNumber": 1
         }
       ],
-      "role": "numberedSection",
+      "role": "detected",
       "sectionNumber": "6",
-      "sectionType": "organizational_header",
-      "depth": 1
-    },
-    {
-      "title": "8. Does the applicant propose to make General Primary Medical Care available directly (Column I) and/or through formal written contractual agreements in which the health center pays for the service (Column II)?",
-      "pageNumber": 1,
-      "content": [
-        {
-          "text": "Suggested Resource(s): Form 5A: Services Provided [",
-          "pageNumber": 1
-        },
-        {
-          "text": "[ X ] Yes [_] No",
-          "pageNumber": 1
-        },
-        {
-          "text": "9. Does the applicant propose to make services accessible to all? If a sub-population is targeted (e.g., a school-based site that targets school-aged children), will health center services be available and accessible to others seeking services at the proposed site(s)?",
-          "pageNumber": 1
-        },
-        {
-          "text": "https://grants2.hrsa.gov/WebGAM2Internal/Interface/PrintForm.aspx?RV=6231706f-c4bb-43e6-8185-3b03e8cc9fdb&RTC=19&PrintPage=False&IsPo ...",
-          "pageNumber": 1
-        },
-        {
-          "text": "1/3",
-          "pageNumber": 1
-        },
-        {
-          "text": "1/22/26, 2:34 PM",
-          "pageNumber": 2
-        },
-        {
-          "text": "Suggested Resource(s): Project Narrative [\"",
-          "pageNumber": 2
-        },
-        {
-          "text": "Print All | SA | HRSA EHBs",
-          "pageNumber": 2
-        },
-        {
-          "text": "[ X ] Yes [ _] No",
-          "pageNumber": 2
-        }
-      ],
-      "role": "numberedSection",
-      "sectionNumber": "8",
       "sectionType": "organizational_header",
       "depth": 1
     },
@@ -30252,22 +30168,8 @@
           "pageNumber": 2
         }
       ],
-      "role": "numberedSection",
+      "role": "detected",
       "sectionNumber": "10",
-      "sectionType": "organizational_header",
-      "depth": 1
-    },
-    {
-      "title": "11. Is the total number of unduplicated patients projected to be served in the assessment period on Form 1A at least 75 percent of the SAAT Patient Target? Suggested Resource(s): SAAT[\" | Form 1A: General Information Worksheet[\"",
-      "pageNumber": 2,
-      "content": [
-        {
-          "text": "[ X ] Yes [ _ ] No [_] N/A",
-          "pageNumber": 2
-        }
-      ],
-      "role": "numberedSection",
-      "sectionNumber": "11",
       "sectionType": "organizational_header",
       "depth": 1
     },
@@ -30284,17 +30186,8 @@
           "pageNumber": 2
         }
       ],
-      "role": "numberedSection",
+      "role": "detected",
       "sectionNumber": "12",
-      "sectionType": "organizational_header",
-      "depth": 1
-    },
-    {
-      "title": "13. Does the applicant request annual SAC funding that does NOT exceed the SAAT Total Funding for the service area? Suggested Resource(s): SF-424A[\" | Budget Narrative[? | SAATE\" [ X ] Yes [ _ ] No [_]N/A",
-      "pageNumber": 2,
-      "content": [],
-      "role": "numberedSection",
-      "sectionNumber": "13",
       "sectionType": "organizational_header",
       "depth": 1
     },
@@ -30315,17 +30208,8 @@
           "pageNumber": 2
         }
       ],
-      "role": "numberedSection",
+      "role": "detected",
       "sectionNumber": "14",
-      "sectionType": "organizational_header",
-      "depth": 1
-    },
-    {
-      "title": "15. Does the applicant propose to serve patients for each population type listed in the SAAT? Suggested Resource(s): SF-424A[\" | SAAT[\" | Form 1A: General Information Worksheet[\" [ X ] Yes [ _] No [_] N/A",
-      "pageNumber": 2,
-      "content": [],
-      "role": "numberedSection",
-      "sectionNumber": "15",
       "sectionType": "organizational_header",
       "depth": 1
     },
@@ -30348,141 +30232,12 @@
         {
           "text": "The applicant did not include zip codes where at least 75% of current patients reside.",
           "pageNumber": 2
-        },
-        {
-          "text": "17. New or competing supplement applicant: Is at least one new full-time (operational 40 hours or more per week) permanent, fixed building site with a verifiable street address proposed on Form 5B? * If funding is only requested for MSAW, the applicant may propose a new full-time seasonal (rather than permanent) service delivery site.",
-          "pageNumber": 2
-        },
-        {
-          "text": "Suggested Resource(s): Form 5B: Service Sites [\" [ X ] Yes [ _ ] No [_] N/A",
-          "pageNumber": 2
-        },
-        {
-          "text": "18. New or competing supplement applicant requesting RPH funding: Does the applicant demonstrate consultation with residents of public housing in the preparation of the SAC application and ensure ongoing consultation with the residents regarding the planning and administration of the health center?",
-          "pageNumber": 2
-        },
-        {
-          "text": "Suggested Resource(s): Project Narrative [?",
-          "pageNumber": 2
-        },
-        {
-          "text": "[ _ ] Yes [ X ] No [_]N/A",
-          "pageNumber": 2
-        },
-        {
-          "text": "https://grants2.hrsa.gov/WebGAM2Internal/Interface/PrintForm.aspx?RV=6231706f-c4bb-43e6-8185-3b03e8cc9fdb&RTC=19&PrintPage=False&IsPo ...",
-          "pageNumber": 2
-        },
-        {
-          "text": "2/3",
-          "pageNumber": 2
         }
       ],
-      "role": "numberedSection",
+      "role": "detected",
       "sectionNumber": "16",
       "sectionType": "organizational_header",
       "depth": 1
-    },
-    {
-      "title": "1/22/26, 2:34 PM",
-      "pageNumber": 3,
-      "content": [],
-      "role": "sectionHeading",
-      "sectionNumber": "1",
-      "sectionType": "organizational_header",
-      "depth": 1
-    },
-    {
-      "title": "Print All | SA | HRSA EHBs",
-      "pageNumber": 3,
-      "content": [
-        {
-          "text": "The applicant did not demonstrate that the applicant consulted with public housing residents in planning the new sites or ensure ongoing input from these residents.",
-          "pageNumber": 3
-        },
-        {
-          "text": "19. New or competing supplement applicant requesting HP and/or RPH funding: Does the applicant attest on the Summary Page that funding will be utilized to supplement, and not supplant, the expenditures of the health center and the value of in-kind contributions for the delivery of services to these populations?",
-          "pageNumber": 3
-        },
-        {
-          "text": "Suggested Resource(s): Summary Pager?",
-          "pageNumber": 3
-        },
-        {
-          "text": "[ _] Yes [ X ] No [_]N/A",
-          "pageNumber": 3
-        },
-        {
-          "text": "The applicant did not indicate on the summary page that RPH funds will be used to supplement, and not supplant, current expenditures or in-kind contributions for services to that population.",
-          "pageNumber": 3
-        },
-        {
-          "text": "Patient Projection Funding Reduction Check",
-          "pageNumber": 3
-        },
-        {
-          "text": "As of 01/22/2026 02:33:58 PM",
-          "pageNumber": 3
-        },
-        {
-          "text": "If the Form 1A patient projection is less than 95% of the SAAT Patient Target, is the annual SAC funding request reduced\nNarrative? * This question does not impact application completeness or eligibility.",
-          "pageNumber": 3
-        },
-        {
-          "text": "accordingly in the SF-424A and Budget",
-          "pageNumber": 3
-        },
-        {
-          "text": "Suggested Resource(s): SF-424A[\" | Budget Narrative[? | SAAT[\" | Patient and Budget Calculator[\"",
-          "pageNumber": 3
-        },
-        {
-          "text": "[ _ ] Yes [ _ ] No [ X ] N/A",
-          "pageNumber": 3
-        }
-      ],
-      "role": "title",
-      "sectionNumber": "",
-      "sectionType": "requirement",
-      "depth": 0
-    },
-    {
-      "title": "Recommendations",
-      "pageNumber": 3,
-      "content": [
-        {
-          "text": "As of 01/22/2026 02:34:00 PM",
-          "pageNumber": 3
-        },
-        {
-          "text": "Is the application complete based on the required documents mentioned in the Completeness and Eligibility Checklist?",
-          "pageNumber": 3
-        },
-        {
-          "text": "[ X ] Yes [_ ] No",
-          "pageNumber": 3
-        },
-        {
-          "text": "Based on BPHC OPPD review, is the applicant eligible? [ _ ] Yes [ X ] No",
-          "pageNumber": 3
-        },
-        {
-          "text": "Close Window",
-          "pageNumber": 3
-        },
-        {
-          "text": "https://grants2.hrsa.gov/WebGAM2Internal/Interface/PrintForm.aspx?RV=6231706f-c4bb-43e6-8185-3b03e8cc9fdb&RTC=19&PrintPage=False&IsPo ...",
-          "pageNumber": 3
-        },
-        {
-          "text": "3/3",
-          "pageNumber": 3
-        }
-      ],
-      "role": "sectionHeading",
-      "sectionNumber": "",
-      "sectionType": "requirement",
-      "depth": 0
     }
   ],
   "keyValuePairs": [],
@@ -30557,7 +30312,7 @@
   "figures": [],
   "metadata": {
     "pageCount": 3,
-    "analyzedAt": "2026-02-13T20:52:07.900Z",
+    "analyzedAt": "2026-02-17T22:23:44.001Z",
     "extractionQuality": "production"
   }
 }

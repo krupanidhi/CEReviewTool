@@ -5,202 +5,223 @@
       "question": "Did the applicant include a Project Narrative?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 1,
-      "source": "document_intelligence",
       "suggestedResources": "",
       "requiresSAAT": false,
-      "pageReference": 1
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 2,
       "question": "Public Agencies: Does the application include Attachment 6: Co-Applicant Agreement?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 2,
-      "source": "document_intelligence",
       "suggestedResources": "",
       "requiresSAAT": false,
-      "pageReference": 1
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 3,
       "question": "New applicant: Does the application include Attachment 11: Evidence of Nonprofit or Public Agency Status?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 3,
-      "source": "document_intelligence",
       "suggestedResources": "",
       "requiresSAAT": false,
-      "pageReference": 1
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 4,
       "question": "New and Competing Supplement applicants: Does the application include Attachment 12: Operational Plan?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 4,
-      "source": "document_intelligence",
-      "suggestedResources": "Attachment 11: Evidence of Nonprofit or Public Agency Status [\"",
+      "suggestedResources": "",
       "requiresSAAT": false,
-      "pageReference": 1
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 5,
       "question": "New applicant: Is the applicant a private, nonprofit entity or a public agency (including Tribal, and urban Indian organizations) in the United States?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 5,
-      "source": "document_intelligence",
-      "suggestedResources": "Attachment 11: Evidence of Nonprofit or Public Agency Status [\"",
+      "suggestedResources": "Attachment 11: Evidence of Nonprofit or Public Agency Status",
       "requiresSAAT": false,
-      "pageReference": 1
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 6,
       "question": "Does the applicant propose to perform a substantive role in the project (i.e., does not apply on behalf of another organization)?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 6,
-      "source": "document_intelligence",
-      "suggestedResources": "Budget Narrative[\" | Attachment 2: Bylaws[] | Form 5A: Services Provided[] | Form 8: Health Center Agreements[ | Project Narrative [] | Form 5A: Services Provided[\"",
+      "suggestedResources": "Budget Narrative | Attachment 2: Bylaws | Form 5A: Services Provided | Form 8: Health Center Agreements",
       "requiresSAAT": false,
-      "pageReference": 1
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 7,
       "question": "Does the applicant propose to operate a health center that makes all required primary health care services available and accessible in the service area, either directly or through established arrangements, without regard for ability to pay? (Note that applicants may not propose to provide ONLY a single service or any subset of the required primary health care services.)",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 7,
-      "source": "document_intelligence",
-      "suggestedResources": "Project Narrative [] | Form 5A: Services Provided[\"",
+      "suggestedResources": "Project Narrative | Form 5A: Services Provided",
       "requiresSAAT": false,
-      "pageReference": 1
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 8,
       "question": "Does the applicant propose to make General Primary Medical Care available directly (Column I) and/or through formal written contractual agreements in which the health center pays for the service (Column II)?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 8,
-      "source": "document_intelligence",
-      "suggestedResources": "Form 5A: Services Provided [ | Project Narrative [\" Print All | SA | HRSA EHBs",
+      "suggestedResources": "Form 5A: Services Provided",
       "requiresSAAT": false,
-      "pageReference": 1
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 9,
-      "question": "Does the applicant propose to make services accessible to all? If a sub-population is targeted (e.g., a school-based site that targets school-aged children), will health center services be available and accessible to others seeking services at the proposed site(s)? ... 1/3 1/22/26, 2:34 PM",
+      "question": "Does the applicant propose to make services accessible to all? If a sub-population is targeted (e.g., a school-based site that targets school-aged children), will health center services be available and accessible to others seeking services at the proposed site(s)?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 9,
-      "source": "document_intelligence",
-      "suggestedResources": "Project Narrative [\" Print All | SA | HRSA EHBs",
+      "suggestedResources": "Project Narrative",
       "requiresSAAT": false,
-      "pageReference": 1
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 10,
       "question": "Does the applicant propose a service area announced under this NOFO number? If the answer to Question 10 is \"No\", select \"N/A\" for Questions 11 through 15.",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 10,
-      "source": "document_intelligence",
-      "suggestedResources": "Summary Pager? | SAAT [ | Project Abstract [] | Project Narrativer? | Form 5B: Service Sites [\"",
+      "suggestedResources": "Summary Page | SAAT | Project Abstract | Project Narrative | Form 5B: Service Sites",
       "requiresSAAT": true,
-      "pageReference": 2
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 11,
       "question": "Is the total number of unduplicated patients projected to be served in the assessment period on Form 1A at least 75 percent of the SAAT Patient Target?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 11,
-      "source": "document_intelligence",
-      "suggestedResources": "SAAT[\" | Form 1A: General Information Worksheet[\"",
+      "suggestedResources": "SAAT | Form 1A: General Information Worksheet",
       "requiresSAAT": true,
-      "pageReference": 2
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 12,
       "question": "Does the applicant propose to serve patients for each Service Type listed in the SAAT?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 12,
-      "source": "document_intelligence",
-      "suggestedResources": "SAAT[ | Form 1A: General Information Worksheet[\"",
+      "suggestedResources": "SAAT | Form 1A: General Information Worksheet",
       "requiresSAAT": true,
-      "pageReference": 2
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 13,
       "question": "Does the applicant request annual SAC funding that does NOT exceed the SAAT Total Funding for the service area?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 13,
-      "source": "document_intelligence",
-      "suggestedResources": "SF-424A[\" | Budget Narrative[? | SAATE\"",
+      "suggestedResources": "SF-424A | Budget Narrative | SAAT",
       "requiresSAAT": true,
-      "pageReference": 2
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 14,
       "question": "Does the applicant maintain the current funding distribution (i.e., CHC, MSAW, HP, RPH) from the SAAT?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 14,
-      "source": "document_intelligence",
-      "suggestedResources": "SF-424AL\" | SAATE\"",
+      "suggestedResources": "SF-424A | SAAT",
       "requiresSAAT": true,
-      "pageReference": 2
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 15,
       "question": "Does the applicant propose to serve patients for each population type listed in the SAAT?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 15,
-      "source": "document_intelligence",
-      "suggestedResources": "SF-424A[\" | SAAT[\" | Form 1A: General Information Worksheet[\"",
+      "suggestedResources": "SF-424A | SAAT | Form 1A: General Information Worksheet",
       "requiresSAAT": true,
-      "pageReference": 2
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 16,
-      "question": "New or competing supplement applicant: For Form 5B: Service Sites, does the applicant include:",
+      "question": "New or competing supplement applicant: For Form 5B: Service Sites, does the applicant include: · Service area zip codes where the zip code patient percentages on the SAAT total at least 75 percent; or . All service area zip codes if the sum of all zip code patient percentages on the SAAT is less than 75 percent?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 16,
-      "source": "document_intelligence",
-      "suggestedResources": "Form 5B: Service Sites[? | SAATE | Form 5B: Service Sites [\" | Project Narrative [?",
+      "suggestedResources": "Form 5B: Service Sites | SAAT",
       "requiresSAAT": true,
-      "pageReference": 2
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 17,
       "question": "New or competing supplement applicant: Is at least one new full-time (operational 40 hours or more per week) permanent, fixed building site with a verifiable street address proposed on Form 5B? * If funding is only requested for MSAW, the applicant may propose a new full-time seasonal (rather than permanent) service delivery site.",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 17,
-      "source": "document_intelligence",
-      "suggestedResources": "Form 5B: Service Sites [\"",
+      "suggestedResources": "Form 5B: Service Sites",
       "requiresSAAT": false,
-      "pageReference": 2
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 18,
       "question": "New or competing supplement applicant requesting RPH funding: Does the applicant demonstrate consultation with residents of public housing in the preparation of the SAC application and ensure ongoing consultation with the residents regarding the planning and administration of the health center?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 18,
-      "source": "document_intelligence",
-      "suggestedResources": "Project Narrative [?",
+      "suggestedResources": "Project Narrative",
       "requiresSAAT": false,
-      "pageReference": 2
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 19,
       "question": "New or competing supplement applicant requesting HP and/or RPH funding: Does the applicant attest on the Summary Page that funding will be utilized to supplement, and not supplant, the expenditures of the health center and the value of in-kind contributions for the delivery of services to these populations?",
       "section": "Completeness and Eligibility Checklist",
       "originalNumber": 19,
-      "source": "document_intelligence",
-      "suggestedResources": "Summary Pager? | SF-424A[\" | Budget Narrative[? | SAAT[\" | Patient and Budget Calculator[\"",
-      "requiresSAAT": true,
-      "pageReference": 3
+      "suggestedResources": "Summary Page",
+      "requiresSAAT": false,
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 20,
-      "question": "If the Form 1A patient projection is less than 95% of the SAAT Patient Target, is the annual SAC funding request reduced Narrative? * This question does not impact application completeness or eligibility. accordingly in the SF-424A and Budget",
+      "question": "If the Form 1A patient projection is less than 95% of the SAAT Patient Target, is the annual SAC funding request reduced accordingly in the SF-424A and Budget Narrative? * This question does not impact application completeness or eligibility.",
       "section": "Patient Projection Funding Reduction Check",
       "originalNumber": null,
-      "source": "document_intelligence",
-      "suggestedResources": "SF-424A[\" | Budget Narrative[? | SAAT[\" | Patient and Budget Calculator[\"",
+      "suggestedResources": "SF-424A | Budget Narrative | SAAT | Patient and Budget Calculator",
       "requiresSAAT": true,
-      "pageReference": 3
+      "source": "openai_extraction",
+      "pageReference": null
+    },
+    {
+      "number": 21,
+      "question": "Is the application complete based on the required documents mentioned in the Completeness and Eligibility Checklist?",
+      "section": "Recommendations",
+      "originalNumber": null,
+      "suggestedResources": "",
+      "requiresSAAT": false,
+      "source": "openai_extraction",
+      "pageReference": null
+    },
+    {
+      "number": 22,
+      "question": "Based on BPHC OPPD review, is the applicant eligible?",
+      "section": "Recommendations",
+      "originalNumber": null,
+      "suggestedResources": "",
+      "requiresSAAT": false,
+      "source": "openai_extraction",
+      "pageReference": null
     }
   ],
   "metadata": {},
-  "parsedAt": "2026-02-17T01:14:40.703Z"
+  "parsedAt": "2026-02-17T22:23:51.335Z",
+  "source": "openai_extraction"
 }

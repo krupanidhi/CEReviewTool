@@ -2,12 +2,19 @@
   "document": {
     "metadata": {
       "pageCount": 2,
-      "analyzedAt": "2026-02-13T20:52:07.817Z",
-      "totalSections": 4,
+      "analyzedAt": "2026-02-17T22:23:48.466Z",
+      "totalSections": 3,
       "totalTables": 0,
-      "totalFormFields": 39
+      "totalFormFields": 36
     },
-    "tableOfContents": [],
+    "tableOfContents": [
+      {
+        "id": "section_3",
+        "title": "3. Other comments",
+        "pageReference": 1,
+        "level": 1
+      }
+    ],
     "sections": [
       {
         "sectionNumber": "1",
@@ -159,7 +166,7 @@
         "title": "3. Other comments",
         "type": "organizational_header",
         "pageReference": 1,
-        "content": "Program Specific Checklist Questions\nCompletion Status: Complete\nProgram Specific Recommendation: Eligible\n- Program Office Recommendation\nPO Recommendation\nName: Ashley Vigil\nJustification:\nDate: 11/13/2025 10:04:03 AM\nRecommendation: Eligible",
+        "content": "Program Specific Checklist Questions\nCompletion Status: Complete\nProgram Specific Recommendation: Eligible\n- Program Office Recommendation\nPO Recommendation\nName: Ashley Vigil\nJustification:\nDate: 11/13/2025 10:04:03 AM\nRecommendation: Eligible\nGMS Recommendation\nName: Joi, Grymes-Johnson Justification:\nDate: 11/13/2025 10:38:53 AM\nRecommendation: Eligible\nThe information provided within the application adheres to the Notice of Funding Opportunity.\nClose Window",
         "formFields": [
           {
             "field": "Completion Status",
@@ -215,31 +222,6 @@
             "field": "Funding Cycle Code",
             "value": "9856",
             "pageReference": 1
-          }
-        ],
-        "tables": []
-      },
-      {
-        "sectionNumber": null,
-        "title": "GMS Recommendation",
-        "type": "requirement",
-        "pageReference": 2,
-        "content": "Name: Joi, Grymes-Johnson Justification:\nDate: 11/13/2025 10:38:53 AM\nRecommendation: Eligible\nThe information provided within the application adheres to the Notice of Funding Opportunity.\nClose Window",
-        "formFields": [
-          {
-            "field": "Name",
-            "value": "Joi, Grymes-Johnson Justification:",
-            "pageReference": 2
-          },
-          {
-            "field": "Date",
-            "value": "11/13/2025 10:38:53 AM",
-            "pageReference": 2
-          },
-          {
-            "field": "Recommendation",
-            "value": "Eligible",
-            "pageReference": 2
           }
         ],
         "tables": []

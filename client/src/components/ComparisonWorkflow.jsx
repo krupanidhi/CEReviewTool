@@ -10,6 +10,7 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
   const [selectedSections, setSelectedSections] = useState([])
   const [comparing, setComparing] = useState(false)
   const [error, setError] = useState(null)
+  const [reviewMode, setReviewMode] = useState('checklist') // 'checklist' | 'compliance' | 'both'
 
   useEffect(() => {
     if (cachedDocs) {
@@ -56,6 +57,10 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
 
       const results = []
 
+      const runCompliance = reviewMode === 'compliance' || reviewMode === 'both'
+      const runChecklist = reviewMode === 'checklist' || reviewMode === 'both'
+      log('info', `Review mode: ${reviewMode} (compliance: ${runCompliance}, checklist: ${runChecklist})`)
+
       for (const application of applications) {
         const applicationData = application.analysis?.data || application.data
         log('info', `Application: ${application.originalName || application.name}`)
@@ -77,10 +82,14 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
 
           log('info', `Extracted section numbers: ${selectedSectionNumbers.join(', ')}`)
 
-          // ---- SINGLE-CALL PROCESSING (matching Prefunding Review approach) ----
+          // ---- COMPLIANCE REPORT ----
           let allChunkSections = []
           let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+          let dedupedSections = []
+          let overallCompliance = 0
+          let singleCallSuccess = false
 
+         if (runCompliance) {
           // Step 1: Collect ALL sections under selected main numbers
           const allSelectedSections = checklistData.sections?.filter(section => {
             const sectionTitle = section.title || ''
@@ -124,7 +133,7 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
           setProgress({ current: 0, total: 1, currentSection: 'Compliance Analysis — processing all sections...', indeterminate: true })
           log('info', `Sending ALL ${leafSections.length} leaf sections in ONE API call...`)
 
-          let singleCallSuccess = false
+          singleCallSuccess = false
           const singleCallStart = performance.now()
 
           for (let attempt = 1; attempt <= 2; attempt++) {
@@ -295,7 +304,7 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
               seenSections.set(key, section)
             }
           })
-          const dedupedSections = [...seenSections.values()]
+          dedupedSections = [...seenSections.values()]
           if (dedupedSections.length < filteredSections.length) {
             log('warn', `Deduplicated: ${filteredSections.length} → ${dedupedSections.length} sections (removed ${filteredSections.length - dedupedSections.length} duplicates)`)
           }
@@ -304,18 +313,22 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
           const complianceElapsed = ((performance.now() - workflowStart) / 1000).toFixed(1)
           const applicableSections = dedupedSections.filter(s => s.status !== 'not_applicable')
           const metSections = applicableSections.filter(s => s.status === 'met')
-          const overallCompliance = applicableSections.length > 0
+          overallCompliance = applicableSections.length > 0
             ? Math.round((metSections.length / applicableSections.length) * 100)
             : 0
 
           log('info', `✅ Compliance complete: ${allChunkSections.length} sections, ${overallCompliance}% compliance in ${complianceElapsed}s`)
           log('info', `Token usage — prompt: ${totalUsage.promptTokens}, completion: ${totalUsage.completionTokens}, total: ${totalUsage.totalTokens}`)
+         } else {
+          log('info', 'Skipping Compliance Report (reviewMode: ' + reviewMode + ')')
+         }
 
-          // ---- AUTO-RUN CHECKLIST COMPARISON ----
+          // ---- CHECKLIST COMPARISON ----
           let checklistComparisonResults = null
+         if (runChecklist) {
           try {
             setProgress({ current: 0, total: 2, currentSection: 'Checklist Comparison — AI is analyzing both sections in parallel...', indeterminate: true })
-            log('info', '===== AUTO-RUN CHECKLIST COMPARISON =====')
+            log('info', '===== CHECKLIST COMPARISON =====')
             const qaStart = performance.now()
 
             // Run in parallel for speed, track completion with counter
@@ -352,8 +365,11 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
           } catch (qaErr) {
             log('error', `Checklist comparison error: ${qaErr.message}`)
           }
+         } else {
+          log('info', 'Skipping Checklist Comparison (reviewMode: ' + reviewMode + ')')
+         }
 
-          const processingMode = singleCallSuccess ? 'single-call' : 'chunked-fallback'
+          const processingMode = !runCompliance ? 'checklist-only' : singleCallSuccess ? 'single-call' : 'chunked-fallback'
           const mergedResult = {
             success: true,
             comparison: {
@@ -373,7 +389,7 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
             metadata: {
               model: processingMode,
               comparedAt: new Date().toISOString(),
-              leafSections: leafSections.length,
+              leafSections: runCompliance ? leafSections.length : 0,
               totalSections: dedupedSections.length,
               rawSections: allChunkSections.length,
               duplicatesRemoved: allChunkSections.length - dedupedSections.length
@@ -473,6 +489,31 @@ export default function ComparisonWorkflow({ onComparisonComplete, cachedDocs, o
       {/* Step 2: Select Sections */}
       {step === 2 && uploadedDocs && (
         <div className="space-y-6">
+          {/* Review Mode Selection */}
+          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+            <label className="block text-sm font-medium text-gray-300 mb-3">Review Type</label>
+            <div className="flex space-x-3">
+              {[
+                { value: 'checklist', label: 'Checklist Comparison', desc: 'Fast — Q&A analysis only' },
+                { value: 'compliance', label: 'Compliance Report', desc: 'Detailed section-by-section review' },
+                { value: 'both', label: 'Both', desc: 'Full analysis (takes longer)' }
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setReviewMode(opt.value)}
+                  className={`flex-1 p-3 rounded-lg border text-left transition-colors ${
+                    reviewMode === opt.value
+                      ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                      : 'border-slate-600 bg-slate-700/50 text-gray-400 hover:border-slate-500'
+                  }`}
+                >
+                  <div className="font-medium text-sm">{opt.label}</div>
+                  <div className="text-xs mt-1 opacity-70">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <ChecklistSelector 
             checklists={uploadedDocs.checklists}
             onSelectionChange={handleSelectionChange}

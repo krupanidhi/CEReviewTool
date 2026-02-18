@@ -1094,7 +1094,7 @@
               "y": 1.3466
             }
           ],
-          "confidence": 0.994
+          "confidence": 0.995
         },
         {
           "content": "PRACTICE",
@@ -1512,7 +1512,7 @@
               "y": 1.9197
             }
           ],
-          "confidence": 0.971
+          "confidence": 0.972
         },
         {
           "content": "Grant",
@@ -2216,7 +2216,7 @@
               "y": 3.486
             }
           ],
-          "confidence": 0.979
+          "confidence": 0.983
         },
         {
           "content": "the",
@@ -2260,7 +2260,7 @@
               "y": 3.486
             }
           ],
-          "confidence": 0.954
+          "confidence": 0.955
         },
         {
           "content": "[X]",
@@ -2436,7 +2436,7 @@
               "y": 4.3598
             }
           ],
-          "confidence": 0.926
+          "confidence": 0.925
         },
         {
           "content": "the",
@@ -2634,7 +2634,7 @@
               "y": 4.3646
             }
           ],
-          "confidence": 0.977
+          "confidence": 0.974
         },
         {
           "content": "guidance",
@@ -2678,7 +2678,7 @@
               "y": 4.3646
             }
           ],
-          "confidence": 0.987
+          "confidence": 0.988
         },
         {
           "content": "non-profit,",
@@ -2744,7 +2744,7 @@
               "y": 4.3646
             }
           ],
-          "confidence": 0.984
+          "confidence": 0.987
         },
         {
           "content": "[X]",
@@ -3162,7 +3162,7 @@
               "y": 6.184
             }
           ],
-          "confidence": 0.986
+          "confidence": 0.987
         },
         {
           "content": "Eligible",
@@ -3404,7 +3404,7 @@
               "y": 7.4781
             }
           ],
-          "confidence": 0.976
+          "confidence": 0.975
         },
         {
           "content": "Date:",
@@ -4156,7 +4156,7 @@
               "y": 0.8787
             }
           ],
-          "confidence": 0.973
+          "confidence": 0.972
         },
         {
           "content": "Eligible",
@@ -4310,7 +4310,7 @@
               "y": 1.3228
             }
           ],
-          "confidence": 0.991
+          "confidence": 0.99
         },
         {
           "content": "adheres",
@@ -4514,7 +4514,14 @@
       "selectionMarks": []
     }
   ],
-  "tableOfContents": [],
+  "tableOfContents": [
+    {
+      "id": "section_3",
+      "title": "3. Other comments",
+      "pageNumber": 1,
+      "level": 1
+    }
+  ],
   "sections": [
     {
       "title": "1. Does the application contain all required attachments listed in the guidance?",
@@ -4525,7 +4532,7 @@
           "pageNumber": 1
         }
       ],
-      "role": "numberedSection",
+      "role": "detected",
       "sectionNumber": "1",
       "sectionType": "organizational_header",
       "depth": 1
@@ -4547,7 +4554,7 @@
           "pageNumber": 1
         }
       ],
-      "role": "numberedSection",
+      "role": "detected",
       "sectionNumber": "2",
       "sectionType": "organizational_header",
       "depth": 1
@@ -4591,17 +4598,11 @@
         {
           "text": "Recommendation: Eligible",
           "pageNumber": 1
-        }
-      ],
-      "role": "sectionHeading",
-      "sectionNumber": "3",
-      "sectionType": "organizational_header",
-      "depth": 1
-    },
-    {
-      "title": "GMS Recommendation",
-      "pageNumber": 2,
-      "content": [
+        },
+        {
+          "text": "GMS Recommendation",
+          "pageNumber": 2
+        },
         {
           "text": "Name: Joi, Grymes-Johnson Justification:",
           "pageNumber": 2
@@ -4624,9 +4625,9 @@
         }
       ],
       "role": "sectionHeading",
-      "sectionNumber": "",
-      "sectionType": "requirement",
-      "depth": 0
+      "sectionNumber": "3",
+      "sectionType": "organizational_header",
+      "depth": 1
     }
   ],
   "keyValuePairs": [],
@@ -4634,7 +4635,7 @@
   "figures": [],
   "metadata": {
     "pageCount": 2,
-    "analyzedAt": "2026-02-13T20:52:07.817Z",
+    "analyzedAt": "2026-02-17T22:23:48.466Z",
     "extractionQuality": "production"
   }
 }

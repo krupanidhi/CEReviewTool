@@ -27,7 +27,7 @@ import crypto from 'crypto'
  */
 export async function prefundingValidate(pfText, appName, baseName, yearCode, appPath, appResult, ctx) {
   const { CONFIG, log, logS, logE, logW, md5,
-    PREFUNDING_DATA_DIR, PREFUNDING_CACHE_DIR } = ctx
+    PREFUNDING_DATA_DIR, PREFUNDING_CACHE_DIR, PF_RESULTS_DIR } = ctx
 
   // Load compliance rules for the detected year
   const yearRulesPath = path.join(PREFUNDING_DATA_DIR, yearCode, 'compliance-rules.json')
@@ -63,6 +63,9 @@ export async function prefundingValidate(pfText, appName, baseName, yearCode, ap
 
   // Cache for Prefunding dashboard
   await cachePrefundingResults(pfText, appName, baseName, appPath, sectionResults, ctx)
+
+  // Write per-application JSON result file for compare-all-results.js
+  await writeAppResultJSON(appName, sectionResults, PF_RESULTS_DIR, log, logS, logE)
 }
 
 /**
@@ -289,6 +292,40 @@ async function cachePrefundingResults(pfText, appName, baseName, appPath, sectio
     }
   } catch (err) {
     logE(`Prefunding cache failed: ${err.message}`)
+  }
+}
+
+/**
+ * Write per-application JSON result file for compare-all-results.js.
+ * Format matches the sample provided:
+ * { applicationNumber, filename, timestamp, results: { sectionName: { compliantItems, nonCompliantItems, notApplicableItems } } }
+ */
+async function writeAppResultJSON(appName, sectionResults, PF_RESULTS_DIR, log, logS, logE) {
+  try {
+    if (!PF_RESULTS_DIR) {
+      log('⏭️  PF_RESULTS_DIR not set, skipping per-app JSON output')
+      return
+    }
+
+    await fs.mkdir(PF_RESULTS_DIR, { recursive: true })
+
+    // Extract application number from filename (e.g., "Application-242744" → "242744")
+    const appNumMatch = appName.match(/Application[- _]?(\d+)/i)
+    const applicationNumber = appNumMatch ? appNumMatch[1] : ''
+
+    const resultData = {
+      applicationNumber,
+      filename: appName,
+      timestamp: new Date().toISOString(),
+      results: sectionResults
+    }
+
+    const safeBaseName = appName.replace(/\.pdf$/i, '').replace(/[^a-zA-Z0-9_\-]/g, '_')
+    const outputPath = path.join(PF_RESULTS_DIR, `${safeBaseName}.json`)
+    await fs.writeFile(outputPath, JSON.stringify(resultData, null, 2))
+    logS(`PF result JSON → ${outputPath}`)
+  } catch (err) {
+    logE(`Failed to write PF result JSON: ${err.message}`)
   }
 }
 

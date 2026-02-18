@@ -1,313 +1,310 @@
 [
   {
     "questionNumber": 1,
-    "answerStrategy": "presence",
+    "question": "Did the applicant include a Project Narrative?",
+    "section": "Completeness and Eligibility Checklist",
+    "answerStrategy": "document_review",
+    "suggestedResources": "",
     "lookFor": [
       "Project Narrative"
     ],
+    "complianceGuidance": "The Project Narrative must be attached in the Project Narrative form by clicking the Attach File button. The document must be present in the application and should address the required content as specified in the NOFO and User Guide. The absence of the Project Narrative attachment results in non-compliance.",
     "condition": null,
-    "description": "Check if Project Narrative is included in the application"
+    "dependsOn": null,
+    "description": "Checks for inclusion of the Project Narrative attachment."
   },
   {
     "questionNumber": 2,
-    "answerStrategy": "presence",
+    "question": "New applicant with a co-applicant board: Does the application include Attachment 6: Co-Applicant Agreement?",
+    "section": "Completeness and Eligibility Checklist",
+    "answerStrategy": "document_review",
+    "suggestedResources": "",
     "lookFor": [
-      "Attachment 6",
-      "Co-Applicant Agreement"
+      "Attachment 6: Co-Applicant Agreement"
     ],
+    "complianceGuidance": "Attachment 6: Co-Applicant Agreement is required for public center applicants that have a co-applicant board. The attachment must be present and must document the agreement between the public entity and the co-applicant board. If the applicant is not a public entity with a co-applicant board, this attachment is not required.",
     "condition": {
-      "type": "applicant_status",
-      "value": "new",
+      "type": "applicant_type",
+      "value": "public_agency",
       "naIfNot": true
     },
-    "description": "New applicants with a co-applicant board: Check if Attachment 6 (Co-Applicant Agreement) is included"
+    "dependsOn": null,
+    "description": "Checks for inclusion of Co-Applicant Agreement for public agency applicants with a co-applicant board."
   },
   {
     "questionNumber": 3,
-    "answerStrategy": "presence",
+    "question": "New applicant: Does the application include Attachment 11: Evidence of Nonprofit or Public Center Status?",
+    "section": "Completeness and Eligibility Checklist",
+    "answerStrategy": "document_review",
+    "suggestedResources": "Attachment 11: Evidence of Nonprofit or Public Center Status",
     "lookFor": [
-      "Attachment 11",
-      "Evidence of Nonprofit",
-      "Public Center Status"
+      "Attachment 11: Evidence of Nonprofit or Public Center Status"
     ],
+    "complianceGuidance": "Attachment 11 must be included for new applicants and must provide documentation demonstrating the applicant's nonprofit or public center status. Acceptable evidence includes IRS determination letters for nonprofits or documentation of public agency status. The absence of this attachment results in non-compliance.",
     "condition": {
       "type": "applicant_status",
       "value": "new",
       "naIfNot": true
     },
-    "description": "New applicants: Check if Attachment 11 (Evidence of Nonprofit or Public Center Status) is included"
+    "dependsOn": null,
+    "description": "Checks for inclusion of evidence of nonprofit or public center status for new applicants."
   },
   {
     "questionNumber": 4,
-    "answerStrategy": "ai_focused",
+    "question": "New applicant: Is the applicant a private, nonprofit entity or a public agency (including Tribal, and urban Indian organizations) in the United States?",
+    "section": "Completeness and Eligibility Checklist",
+    "answerStrategy": "eligibility_check",
+    "suggestedResources": "Attachment 11: Evidence of Nonprofit or Public Center Status",
     "lookFor": [
-      "Attachment 11",
-      "Evidence of Nonprofit",
-      "Public Center Status"
+      "Attachment 11: Evidence of Nonprofit or Public Center Status"
     ],
+    "complianceGuidance": "New applicants must be either a private, nonprofit entity or a public agency (including Tribal and urban Indian organizations) located in the United States. Evidence must be provided in Attachment 11. If the applicant does not meet this eligibility criterion, the application is not eligible for funding.",
     "condition": {
       "type": "applicant_status",
       "value": "new",
       "naIfNot": true
     },
-    "focusPages": [
-      "Attachment 11"
-    ],
-    "aiQuestion": "Based on Attachment 11, is the applicant a private nonprofit entity or a public agency (including Tribal and urban Indian organizations) in the United States?",
-    "description": "New applicants: Verify entity type from Attachment 11"
+    "dependsOn": null,
+    "description": "Checks applicant eligibility as a nonprofit or public agency for new applicants."
   },
   {
     "questionNumber": 5,
-    "answerStrategy": "ai_focused",
+    "question": "Does the applicant propose to operate a health center that makes all required primary health care services available and accessible in the service area, either directly or through established arrangements, without regard for ability to pay? (Note that applicants may not propose to provide ONLY a single service or any subset of the required primary health care services.)",
+    "section": "Completeness and Eligibility Checklist",
+    "answerStrategy": "document_review",
+    "suggestedResources": "Project Narrative | Form 5A: Services Provided",
     "lookFor": [
       "Project Narrative",
-      "Form 5A"
+      "Form 5A: Services Provided"
     ],
+    "complianceGuidance": "The applicant must propose to make all required primary health care services available and accessible in the service area, either directly or through formal written arrangements, as documented in Form 5A and the Project Narrative. The applicant may not propose to provide only a single service or a subset of required services. Services must be available to all, regardless of ability to pay.",
     "condition": null,
-    "focusPages": [
-      "Project Narrative",
-      "Form 5A"
-    ],
-    "aiQuestion": "Does the applicant propose to operate a health center that makes all required primary health care services available and accessible in the service area, either directly or through established arrangements, without regard for ability to pay?",
-    "description": "Verify that all required primary health care services are available and accessible, not limited to a single service or subset"
+    "dependsOn": null,
+    "description": "Ensures all required primary health care services are proposed and accessible."
   },
   {
     "questionNumber": 6,
-    "answerStrategy": "ai_focused",
+    "question": "Does the applicant propose to make General Primary Medical Care available directly (Column I) and/or through formal written contractual agreements in which the health center pays for the service (Column II)?",
+    "section": "Completeness and Eligibility Checklist",
+    "answerStrategy": "document_review",
+    "suggestedResources": "Form 5A: Services Provided | Budget Narrative | Attachment 2: Bylaws | Form 8: Health Center Agreements | Project Narrative",
     "lookFor": [
-      "Form 5A"
+      "Form 5A: Services Provided"
     ],
+    "complianceGuidance": "Form 5A must indicate that General Primary Medical Care is made available either directly (Column I) or through formal written contractual agreements (Column II) in which the health center pays for the service. At least one of these columns must be checked for General Primary Medical Care. Referral arrangements (Column III) alone are not sufficient.",
     "condition": null,
-    "focusPages": [
-      "Form 5A"
-    ],
-    "aiQuestion": "Does the applicant propose to make General Primary Medical Care available directly (Column I) and/or through formal written contractual agreements in which the health center pays for the service (Column II)?",
-    "description": "Check Form 5A for General Primary Medical Care availability directly or via paid contracts"
+    "dependsOn": null,
+    "description": "Ensures General Primary Medical Care is available directly or via contract."
   },
   {
     "questionNumber": 7,
-    "answerStrategy": "ai_focused",
+    "question": "Does the applicant propose to perform a substantive role in the project (i.e., does not apply on behalf of another organization)?",
+    "section": "Completeness and Eligibility Checklist",
+    "answerStrategy": "eligibility_check",
+    "suggestedResources": "Budget Narrative | Attachment 2: Bylaws | Form 5A: Services Provided | Form 8: Health Center Agreements",
     "lookFor": [
-      "Budget Narrative",
-      "Attachment 2",
-      "Bylaws",
-      "Form 5A",
-      "Form 8"
+      "Project Narrative",
+      "Attachment 2: Bylaws",
+      "Form 8: Health Center Agreements"
     ],
+    "complianceGuidance": "The applicant must demonstrate a substantive role in the project, as evidenced by the Project Narrative, Bylaws, and Health Center Agreements. The applicant may not apply on behalf of another organization or serve solely as a pass-through entity. The application must show direct involvement in governance, operations, and service delivery.",
     "condition": null,
-    "focusPages": [
-      "Budget Narrative",
-      "Attachment 2",
-      "Bylaws",
-      "Form 5A",
-      "Form 8"
-    ],
-    "aiQuestion": "Does the applicant propose to perform a substantive role in the project and not apply on behalf of another organization?",
-    "description": "Verify applicant's substantive role and that they are not applying on behalf of another organization"
+    "dependsOn": null,
+    "description": "Ensures applicant is not a pass-through and performs a substantive role."
   },
   {
     "questionNumber": 8,
-    "answerStrategy": "ai_focused",
+    "question": "Does the applicant propose to make services accessible to all? If a sub-population is targeted (e.g., a school-based site that targets school-aged children), will health center services be available and accessible to others seeking services at the proposed site(s)?",
+    "section": "Completeness and Eligibility Checklist",
+    "answerStrategy": "document_review",
+    "suggestedResources": "Project Narrative",
     "lookFor": [
       "Project Narrative"
     ],
+    "complianceGuidance": "The Project Narrative must demonstrate that health center services are accessible to all individuals seeking care at the proposed site(s), not just the targeted sub-population. If a site targets a sub-population, services must still be available to others who seek care at that site.",
     "condition": null,
-    "focusPages": [
-      "Project Narrative"
-    ],
-    "aiQuestion": "Does the applicant propose to make services accessible to all? If a sub-population is targeted, are services available and accessible to others seeking services at the proposed site(s)?",
-    "description": "Verify accessibility of services to all, including non-targeted populations"
+    "dependsOn": null,
+    "description": "Ensures services are accessible to all, not just targeted sub-populations."
   },
   {
     "questionNumber": 9,
+    "question": "Does the applicant propose a service area announced under this NOFO number? If the answer to Question 9 is \"No\", select \"N/A\" for Questions 10 through 13.",
+    "section": "Print All | RO | HRSA EHBs",
     "answerStrategy": "saat_compare",
+    "suggestedResources": "Summary Page | SAAT | Project Abstract | Project Narrative | Form 5B: Service Sites",
     "lookFor": [
       "Summary Page",
-      "SAAT",
-      "Project Abstract",
-      "Project Narrative",
-      "Form 5B"
+      "SAAT"
     ],
+    "complianceGuidance": "The applicant must propose to serve a service area listed in the Service Area Announcement Table (SAAT) for the current NOFO number. The Service Area ID, city, and state on the Summary Page must match an entry in the SAAT. If not, Questions 10-13 are not applicable.",
     "condition": null,
-    "saatCheck": "nofo_match",
-    "description": "Check if applicant proposes a service area announced under the NOFO number"
+    "dependsOn": null,
+    "description": "Ensures applicant proposes a service area listed in the current NOFO/SAAT."
   },
   {
     "questionNumber": 10,
+    "question": "Is the total number of unduplicated patients projected to be served in 2026 on Form 1A at least 75 percent of the SAAT Patient Target?",
+    "section": "Print All | RO | HRSA EHBs",
     "answerStrategy": "saat_compare",
+    "suggestedResources": "SAAT | Form 1A: General Information Worksheet",
     "lookFor": [
-      "SAAT",
-      "Form 1A"
+      "Form 1A: General Information Worksheet",
+      "SAAT"
     ],
+    "complianceGuidance": "The total unduplicated patient projection for calendar year 2026 (Form 1A) must be at least 75 percent of the Patient Target listed in the SAAT for the proposed service area. Calculate the percentage: (Form 1A patient projection / SAAT Patient Target) x 100. If less than 75%, the application is not eligible.",
     "condition": null,
     "dependsOn": {
       "question": 9,
       "requiredAnswer": "Yes"
     },
-    "saatCheck": "patient_target_75pct",
-    "description": "Check if projected unduplicated patients in Form 1A are at least 75% of SAAT Patient Target"
+    "description": "Ensures patient projection meets 75% of SAAT Patient Target."
   },
   {
     "questionNumber": 11,
+    "question": "Does the applicant propose to serve patients for each Service Type listed in the SAAT?",
+    "section": "Print All | RO | HRSA EHBs",
     "answerStrategy": "saat_compare",
+    "suggestedResources": "SAAT | Form 1A: General Information Worksheet",
     "lookFor": [
-      "SAAT",
-      "Form 1A"
+      "Form 1A: General Information Worksheet",
+      "SAAT"
     ],
+    "complianceGuidance": "For each Service Type listed in the SAAT for the service area, the applicant must project patients (greater than zero) for that Service Type in Form 1A. If a Service Type is not listed in the SAAT, zeros are acceptable. All required Service Types must be addressed.",
     "condition": null,
     "dependsOn": {
       "question": 9,
       "requiredAnswer": "Yes"
     },
-    "saatCheck": "service_types_match",
-    "description": "Check if applicant proposes to serve patients for each Service Type listed in SAAT"
+    "description": "Ensures applicant projects patients for all SAAT-listed Service Types."
   },
   {
     "questionNumber": 12,
+    "question": "Does the applicant request annual SAC funding that does NOT exceed the SAAT Total Funding for the service area?",
+    "section": "Print All | RO | HRSA EHBs",
     "answerStrategy": "saat_compare",
+    "suggestedResources": "SF-424A | Budget Narrative | SAAT",
     "lookFor": [
-      "SF-424A",
+      "SF-424A: Budget Information - Section A-C",
       "Budget Narrative",
       "SAAT"
     ],
+    "complianceGuidance": "The total federal funding requested in SF-424A (Section A - Budget Summary) must not exceed the Total Funding available for the service area as listed in the SAAT. Compare the requested amount to the SAAT; if it exceeds, the application is not eligible.",
     "condition": null,
     "dependsOn": {
       "question": 9,
       "requiredAnswer": "Yes"
     },
-    "saatCheck": "funding_not_exceed",
-    "description": "Check if annual SAC funding request does NOT exceed SAAT Total Funding for the service area"
+    "description": "Ensures funding request does not exceed SAAT Total Funding."
   },
   {
     "questionNumber": 13,
+    "question": "Does the applicant maintain the current funding distribution (i.e., CHC, MHC, HCH, PHPC) from the SAAT?",
+    "section": "Print All | RO | HRSA EHBs",
     "answerStrategy": "saat_compare",
+    "suggestedResources": "SF-424A | SAAT | Form 5B: Service Sites | Project Narrative | Summary Page",
     "lookFor": [
-      "SF-424A",
+      "SF-424A: Budget Information - Section A-C",
       "SAAT"
     ],
+    "complianceGuidance": "Funding must be requested for each population type (CHC, MHC, HCH, PHPC) that has an amount greater than $0 in the SAAT, and the funding distribution across population types must be maintained. Compare the requested amounts per population type in SF-424A to the SAAT; they must match the distribution.",
     "condition": null,
     "dependsOn": {
       "question": 9,
       "requiredAnswer": "Yes"
     },
-    "saatCheck": "funding_distribution",
-    "description": "Check if applicant maintains current funding distribution (CHC, MHC, HCH, PHPC) from SAAT"
+    "description": "Ensures funding distribution matches SAAT population types."
   },
   {
     "questionNumber": 14,
+    "question": "New or competing supplement applicant: For Form 5B: Service Sites, does the applicant include: Service area zip codes where the zip code patient percentages on the SAAT total at least 75 percent; or All service area zip codes if the sum of all zip code patient percentages on the SAAT is less than 75 percent?",
+    "section": "Completeness and Eligibility Checklist",
     "answerStrategy": "saat_compare",
+    "suggestedResources": "Form 5B: Service Sites | SAAT",
     "lookFor": [
-      "Form 5B",
+      "Form 5B: Service Sites",
       "SAAT"
     ],
+    "complianceGuidance": "For new or competing supplement applicants, Form 5B must include service area zip codes such that the sum of zip code patient percentages from the SAAT for the entered zip codes is at least 75 percent. If the sum of all zip code patient percentages in the SAAT is less than 75 percent, all zip codes from the SAAT must be entered.",
     "condition": {
       "type": "applicant_status",
       "value": "new_or_competing",
       "naIfNot": true
     },
-    "dependsOn": {
-      "question": 9,
-      "requiredAnswer": "Yes"
-    },
-    "saatCheck": "zip_codes_75pct",
-    "description": "New/Competing Supplement: Check if Form 5B includes service area zip codes where patient percentages total at least 75% or all zip codes if less than 75%"
+    "dependsOn": null,
+    "description": "Ensures zip codes entered cover at least 75% of SAAT patient percentages."
   },
   {
     "questionNumber": 15,
-    "answerStrategy": "ai_focused",
+    "question": "New or competing supplement applicant: Is at least one new full-time (operational 40 hours or more per week) permanent, fixed building site with a verifiable street address proposed on Form 5B? If funding is only requested for MHC, the applicant may propose a new full-time seasonal (rather than permanent) service delivery site.",
+    "section": "Completeness and Eligibility Checklist",
+    "answerStrategy": "document_review",
+    "suggestedResources": "Form 5B: Service Sites",
     "lookFor": [
-      "Form 5B"
+      "Form 5B: Service Sites"
     ],
+    "complianceGuidance": "New or competing supplement applicants must propose at least one new Service Delivery or Administrative/Service Delivery site with Location Type as 'Permanent' and operating at least 40 hours per week with a verifiable street address. If only MHC funding is requested, a full-time seasonal site is acceptable. The site must not be admin-only.",
     "condition": {
       "type": "applicant_status",
       "value": "new_or_competing",
       "naIfNot": true
     },
-    "dependsOn": {
-      "question": 9,
-      "requiredAnswer": "Yes"
-    },
-    "focusPages": [
-      "Form 5B"
-    ],
-    "aiQuestion": "Is at least one new full-time permanent, fixed building site with a verifiable street address proposed on Form 5B? If funding is only requested for MHC, is a new full-time seasonal site proposed?",
-    "description": "New/Competing Supplement: Check for new full-time permanent or seasonal site with verifiable address in Form 5B"
+    "dependsOn": null,
+    "description": "Ensures at least one new full-time permanent site is proposed (seasonal allowed for MHC only)."
   },
   {
     "questionNumber": 16,
-    "answerStrategy": "ai_focused",
+    "question": "New or competing supplement applicant requesting PHPC funding: Does the applicant demonstrate consultation with residents of public housing in the preparation of the SAC application and ensure ongoing consultation with the residents regarding the planning and administration of the health center?",
+    "section": "Completeness and Eligibility Checklist",
+    "answerStrategy": "document_review",
+    "suggestedResources": "Project Narrative",
     "lookFor": [
       "Project Narrative"
     ],
+    "complianceGuidance": "Applicants requesting PHPC funding must demonstrate in the Project Narrative that consultation with residents of public housing occurred during preparation of the application and that ongoing consultation will be ensured regarding planning and administration of the health center.",
     "condition": {
-      "type": "applicant_status",
-      "value": "new_or_competing",
+      "type": "funding_type",
+      "value": "phpc",
       "naIfNot": true
     },
-    "dependsOn": {
-      "question": 9,
-      "requiredAnswer": "Yes"
-    },
-    "focusPages": [
-      "Project Narrative"
-    ],
-    "aiQuestion": "If requesting PHPC funding, does the applicant demonstrate consultation with residents of public housing in the preparation of the SAC application and ensure ongoing consultation regarding planning and administration?",
-    "description": "New/Competing Supplement requesting PHPC: Verify consultation with public housing residents in Project Narrative"
+    "dependsOn": null,
+    "description": "Ensures PHPC applicants demonstrate consultation with public housing residents."
   },
   {
     "questionNumber": 17,
-    "answerStrategy": "ai_focused",
+    "question": "New or competing supplement applicant requesting HCH and/or PHPC funding: Does the applicant attest on the Summary Page that funding will be utilized to supplement, and not supplant, the expenditures of the health center and the value of in-kind contributions for the delivery of services to these populations?",
+    "section": "Completeness and Eligibility Checklist",
+    "answerStrategy": "document_review",
+    "suggestedResources": "Summary Page",
     "lookFor": [
       "Summary Page"
     ],
+    "complianceGuidance": "Applicants requesting HCH and/or PHPC funding must check the certification box on the Summary Page attesting that grant funding will supplement, not supplant, health center expenditures and in-kind contributions for services to these populations. The applicant must also provide a brief description of how funds will be used to expand services.",
     "condition": {
-      "type": "applicant_status",
-      "value": "new_or_competing",
+      "type": "funding_type",
+      "value": "hp_or_rph",
       "naIfNot": true
     },
-    "dependsOn": {
-      "question": 9,
-      "requiredAnswer": "Yes"
-    },
-    "focusPages": [
-      "Summary Page"
-    ],
-    "aiQuestion": "If requesting HCH and/or PHPC funding, does the applicant attest on the Summary Page that funding will supplement, not supplant, expenditures and in-kind contributions for delivery of services to these populations?",
-    "description": "New/Competing Supplement requesting HCH/PHPC: Check attestation on Summary Page regarding supplementing, not supplanting, expenditures"
+    "dependsOn": null,
+    "description": "Ensures HCH/PHPC applicants attest to supplement, not supplant, funding."
   },
   {
     "questionNumber": 18,
+    "question": "If the Form 1A patient projection is less than 95% of the SAAT Patient Target, is the annual SAC funding request reduced accordingly in the SF-424A and Budget Narrative? * This question does not impact application completeness or eligibility.",
+    "section": "Patient Projection Funding Reduction Check",
     "answerStrategy": "saat_compare",
+    "suggestedResources": "",
     "lookFor": [
-      "SF-424A",
+      "Form 1A: General Information Worksheet",
+      "SF-424A: Budget Information - Section A-C",
       "Budget Narrative",
-      "SAAT",
-      "Patient and Budget Calculator"
+      "SAAT"
     ],
+    "complianceGuidance": "If the Form 1A patient projection is between 75% and 94.9% of the SAAT Patient Target, the annual SAC funding request in SF-424A and Budget Narrative must be reduced proportionally. The reduction should reflect the percentage of the patient projection relative to the SAAT Patient Target, as described in the NOFO and User Guide.",
     "condition": null,
-    "saatCheck": "funding_reduction_95pct",
-    "description": "If Form 1A patient projection is less than 95% of SAAT Patient Target, check if annual SAC funding request is reduced accordingly"
-  },
-  {
-    "questionNumber": 19,
-    "answerStrategy": "presence",
-    "lookFor": [
-      "Completeness and Eligibility Checklist"
-    ],
-    "condition": null,
-    "description": "Check if application is complete based on required documents in the Completeness and Eligibility Checklist"
-  },
-  {
-    "questionNumber": 20,
-    "answerStrategy": "ai_focused",
-    "lookFor": [
-      "Completeness and Eligibility Checklist"
-    ],
-    "condition": null,
-    "focusPages": [
-      "Completeness and Eligibility Checklist"
-    ],
-    "aiQuestion": "Based on BPHC OPPD review, is the applicant eligible?",
-    "description": "Verify applicant eligibility based on BPHC OPPD review"
+    "dependsOn": {
+      "question": 10,
+      "requiredAnswer": "Yes"
+    },
+    "description": "Ensures funding request is reduced if patient projection is less than 95% of SAAT target."
   }
 ]

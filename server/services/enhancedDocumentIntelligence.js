@@ -263,17 +263,10 @@ export async function analyzeDocumentEnhanced(fileBuffer, mimeType) {
         // Skip single-digit instruction steps (e.g., "3. Click Save")
         if (depth === 1 && instructionVerbs.test(text)) return
         
-        // Only consider multi-level numbers (2+ dots) or single-level with
-        // descriptive titles like "Completing", "Form", "Section"
-        if (depth === 1) {
-          // Single-level: must match a TOC entry or have a descriptive title
-          const hasDescriptiveTitle = /^(\d+)[\.\s]+\S+.*(?:Completing|Starting|Reviewing|Submitting|Form|Section|Application|Information|Overview)/i.test(text)
-          const matchesToC = sortedTOC.some(t => {
-            const tocNum = t.title?.match(/^(\d+)/)?.[1]
-            return tocNum === sectionNumber
-          })
-          if (!hasDescriptiveTitle && !matchesToC) return
-        }
+        // Single-depth numbered paragraphs: the instructionVerbs filter above
+        // (line 264) already blocks instruction steps like "3. Click Save".
+        // Any single-depth numbered paragraph that passes that filter is a
+        // legitimate section heading (e.g., checklist questions, requirements).
         
         // Skip if already captured by DI
         if (diTaggedNumbers.has(sectionNumber)) return

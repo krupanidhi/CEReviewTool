@@ -2,30 +2,163 @@
   "document": {
     "metadata": {
       "pageCount": 3,
-      "analyzedAt": "2026-02-13T20:52:07.900Z",
-      "totalSections": 17,
+      "analyzedAt": "2026-02-17T22:23:44.001Z",
+      "totalSections": 9,
       "totalTables": 1,
-      "totalFormFields": 55
+      "totalFormFields": 33
     },
-    "tableOfContents": [
-      {
-        "id": "section_12",
-        "title": "12. Does the applicant propose to serve patients for each Service Type listed in the SAAT? Suggested Resource(s): SAAT[ | Form 1A: General Information Worksheet[\" [ X ] Yes [ _] No [_] N/A",
-        "pageReference": 2,
-        "level": 1
-      }
-    ],
+    "tableOfContents": [],
     "sections": [
       {
-        "sectionNumber": null,
-        "title": "Completeness and Eligibility Checklist",
-        "type": "requirement",
+        "sectionNumber": "1",
+        "title": "1. Did the applicant include a Project Narrative? [ X ] Yes [_] No",
+        "type": "organizational_header",
         "pageReference": 1,
-        "content": "Action Taken On: 1/16/2026 3:21:02 PM ET\nAs of 01/22/2026 02:33:53 PM",
+        "content": "",
         "formFields": [
+          {
+            "field": "Action",
+            "value": "Sent by PQC to PAO",
+            "pageReference": 1
+          },
+          {
+            "field": "Comment",
+            "value": "Application is assigned to Erica Clift.",
+            "pageReference": 1
+          },
+          {
+            "field": "Action Taken By",
+            "value": "Patricia Burbano",
+            "pageReference": 1
+          },
           {
             "field": "Action Taken On",
             "value": "1/16/2026 3:21:02 PM ET",
+            "pageReference": 1
+          },
+          {
+            "field": "Suggested Resource(s)",
+            "value": "Attachment 11: Evidence of Nonprofit or Public Agency Status [\"",
+            "pageReference": 1
+          }
+        ],
+        "tables": []
+      },
+      {
+        "sectionNumber": "2",
+        "title": "2. Public Agencies: Does the application include Attachment 6: Co-Applicant Agreement?",
+        "type": "organizational_header",
+        "pageReference": 1,
+        "content": "[ _] Yes [ _ ] No [ X ] N/A",
+        "formFields": [
+          {
+            "field": "Action",
+            "value": "Sent by PQC to PAO",
+            "pageReference": 1
+          },
+          {
+            "field": "Comment",
+            "value": "Application is assigned to Erica Clift.",
+            "pageReference": 1
+          },
+          {
+            "field": "Action Taken By",
+            "value": "Patricia Burbano",
+            "pageReference": 1
+          },
+          {
+            "field": "Action Taken On",
+            "value": "1/16/2026 3:21:02 PM ET",
+            "pageReference": 1
+          },
+          {
+            "field": "Suggested Resource(s)",
+            "value": "Attachment 11: Evidence of Nonprofit or Public Agency Status [\"",
+            "pageReference": 1
+          }
+        ],
+        "tables": []
+      },
+      {
+        "sectionNumber": "3",
+        "title": "3. New applicant: Does the application include Attachment 11: Evidence of Nonprofit or Public Agency Status? [ X ] Yes [ _ ] No [_] N/A",
+        "type": "organizational_header",
+        "pageReference": 1,
+        "content": "",
+        "formFields": [
+          {
+            "field": "Action",
+            "value": "Sent by PQC to PAO",
+            "pageReference": 1
+          },
+          {
+            "field": "Comment",
+            "value": "Application is assigned to Erica Clift.",
+            "pageReference": 1
+          },
+          {
+            "field": "Action Taken By",
+            "value": "Patricia Burbano",
+            "pageReference": 1
+          },
+          {
+            "field": "Action Taken On",
+            "value": "1/16/2026 3:21:02 PM ET",
+            "pageReference": 1
+          },
+          {
+            "field": "Suggested Resource(s)",
+            "value": "Attachment 11: Evidence of Nonprofit or Public Agency Status [\"",
+            "pageReference": 1
+          }
+        ],
+        "tables": []
+      },
+      {
+        "sectionNumber": "4",
+        "title": "4. New and Competing Supplement applicants: Does the application include Attachment 12: Operational Plan? [ X ] Yes [ _] No [_] N/A",
+        "type": "organizational_header",
+        "pageReference": 1,
+        "content": "",
+        "formFields": [
+          {
+            "field": "Action",
+            "value": "Sent by PQC to PAO",
+            "pageReference": 1
+          },
+          {
+            "field": "Comment",
+            "value": "Application is assigned to Erica Clift.",
+            "pageReference": 1
+          },
+          {
+            "field": "Action Taken By",
+            "value": "Patricia Burbano",
+            "pageReference": 1
+          },
+          {
+            "field": "Action Taken On",
+            "value": "1/16/2026 3:21:02 PM ET",
+            "pageReference": 1
+          },
+          {
+            "field": "Suggested Resource(s)",
+            "value": "Attachment 11: Evidence of Nonprofit or Public Agency Status [\"",
+            "pageReference": 1
+          }
+        ],
+        "tables": []
+      },
+      {
+        "sectionNumber": "6",
+        "title": "6. Does the applicant propose to perform a substantive role in the project (i.e., does not apply on behalf of another organization)?",
+        "type": "organizational_header",
+        "pageReference": 1,
+        "content": "Suggested Resource(s): Budget Narrative[\" | Attachment 2: Bylaws[] | Form 5A: Services Provided[] | Form 8: Health Center Agreements[\n[ X ] Yes [_] No",
+        "formFields": [
+          {
+            "field": "No",
+            "value": "Not Selected",
             "pageReference": 1
           },
           {
@@ -44,447 +177,115 @@
             "pageReference": 1
           },
           {
+            "field": "Action Taken On",
+            "value": "1/16/2026 3:21:02 PM ET",
+            "pageReference": 1
+          },
+          {
             "field": "Suggested Resource(s)",
             "value": "Attachment 11: Evidence of Nonprofit or Public Agency Status [\"",
             "pageReference": 1
           }
         ],
-        "tables": [],
-        "children": [
+        "tables": []
+      },
+      {
+        "sectionNumber": "10",
+        "title": "10. Does the applicant propose a service area announced under this NOFO number? If the answer to Question 10 is \"No\", select \"N/A\" for Questions 11 through 15.",
+        "type": "organizational_header",
+        "pageReference": 2,
+        "content": "Suggested Resource(s): Summary Pager? | SAAT [ | Project Abstract [] | Project Narrativer? | Form 5B: Service Sites [\" [ X ] Yes [ _] No",
+        "formFields": [
           {
-            "sectionNumber": "1",
-            "title": "1. Did the applicant include a Project Narrative? [ X ] Yes [_] No",
-            "type": "organizational_header",
-            "pageReference": 1,
-            "content": "",
-            "formFields": [
-              {
-                "field": "Action",
-                "value": "Sent by PQC to PAO",
-                "pageReference": 1
-              },
-              {
-                "field": "Comment",
-                "value": "Application is assigned to Erica Clift.",
-                "pageReference": 1
-              },
-              {
-                "field": "Action Taken By",
-                "value": "Patricia Burbano",
-                "pageReference": 1
-              },
-              {
-                "field": "Action Taken On",
-                "value": "1/16/2026 3:21:02 PM ET",
-                "pageReference": 1
-              },
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Attachment 11: Evidence of Nonprofit or Public Agency Status [\"",
-                "pageReference": 1
-              }
-            ],
-            "tables": []
+            "field": "Suggested Resource(s)",
+            "value": "Project Narrative [\"",
+            "pageReference": 2
+          }
+        ],
+        "tables": []
+      },
+      {
+        "sectionNumber": "12",
+        "title": "12. Does the applicant propose to serve patients for each Service Type listed in the SAAT?",
+        "type": "organizational_header",
+        "pageReference": 2,
+        "content": "Suggested Resource(s): SAAT[ | Form 1A: General Information Worksheet[\"\n[ X ] Yes [ _] No [_] N/A",
+        "formFields": [
+          {
+            "field": "N/A",
+            "value": "Not Selected",
+            "pageReference": 2
           },
           {
-            "sectionNumber": "2",
-            "title": "2. Public Agencies: Does the application include Attachment 6: Co-Applicant Agreement?",
-            "type": "organizational_header",
-            "pageReference": 1,
-            "content": "[ _] Yes [ _ ] No [ X ] N/A",
-            "formFields": [
-              {
-                "field": "Action",
-                "value": "Sent by PQC to PAO",
-                "pageReference": 1
-              },
-              {
-                "field": "Comment",
-                "value": "Application is assigned to Erica Clift.",
-                "pageReference": 1
-              },
-              {
-                "field": "Action Taken By",
-                "value": "Patricia Burbano",
-                "pageReference": 1
-              },
-              {
-                "field": "Action Taken On",
-                "value": "1/16/2026 3:21:02 PM ET",
-                "pageReference": 1
-              },
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Attachment 11: Evidence of Nonprofit or Public Agency Status [\"",
-                "pageReference": 1
-              }
-            ],
-            "tables": []
+            "field": "Suggested Resource(s)",
+            "value": "Project Narrative [\"",
+            "pageReference": 2
+          }
+        ],
+        "tables": []
+      },
+      {
+        "sectionNumber": "14",
+        "title": "14. Does the applicant maintain the current funding distribution (i.e., CHC, MSAW, HP, RPH) from the SAAT?",
+        "type": "organizational_header",
+        "pageReference": 2,
+        "content": "Suggested Resource(s): SF-424AL\" | SAATE\"\n[_] Yes [ X ] No [_] N/A\nThe applicant did not maintain the current funding distribution across the special medically underserved population types listed for the service area.",
+        "formFields": [
+          {
+            "field": "Yes [ X ] No [_] N/A",
+            "value": "Not Selected",
+            "pageReference": 2
           },
           {
-            "sectionNumber": "3",
-            "title": "3. New applicant: Does the application include Attachment 11: Evidence of Nonprofit or Public Agency Status? [ X ] Yes [ _ ] No [_] N/A",
-            "type": "organizational_header",
-            "pageReference": 1,
-            "content": "",
-            "formFields": [
-              {
-                "field": "Action",
-                "value": "Sent by PQC to PAO",
-                "pageReference": 1
-              },
-              {
-                "field": "Comment",
-                "value": "Application is assigned to Erica Clift.",
-                "pageReference": 1
-              },
-              {
-                "field": "Action Taken By",
-                "value": "Patricia Burbano",
-                "pageReference": 1
-              },
-              {
-                "field": "Action Taken On",
-                "value": "1/16/2026 3:21:02 PM ET",
-                "pageReference": 1
-              },
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Attachment 11: Evidence of Nonprofit or Public Agency Status [\"",
-                "pageReference": 1
-              }
-            ],
-            "tables": []
+            "field": "Suggested Resource(s)",
+            "value": "Project Narrative [\"",
+            "pageReference": 2
+          }
+        ],
+        "tables": []
+      },
+      {
+        "sectionNumber": "16",
+        "title": "16. New or competing supplement applicant: For Form 5B: Service Sites, does the applicant include:",
+        "type": "organizational_header",
+        "pageReference": 2,
+        "content": "· Service area zip codes where the zip code patient percentages on the SAAT total at least 75 percent; or\n. All service area zip codes if the sum of all zip code patient percentages on the SAAT is less than 75 percent?\nSuggested Resource(s): Form 5B: Service Sites[? | SAATE [ _] Yes [ X ] No [_]N/A\nThe applicant did not include zip codes where at least 75% of current patients reside.",
+        "formFields": [
+          {
+            "field": "N/A",
+            "value": "Not Selected",
+            "pageReference": 2
           },
           {
-            "sectionNumber": "4",
-            "title": "4. New and Competing Supplement applicants: Does the application include Attachment 12: Operational Plan? [ X ] Yes [ _] No [_] N/A",
-            "type": "organizational_header",
-            "pageReference": 1,
-            "content": "5. New applicant: Is the applicant a private, nonprofit entity or a public agency (including Tribal, and urban Indian organizations) in the United States? Suggested Resource(s): Attachment 11: Evidence of Nonprofit or Public Agency Status [\" [ X ] Yes [ _ ] No [_] N/A",
-            "formFields": [
-              {
-                "field": "5. New applicant",
-                "value": "Is the applicant a private, nonprofit entity or a public agency (including Tribal, and urban Indian organizations) in the United States? Suggested Resource(s): Attachment 11: Evidence of Nonprofit or Public Agency Status [\" [ X ] Yes [ _ ] No [_] N/A",
-                "pageReference": 1
-              },
-              {
-                "field": "N/A",
-                "value": "Not Selected",
-                "pageReference": 1
-              },
-              {
-                "field": "Action",
-                "value": "Sent by PQC to PAO",
-                "pageReference": 1
-              },
-              {
-                "field": "Comment",
-                "value": "Application is assigned to Erica Clift.",
-                "pageReference": 1
-              },
-              {
-                "field": "Action Taken By",
-                "value": "Patricia Burbano",
-                "pageReference": 1
-              },
-              {
-                "field": "Action Taken On",
-                "value": "1/16/2026 3:21:02 PM ET",
-                "pageReference": 1
-              },
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Attachment 11: Evidence of Nonprofit or Public Agency Status [\"",
-                "pageReference": 1
-              }
-            ],
-            "tables": []
-          },
+            "field": "Suggested Resource(s)",
+            "value": "Project Narrative [\"",
+            "pageReference": 2
+          }
+        ],
+        "tables": [
           {
-            "sectionNumber": "6",
-            "title": "6. Does the applicant propose to perform a substantive role in the project (i.e., does not apply on behalf of another organization)?",
-            "type": "organizational_header",
-            "pageReference": 1,
-            "content": "Suggested Resource(s): Budget Narrative[\" | Attachment 2: Bylaws[] | Form 5A: Services Provided[] | Form 8: Health Center Agreements[\n[ X ] Yes [_] No\n7. Does the applicant propose to operate a health center that makes all required primary health care services available and accessible in the service area, either directly or through established arrangements, without regard for ability to pay? (Note that applicants may not propose to provide ONLY a single service or any subset of the required primary health care services.)\nSuggested Resource(s): Project Narrative [] | Form 5A: Services Provided[\" [ X ] Yes [_] No",
-            "formFields": [
-              {
-                "field": "No",
-                "value": "Not Selected",
-                "pageReference": 1
-              },
-              {
-                "field": "Action",
-                "value": "Sent by PQC to PAO",
-                "pageReference": 1
-              },
-              {
-                "field": "Comment",
-                "value": "Application is assigned to Erica Clift.",
-                "pageReference": 1
-              },
-              {
-                "field": "Action Taken By",
-                "value": "Patricia Burbano",
-                "pageReference": 1
-              },
-              {
-                "field": "Action Taken On",
-                "value": "1/16/2026 3:21:02 PM ET",
-                "pageReference": 1
-              },
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Attachment 11: Evidence of Nonprofit or Public Agency Status [\"",
-                "pageReference": 1
-              }
-            ],
-            "tables": []
-          },
-          {
-            "sectionNumber": "8",
-            "title": "8. Does the applicant propose to make General Primary Medical Care available directly (Column I) and/or through formal written contractual agreements in which the health center pays for the service (Column II)?",
-            "type": "organizational_header",
-            "pageReference": 1,
-            "content": "Suggested Resource(s): Form 5A: Services Provided [\n[ X ] Yes [_] No\n9. Does the applicant propose to make services accessible to all? If a sub-population is targeted (e.g., a school-based site that targets school-aged children), will health center services be available and accessible to others seeking services at the proposed site(s)?\nhttps://grants2.hrsa.gov/WebGAM2Internal/Interface/PrintForm.aspx?RV=6231706f-c4bb-43e6-8185-3b03e8cc9fdb&RTC=19&PrintPage=False&IsPo ...\n1/3\n1/22/26, 2:34 PM\nSuggested Resource(s): Project Narrative [\"\nPrint All | SA | HRSA EHBs\n[ X ] Yes [ _] No",
-            "formFields": [
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Form 5A: Services Provided [",
-                "pageReference": 1
-              },
-              {
-                "field": "No",
-                "value": "Not Selected",
-                "pageReference": 1
-              },
-              {
-                "field": "Action",
-                "value": "Sent by PQC to PAO",
-                "pageReference": 1
-              },
-              {
-                "field": "Comment",
-                "value": "Application is assigned to Erica Clift.",
-                "pageReference": 1
-              },
-              {
-                "field": "Action Taken By",
-                "value": "Patricia Burbano",
-                "pageReference": 1
-              },
-              {
-                "field": "Action Taken On",
-                "value": "1/16/2026 3:21:02 PM ET",
-                "pageReference": 1
-              }
-            ],
-            "tables": []
-          },
-          {
-            "sectionNumber": "10",
-            "title": "10. Does the applicant propose a service area announced under this NOFO number? If the answer to Question 10 is \"No\", select \"N/A\" for Questions 11 through 15.",
-            "type": "organizational_header",
-            "pageReference": 2,
-            "content": "Suggested Resource(s): Summary Pager? | SAAT [ | Project Abstract [] | Project Narrativer? | Form 5B: Service Sites [\" [ X ] Yes [ _] No",
-            "formFields": [
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Project Narrative [\"",
-                "pageReference": 2
-              }
-            ],
-            "tables": []
-          },
-          {
-            "sectionNumber": "11",
-            "title": "11. Is the total number of unduplicated patients projected to be served in the assessment period on Form 1A at least 75 percent of the SAAT Patient Target? Suggested Resource(s): SAAT[\" | Form 1A: General Information Worksheet[\"",
-            "type": "organizational_header",
-            "pageReference": 2,
-            "content": "[ X ] Yes [ _ ] No [_] N/A",
-            "formFields": [
-              {
-                "field": "N/A",
-                "value": "Not Selected",
-                "pageReference": 2
-              },
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Project Narrative [\"",
-                "pageReference": 2
-              }
-            ],
-            "tables": []
-          },
-          {
-            "sectionNumber": "12",
-            "title": "12. Does the applicant propose to serve patients for each Service Type listed in the SAAT?",
-            "type": "organizational_header",
-            "pageReference": 2,
-            "content": "Suggested Resource(s): SAAT[ | Form 1A: General Information Worksheet[\"\n[ X ] Yes [ _] No [_] N/A",
-            "formFields": [
-              {
-                "field": "N/A",
-                "value": "Not Selected",
-                "pageReference": 2
-              },
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Project Narrative [\"",
-                "pageReference": 2
-              }
-            ],
-            "tables": []
-          },
-          {
-            "sectionNumber": "13",
-            "title": "13. Does the applicant request annual SAC funding that does NOT exceed the SAAT Total Funding for the service area? Suggested Resource(s): SF-424A[\" | Budget Narrative[? | SAATE\" [ X ] Yes [ _ ] No [_]N/A",
-            "type": "organizational_header",
-            "pageReference": 2,
-            "content": "",
-            "formFields": [
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Project Narrative [\"",
-                "pageReference": 2
-              }
-            ],
-            "tables": []
-          },
-          {
-            "sectionNumber": "14",
-            "title": "14. Does the applicant maintain the current funding distribution (i.e., CHC, MSAW, HP, RPH) from the SAAT?",
-            "type": "organizational_header",
-            "pageReference": 2,
-            "content": "Suggested Resource(s): SF-424AL\" | SAATE\"\n[_] Yes [ X ] No [_] N/A\nThe applicant did not maintain the current funding distribution across the special medically underserved population types listed for the service area.",
-            "formFields": [
-              {
-                "field": "Yes [ X ] No [_] N/A",
-                "value": "Not Selected",
-                "pageReference": 2
-              },
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Project Narrative [\"",
-                "pageReference": 2
-              }
-            ],
-            "tables": []
-          },
-          {
-            "sectionNumber": "15",
-            "title": "15. Does the applicant propose to serve patients for each population type listed in the SAAT? Suggested Resource(s): SF-424A[\" | SAAT[\" | Form 1A: General Information Worksheet[\" [ X ] Yes [ _] No [_] N/A",
-            "type": "organizational_header",
-            "pageReference": 2,
-            "content": "",
-            "formFields": [
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Project Narrative [\"",
-                "pageReference": 2
-              }
-            ],
-            "tables": []
-          },
-          {
-            "sectionNumber": "16",
-            "title": "16. New or competing supplement applicant: For Form 5B: Service Sites, does the applicant include:",
-            "type": "organizational_header",
-            "pageReference": 2,
-            "content": "· Service area zip codes where the zip code patient percentages on the SAAT total at least 75 percent; or\n. All service area zip codes if the sum of all zip code patient percentages on the SAAT is less than 75 percent?\nSuggested Resource(s): Form 5B: Service Sites[? | SAATE [ _] Yes [ X ] No [_]N/A\nThe applicant did not include zip codes where at least 75% of current patients reside.\n17. New or competing supplement applicant: Is at least one new full-time (operational 40 hours or more per week) permanent, fixed building site with a verifiable street address proposed on Form 5B? * If funding is only requested for MSAW, the applicant may propose a new full-time seasonal (rather than permanent) service delivery site.\nSuggested Resource(s): Form 5B: Service Sites [\" [ X ] Yes [ _ ] No [_] N/A\n18. New or competing supplement applicant requesting RPH funding: Does the applicant demonstrate consultation with residents of public housing in the preparation of the SAC application and ensure ongoing consultation with the residents regarding the planning and administration of the health center?\nSuggested Resource(s): Project Narrative [?\n[ _ ] Yes [ X ] No [_]N/A\nhttps://grants2.hrsa.gov/WebGAM2Internal/Interface/PrintForm.aspx?RV=6231706f-c4bb-43e6-8185-3b03e8cc9fdb&RTC=19&PrintPage=False&IsPo ...\n2/3",
-            "formFields": [
-              {
-                "field": "N/A",
-                "value": "Not Selected",
-                "pageReference": 2
-              },
-              {
-                "field": "17. New or competing supplement applicant",
-                "value": "Is at least one new full-time (operational 40 hours or more per week) permanent, fixed building site with a verifiable street address proposed on Form 5B? * If funding is only requested for MSAW, the applicant may propose a new full-time seasonal (rather than permanent) service delivery site.",
-                "pageReference": 2
-              },
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Form 5B: Service Sites [\" [ X ] Yes [ _ ] No [_] N/A",
-                "pageReference": 2
-              }
-            ],
-            "tables": []
-          },
-          {
-            "sectionNumber": "1",
-            "title": "1/22/26, 2:34 PM",
-            "type": "organizational_header",
+            "tableId": "table_0",
             "pageReference": 3,
-            "content": "",
-            "formFields": [
-              {
-                "field": "Suggested Resource(s)",
-                "value": "Summary Pager?",
-                "pageReference": 3
-              }
+            "dimensions": {
+              "rows": 3,
+              "columns": 2
+            },
+            "headers": [
+              "Patient Projection Funding Reduction Check",
+              "As of 01/22/2026 02:33:58 PM"
             ],
-            "tables": [
+            "rows": [
               {
-                "tableId": "table_0",
-                "pageReference": 3,
-                "dimensions": {
-                  "rows": 3,
-                  "columns": 2
-                },
-                "headers": [
-                  "Patient Projection Funding Reduction Check",
-                  "As of 01/22/2026 02:33:58 PM"
-                ],
-                "rows": [
-                  {
-                    "Patient Projection Funding Reduction Check": "If the Form 1A patient projection is less than 95% of the SAAT Patient Target, is the annual SAC funding request reduced Narrative? * This question does not impact application completeness or eligibility.",
-                    "As of 01/22/2026 02:33:58 PM": "accordingly in the SF-424A and Budget"
-                  },
-                  {
-                    "Patient Projection Funding Reduction Check": "Suggested Resource(s): SF-424A[\" | Budget Narrative[? | SAAT[\" | Patient and Budget Calculator[\"",
-                    "As of 01/22/2026 02:33:58 PM": ""
-                  }
-                ]
+                "Patient Projection Funding Reduction Check": "If the Form 1A patient projection is less than 95% of the SAAT Patient Target, is the annual SAC funding request reduced Narrative? * This question does not impact application completeness or eligibility.",
+                "As of 01/22/2026 02:33:58 PM": "accordingly in the SF-424A and Budget"
+              },
+              {
+                "Patient Projection Funding Reduction Check": "Suggested Resource(s): SF-424A[\" | Budget Narrative[? | SAAT[\" | Patient and Budget Calculator[\"",
+                "As of 01/22/2026 02:33:58 PM": ""
               }
             ]
           }
         ]
-      },
-      {
-        "sectionNumber": null,
-        "title": "Print All | SA | HRSA EHBs",
-        "type": "requirement",
-        "pageReference": 3,
-        "content": "The applicant did not demonstrate that the applicant consulted with public housing residents in planning the new sites or ensure ongoing input from these residents.\n19. New or competing supplement applicant requesting HP and/or RPH funding: Does the applicant attest on the Summary Page that funding will be utilized to supplement, and not supplant, the expenditures of the health center and the value of in-kind contributions for the delivery of services to these populations?\nSuggested Resource(s): Summary Pager?\n[ _] Yes [ X ] No [_]N/A\nThe applicant did not indicate on the summary page that RPH funds will be used to supplement, and not supplant, current expenditures or in-kind contributions for services to that population.\nPatient Projection Funding Reduction Check\nAs of 01/22/2026 02:33:58 PM\nIf the Form 1A patient projection is less than 95% of the SAAT Patient Target, is the annual SAC funding request reduced\nNarrative? * This question does not impact application completeness or eligibility.\naccordingly in the SF-424A and Budget\nSuggested Resource(s): SF-424A[\" | Budget Narrative[? | SAAT[\" | Patient and Budget Calculator[\"\n[ _ ] Yes [ _ ] No [ X ] N/A",
-        "formFields": [
-          {
-            "field": "Suggested Resource(s)",
-            "value": "Summary Pager?",
-            "pageReference": 3
-          },
-          {
-            "field": "N/A",
-            "value": "Not Selected",
-            "pageReference": 3
-          }
-        ],
-        "tables": []
-      },
-      {
-        "sectionNumber": null,
-        "title": "Recommendations",
-        "type": "requirement",
-        "pageReference": 3,
-        "content": "As of 01/22/2026 02:34:00 PM\nIs the application complete based on the required documents mentioned in the Completeness and Eligibility Checklist?\n[ X ] Yes [_ ] No\nBased on BPHC OPPD review, is the applicant eligible? [ _ ] Yes [ X ] No\nClose Window\nhttps://grants2.hrsa.gov/WebGAM2Internal/Interface/PrintForm.aspx?RV=6231706f-c4bb-43e6-8185-3b03e8cc9fdb&RTC=19&PrintPage=False&IsPo ...\n3/3",
-        "formFields": [
-          {
-            "field": "Suggested Resource(s)",
-            "value": "Summary Pager?",
-            "pageReference": 3
-          }
-        ],
-        "tables": []
       }
     ]
   }

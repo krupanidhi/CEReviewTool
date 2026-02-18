@@ -133,7 +133,7 @@ async function resolveChecklistPath(checklistType, fiscalYear = null, explicitPa
  */
 async function extractAndCacheChecklist(pdfPath, jsonOutputPath) {
   const pdfBuffer = await fs.readFile(pdfPath)
-  console.log(`  � Sending ${basename(pdfPath)} (${(pdfBuffer.length / 1024).toFixed(0)} KB) to Azure DI...`)
+  console.log(`  📄 Sending ${basename(pdfPath)} (${(pdfBuffer.length / 1024).toFixed(0)} KB) to Azure DI...`)
 
   const analysisResult = await analyzeDocumentEnhanced(pdfBuffer, 'application/pdf')
   const structuredData = transformToStructured(analysisResult.data)
@@ -145,6 +145,25 @@ async function extractAndCacheChecklist(pdfPath, jsonOutputPath) {
 
   await fs.writeFile(jsonOutputPath, JSON.stringify(structuredData, null, 2))
   console.log(`  ✅ Structured JSON cached: ${jsonOutputPath}`)
+
+  // Extract questions via OpenAI from raw DI content and cache immediately
+  const rawContent = analysisResult.data?.content || ''
+  if (rawContent) {
+    try {
+      // Detect checklist type from filename
+      const fname = basename(pdfPath).toLowerCase()
+      const checklistType = fname.includes('standard') ? 'standard' : 'programspecific'
+      const questions = await extractQuestionsWithAI(rawContent, checklistType)
+      if (questions.length > 0) {
+        const questionsCache = jsonOutputPath.replace(/_structured\.json$/i, '_questions.json')
+        const cacheData = { questions, metadata: {}, parsedAt: new Date().toISOString(), source: 'openai_extraction' }
+        await fs.writeFile(questionsCache, JSON.stringify(cacheData, null, 2), 'utf-8')
+        console.log(`  💾 Cached ${questions.length} questions to ${basename(questionsCache)}`)
+      }
+    } catch (aiErr) {
+      console.warn(`  ⚠️ OpenAI question extraction failed (will retry on next load): ${aiErr.message}`)
+    }
+  }
 }
 
 /**
@@ -198,6 +217,83 @@ if (!endpoint || !key || !deployment) {
 }
 
 const client = new OpenAIClient(endpoint, new AzureKeyCredential(key))
+
+/**
+ * Extract checklist questions using OpenAI from raw DI text content.
+ *
+ * DI extracts the text perfectly; OpenAI understands the structure and
+ * identifies every numbered and unnumbered question regardless of format.
+ * Result is cached as _questions.json — one-time cost per checklist per FY.
+ *
+ * @param {string} rawContent - Raw text content from DI extraction
+ * @param {string} checklistType - 'programspecific' or 'standard'
+ * @returns {Promise<Array>} Extracted questions
+ */
+async function extractQuestionsWithAI(rawContent, checklistType) {
+  console.log(`🤖 Extracting questions from raw DI text via OpenAI (${checklistType})...`)
+  console.log(`   Raw content length: ${rawContent.length} chars`)
+
+  const systemPrompt = `You are a document analysis expert. Your task is to extract ALL checklist questions from a government grant review checklist document.
+
+Rules:
+- Extract EVERY numbered question (e.g., "1. Does the applicant...", "2. Public Agencies: Does...")
+- Extract EVERY unnumbered question that has Yes/No/N/A checkboxes or answer options
+- Include the FULL question text — do not truncate or summarize
+- Preserve the original question numbering exactly as it appears
+- For unnumbered questions, set originalNumber to null
+- Identify which section each question belongs to (e.g., "Completeness Checklist", "Eligibility Checklist", "Patient Projection Funding Reduction Check")
+- Note if a question references SAAT (Service Area Analysis Tool)
+- Extract any "Suggested Resource(s)" mentioned near each question
+- Do NOT include section headers, metadata, reviewer comments, or instructions as questions
+- Do NOT include "As of" dates, "Action Taken", "Completion Status", or "Other comments" fields
+
+Return a JSON object with this exact structure:
+{
+  "questions": [
+    {
+      "number": 1,
+      "question": "Full question text here",
+      "section": "Section name (e.g., Completeness Checklist)",
+      "originalNumber": 1,
+      "suggestedResources": "Resource text if any, or empty string",
+      "requiresSAAT": false
+    }
+  ]
+}`
+
+  const userPrompt = `Extract ALL questions from this ${checklistType === 'programspecific' ? 'Program-Specific' : 'Standard'} checklist document:\n\n${rawContent}`
+
+  const result = await client.getChatCompletions(deployment, [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ], {
+    temperature: 0,
+    maxTokens: 16000,
+    responseFormat: { type: 'json_object' }
+  })
+
+  const responseText = result.choices[0]?.message?.content || '{}'
+  const parsed = JSON.parse(responseText)
+  const questions = parsed.questions || []
+
+  // Normalize: ensure sequential numbering and add source field
+  questions.forEach((q, idx) => {
+    q.number = idx + 1
+    q.source = 'openai_extraction'
+    q.pageReference = q.pageReference || null
+    q.suggestedResources = q.suggestedResources || ''
+    q.requiresSAAT = q.requiresSAAT || false
+  })
+
+  console.log(`✅ OpenAI extracted ${questions.length} questions`)
+  if (questions.length > 0) {
+    questions.forEach(q => {
+      console.log(`   Q${q.number} [${q.section || '?'}] (orig#${q.originalNumber || 'unnumbered'}): "${q.question.substring(0, 80)}..."`)
+    })
+  }
+
+  return questions
+}
 
 /**
  * Deterministic question extraction from Document Intelligence structured JSON.
@@ -612,8 +708,34 @@ async function parseChecklistQuestions(data, logOptions = {}) {
 
   sections.forEach(s => collectMetadata(s))
 
-  // ─── Extract questions using DI structured sections (deterministic) ────────
-  const questions = extractQuestionsFromDI(sections, parseLog)
+  // ─── Extract questions using OpenAI from raw DI text content ───────────────
+  // Load raw content from the _extraction.json (DI's raw text output)
+  let rawContent = ''
+  if (logOptions.sourcePath) {
+    const extractionPath = logOptions.sourcePath.replace(/_structured\.json$/i, '_extraction.json')
+    try {
+      const extractionRaw = await fs.readFile(extractionPath, 'utf-8')
+      const extractionData = JSON.parse(extractionRaw)
+      rawContent = extractionData.content || ''
+    } catch {
+      console.warn(`⚠️ Could not load extraction JSON from ${extractionPath}`)
+    }
+  }
+  // If no extraction file, try to get content from the structured data itself
+  if (!rawContent) {
+    const allContent = []
+    function gatherContent(section) {
+      if (section.title) allContent.push(section.title)
+      if (section.content) allContent.push(section.content)
+      if (section.children) section.children.forEach(c => gatherContent(c))
+    }
+    sections.forEach(s => gatherContent(s))
+    rawContent = allContent.join('\n')
+  }
+
+  parseLog.push(`Raw content length: ${rawContent.length} chars`)
+
+  const questions = await extractQuestionsWithAI(rawContent, logOptions.checklistType || 'programspecific')
 
   parseLog.push('')
   parseLog.push(`--- Final Results ---`)
@@ -708,10 +830,8 @@ router.post('/analyze', async (req, res) => {
     })
     console.log(`📋 Parsed ${userQuestions.length} questions`)
 
-    // 1b. Load FY-aware rules (cached JSON → auto-generate → hardcoded fallback)
-    const programRules = await loadRulesForFiscalYear(fiscalYear, 'programspecific', {
-      aiClient: client, deployment
-    })
+    // 1b. Load rules from JSON (generated by server/scripts/generateRules.js)
+    const programRules = await loadRulesForFiscalYear(fiscalYear, 'programspecific')
 
     // 2. Extract PDF TOC links if not already present in applicationData
     //    These give us exact hyperlink destinations from the PDF's Table of Contents.
@@ -759,21 +879,24 @@ router.post('/analyze', async (req, res) => {
       }
     }
 
-    // 6. Process each question using rules engine
+    // 6. Process each question using JSON-driven rules
     const comparisonResults = []
     const aiQuestionsToAsk = [] // Collect questions that need AI
 
-    // Track Q10 answer for dependency chain (Q11-Q15 depend on Q10=Yes)
-    let q10Answer = null
+    // Track answers by question number for dependency chains
+    const answersByQNum = {}
 
     for (const q of userQuestions) {
       const rule = programRules.find(r => r.questionNumber === q.number)
 
       if (!rule) {
-        // No rule defined — fall back to AI
+        // No rule for this question — send to AI for general analysis
+        console.log(`   Q${q.number}: No rule → AI general ("${q.question.substring(0, 60)}...")`)
         aiQuestionsToAsk.push(q)
         continue
       }
+
+      console.log(`   Q${q.number}: ${rule.answerStrategy} → "${q.question.substring(0, 60)}..."`)
 
       // Check condition (applicant type, funding type, etc.)
       const condResult = evaluateCondition(rule, applicantFlags)
@@ -786,55 +909,43 @@ router.post('/analyze', async (req, res) => {
           evidence: condResult.reason,
           pageReferences: [],
           reasoning: condResult.reason,
-          suggestedResources: q.suggestedResources || '',
+          suggestedResources: q.suggestedResources || rule.suggestedResources || '',
           requiresSAAT: q.requiresSAAT || false,
           method: 'rules_condition'
         })
-        if (q.number === 10) q10Answer = 'N/A'
+        answersByQNum[q.number] = 'N/A'
         continue
       }
 
-      // Check dependency (Q11-Q15 depend on Q10=Yes)
+      // Check dependency (e.g., Q11-Q15 depend on Q10=Yes)
       if (rule.dependsOn) {
-        const depAnswer = q10Answer || comparisonResults.find(r => r.questionNumber === rule.dependsOn.question)?.aiAnswer
+        const depQNum = rule.dependsOn.question
+        const depAnswer = answersByQNum[depQNum]
         if (depAnswer && depAnswer.toLowerCase() !== rule.dependsOn.requiredAnswer.toLowerCase()) {
           comparisonResults.push({
             questionNumber: q.number,
             question: q.question,
             aiAnswer: 'N/A',
             confidence: 'high',
-            evidence: `Per the checklist instructions, since Question ${rule.dependsOn.question} was answered "${depAnswer}", this question is not applicable.`,
+            evidence: `Per the checklist instructions, since Question ${depQNum} was answered "${depAnswer}", this question is not applicable.`,
             pageReferences: [],
-            reasoning: `The checklist states that if Question ${rule.dependsOn.question} is answered "No", then Questions 11 through 15 should be marked N/A.`,
-            suggestedResources: q.suggestedResources || '',
+            reasoning: `Dependency: Q${depQNum}=${depAnswer}, so this question is N/A.`,
+            suggestedResources: q.suggestedResources || rule.suggestedResources || '',
             requiresSAAT: q.requiresSAAT || false,
             method: 'rules_dependency'
           })
+          answersByQNum[q.number] = 'N/A'
           continue
         }
       }
 
-      // Apply answer strategy — pass suggestedResources as primary lookup hint
-      if (rule.answerStrategy === 'presence') {
-        const result = answerPresenceQuestion(rule, appIndex, q.suggestedResources)
-        comparisonResults.push({
-          questionNumber: q.number,
-          question: q.question,
-          ...result,
-          suggestedResources: q.suggestedResources || '',
-          requiresSAAT: q.requiresSAAT || false,
-          method: 'rules_presence'
-        })
-        console.log(`   Q${q.number}: ${result.aiAnswer} (presence check) → pages [${result.pageReferences.join(', ')}]`)
-      } else if (rule.answerStrategy === 'saat_compare') {
-        // SAAT questions — collect for focused AI call with SAAT data
+      // Route by answer strategy
+      if (rule.answerStrategy === 'saat_compare') {
+        // SAAT questions — collect for batch AI call with SAAT data + complianceGuidance
         aiQuestionsToAsk.push({ ...q, rule, isSAAT: true })
-        if (q.number === 10) {
-          // We need Q10 answered before Q11-Q15, so mark it for priority
-          aiQuestionsToAsk[aiQuestionsToAsk.length - 1].priority = true
-        }
-      } else if (rule.answerStrategy === 'ai_focused') {
-        // Focused AI — collect with relevant pages
+      } else {
+        // document_review, eligibility_check, or any other strategy
+        // All go to focused AI with complianceGuidance from the rule
         aiQuestionsToAsk.push({ ...q, rule })
       }
     }
@@ -851,22 +962,25 @@ router.post('/analyze', async (req, res) => {
       if (saatQuestions.length > 0) {
         const saatResults = await answerSAATQuestionsBatch(saatQuestions, appIndex, saatData, saatSummary, applicantProfile)
         for (const r of saatResults) {
-          if (r.questionNumber === 10) q10Answer = r.aiAnswer
+          answersByQNum[r.questionNumber] = r.aiAnswer
           comparisonResults.push(r)
         }
 
-        // Re-evaluate Q11-Q15 dependencies now that Q10 is answered
-        if (q10Answer && q10Answer.toLowerCase() !== 'yes') {
+        // Re-evaluate dependent SAAT questions now that the NOFO question (Q10) is answered
+        // Find the NOFO question — it's the one whose rule has saatCheck or no dependsOn among SAAT questions
+        const nofoQ = saatQuestions.find(q => q.rule?.dependsOn === null && q.rule?.answerStrategy === 'saat_compare')
+        const nofoAnswer = nofoQ ? answersByQNum[nofoQ.number] : null
+        if (nofoAnswer && nofoAnswer.toLowerCase() !== 'yes') {
           for (const q of saatQuestions) {
-            if (q.rule?.dependsOn?.question === 10 && !comparisonResults.find(r => r.questionNumber === q.number)) {
+            if (q.rule?.dependsOn && !comparisonResults.find(r => r.questionNumber === q.number)) {
               comparisonResults.push({
                 questionNumber: q.number,
                 question: q.question,
                 aiAnswer: 'N/A',
                 confidence: 'high',
-                evidence: `Q10 answered "${q10Answer}" — questions 11-15 are N/A per checklist instructions.`,
+                evidence: `Question ${nofoQ.number} answered "${nofoAnswer}" — dependent SAAT questions are N/A per checklist instructions.`,
                 pageReferences: [],
-                reasoning: `Dependency: Q10=${q10Answer}, so this question is automatically N/A.`,
+                reasoning: `Dependency: Q${nofoQ.number}=${nofoAnswer}, so this question is automatically N/A.`,
                 suggestedResources: q.suggestedResources || '',
                 requiresSAAT: q.requiresSAAT || false,
                 method: 'rules_dependency'
@@ -1218,25 +1332,26 @@ async function answerSAATQuestionsBatch(saatQuestions, appIndex, saatData, saatS
   // Build focused prompt with only SAAT questions + relevant pages
   const questionsText = saatQuestions.map(q => {
     let line = `Q${q.number}: ${q.question}`
-    if (q.rule?.description) line += `\n  Rule: ${q.rule.description}`
+    if (q.rule?.complianceGuidance) line += `\n  COMPLIANCE CRITERIA: ${q.rule.complianceGuidance}`
+    if (q.suggestedResources || q.rule?.suggestedResources) line += `\n  SUGGESTED RESOURCES: ${q.suggestedResources || q.rule.suggestedResources}`
     return line
   }).join('\n\n')
 
-  const systemPrompt = `You are an expert HRSA grant reviewer. Answer ONLY the questions below using the SAAT data and application form data provided.
+  const systemPrompt = `You are an expert HRSA grant reviewer conducting a compliance review. Answer ONLY the questions below using the SAAT data and application form data provided.
 
-RULES:
-- Q10: "Yes" if the applicant's NOFO matches AND proposes a valid service area from the SAAT. If "No", Q11-Q15 are all "N/A".
-- Q11: "Yes" if Form 1A patient projection >= 75% of SAAT Patient Target. Show the numbers.
-- Q12: "Yes" if applicant proposes ALL Service Types listed in SAAT.
-- Q13: "Yes" if annual SAC funding request (SF-424A) does NOT exceed SAAT Total Funding. Show the amounts.
-- Q14: "Yes" if funding distribution matches SAAT (CHC, MSAW, HP, RPH).
-- Q15: "Yes" if applicant proposes ALL population types listed in SAAT.
-- Q16: "Yes" if Form 5B zip codes cover >= 75% of SAAT patient percentage.
+CRITICAL INSTRUCTIONS:
+- Each question includes COMPLIANCE CRITERIA from the User Guide that describe exactly what to evaluate.
+- Cross-reference the SAAT data with the application forms to verify compliance.
+- For patient target questions: compare actual numbers and show the calculation.
+- For funding questions: compare actual dollar amounts and show the comparison.
+- For service/population type questions: list what the SAAT requires and what the application proposes.
+- If a question depends on another (e.g., "If Q10 is No, Q11-Q15 are N/A"), handle dependencies.
 
 WRITING STYLE:
 - Write "evidence" as a clear, descriptive paragraph a reviewer can read. Reference the specific page, form name, and values found.
-- Write "reasoning" as a brief explanation of how you reached your conclusion, not a numbered step list.
+- Write "reasoning" as a brief explanation of how the compliance criteria are or are not met.
 - Always mention the page number where you found the data (e.g., "Form 1A on page 135 shows 5,200 projected patients").
+- Show specific numbers, percentages, and comparisons.
 
 Return ONLY a JSON array:
 [{"questionNumber":10,"aiAnswer":"Yes","confidence":"high","evidence":"The applicant proposes to serve Service Area 154 in Philadelphia, PA, which is listed under NOFO HRSA-26-004 in the SAAT. The Project Abstract on page 5 confirms the applicant is applying for this service area.","pageReferences":[5],"reasoning":"The NOFO number matches and the proposed service area is listed in the SAAT, confirming the applicant is proposing a valid announced service area."}]`
@@ -1361,25 +1476,31 @@ async function answerFocusedQuestionsBatch(focusedQuestions, appIndex, applicant
     }
 
     const questionsText = group.questions.map(q => {
-      const aiQ = q.rule?.aiQuestion || q.question
-      let line = `Q${q.number}: ${aiQ}`
-      if (q.suggestedResources) line += `\n  → Look in: ${q.suggestedResources}`
+      let line = `Q${q.number}: ${q.question}`
+      if (q.rule?.complianceGuidance) line += `\n  COMPLIANCE CRITERIA: ${q.rule.complianceGuidance}`
+      if (q.suggestedResources || q.rule?.suggestedResources) line += `\n  SUGGESTED RESOURCES: ${q.suggestedResources || q.rule.suggestedResources}`
       return line
     }).join('\n\n')
 
-    const systemPrompt = `You are an expert HRSA grant reviewer. Answer ONLY the questions below using the application pages provided.
+    const systemPrompt = `You are an expert HRSA grant reviewer conducting a compliance review. Answer ONLY the questions below using the application pages provided.
+
+CRITICAL INSTRUCTIONS:
+- Each question includes COMPLIANCE CRITERIA that describe exactly what to evaluate. Use these criteria — do NOT just check if a word or document name appears in the text.
+- For document inclusion questions: verify the document is actually present as a distinct attachment/form, not just mentioned in passing text.
+- For eligibility questions: evaluate whether the applicant meets the specific criteria described in the compliance guidance.
+- For service/form questions: verify the specific content requirements are met (e.g., correct columns checked, required sections completed).
 
 For each question, answer "Yes", "No", or "N/A" with specific evidence from the pages.
 
 WRITING STYLE:
 - Write "evidence" as a clear, descriptive paragraph a reviewer can read. Mention the specific page number, document/form name, and what you found.
-- Write "reasoning" as a brief explanation of your conclusion, not a numbered step list.
-- Example evidence: "The Budget Narrative on page 55 describes the applicant's staffing plan and operational costs. Form 5A on page 143 lists General Primary Medical Care under Column I (direct services), confirming the applicant will provide this service directly."
+- Write "reasoning" as a brief explanation of how the compliance criteria are or are not met.
+- Be specific: cite page numbers, form names, column values, and actual content found.
 
 Return ONLY a JSON array:
-[{"questionNumber":6,"aiAnswer":"Yes","confidence":"high","evidence":"The Budget Narrative on page 55 describes the applicant's direct involvement in staffing and operations. Form 5A on page 143 shows services the applicant will provide directly.","pageReferences":[55,143],"reasoning":"The applicant demonstrates a substantive role through direct service delivery and budget management, not merely applying on behalf of another organization."}]`
+[{"questionNumber":6,"aiAnswer":"Yes","confidence":"high","evidence":"The Budget Narrative on page 55 describes the applicant's direct involvement in staffing and operations. Form 5A on page 143 shows services the applicant will provide directly.","pageReferences":[55,143],"reasoning":"The compliance criteria require the applicant to demonstrate a substantive role. The Budget Narrative and Form 5A confirm direct service delivery and budget management, not merely applying on behalf of another organization."}]`
 
-    const userPrompt = `QUESTIONS:\n${questionsText}\n\nAPPLICATION PAGES:\n${allPageTexts.join('\n\n')}\n\nAPPLICANT: ${applicantProfile.organizationName || 'Unknown'} (${applicantProfile.organizationType || 'Unknown'})`
+    const userPrompt = `QUESTIONS WITH COMPLIANCE CRITERIA:\n${questionsText}\n\nAPPLICATION PAGES:\n${allPageTexts.join('\n\n')}\n\nAPPLICANT: ${applicantProfile.organizationName || 'Unknown'} (${applicantProfile.organizationType || 'Unknown'})`
 
     try {
       console.log(`   Focused batch: ${group.questions.length} questions, ${allPageTexts.length} pages, ${userPrompt.length} chars`)

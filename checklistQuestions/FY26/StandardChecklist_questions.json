@@ -3,40 +3,25 @@
     {
       "number": 1,
       "question": "Does the application contain all required attachments listed in the guidance?",
-      "section": "Unknown",
+      "section": "Standard Review Checklist",
       "originalNumber": 1,
-      "source": "document_intelligence",
       "suggestedResources": "",
       "requiresSAAT": false,
-      "pageReference": 1
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 2,
       "question": "Is the applicant an eligible entity as mentioned in the guidance (e.g. non-profit, governmental unit)?",
-      "section": "Unknown",
+      "section": "Standard Review Checklist",
       "originalNumber": 2,
-      "source": "document_intelligence",
       "suggestedResources": "",
       "requiresSAAT": false,
-      "pageReference": 1
+      "source": "openai_extraction",
+      "pageReference": null
     }
   ],
-  "metadata": {
-    "Announcement Name": "Service Area Competition",
-    "Grant (#)": "N/A",
-    "Announcement (#)": "HRSA-26-004",
-    "Funding Cycle Code": "9856",
-    "Completion Status": "Complete",
-    "Program Specific Recommendation": "Eligible",
-    "Name": "Ashley Vigil",
-    "Date": "11/13/2025 10:04:03 AM",
-    "Recommendation": "Eligible",
-    "gmsRecommendation": {
-      "Name": "Joi, Grymes-Johnson Justification:",
-      "Date": "11/13/2025 10:38:53 AM",
-      "Recommendation": "Eligible",
-      "Justification": ""
-    }
-  },
-  "parsedAt": "2026-02-17T01:19:41.455Z"
+  "metadata": {},
+  "parsedAt": "2026-02-17T22:23:49.335Z",
+  "source": "openai_extraction"
 }

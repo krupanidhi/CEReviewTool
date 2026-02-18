@@ -44,6 +44,7 @@ const LOGS_DIR = join(CE_ROOT, 'logs')
 const PREFUNDING_ROOT = 'C:\\Users\\KPeterson\\CascadeProjects\\AIPrefundingReview\\AIPrefundingReview'
 const PREFUNDING_DATA_DIR = join(PREFUNDING_ROOT, 'data')
 const PREFUNDING_CACHE_DIR = join(PREFUNDING_DATA_DIR, 'cache')
+const PF_RESULTS_DIR = join(CE_ROOT, 'pf-results')
 
 const CONFIG = {
   CE_SERVER_URL: process.env.BATCH_SERVER_URL || 'http://localhost:3002',
@@ -142,6 +143,7 @@ async function main() {
   log(`  📂 PF Root:              ${PREFUNDING_ROOT}`)
   log(`  📂 PF Data:              ${PREFUNDING_DATA_DIR}`)
   log(`  📂 PF Cache:             ${PREFUNDING_CACHE_DIR}`)
+  log(`  📂 PF Results (JSON):    ${PF_RESULTS_DIR}`)
 
   const args = process.argv.slice(2)
   const getArg = n => { const i = args.indexOf(`--${n}`); return i >= 0 && i+1 < args.length ? args[i+1] : null }
@@ -201,7 +203,7 @@ async function main() {
     const fyLabel = `FY${yearCode}`
 
     // Log resolved per-app folder paths
-    const resolvedUserGuide = join(USER_GUIDES_ROOT, fundingOpp?.full || `HRSA-${yearCode}-004`)
+    const resolvedUserGuide = join(USER_GUIDES_ROOT, fyLabel)
     const resolvedChecklists = join(CHECKLISTS_ROOT, fyLabel)
     const resolvedSAAT = join(SAAT_ROOT, fyLabel)
     const resolvedPFRules = join(PREFUNDING_DATA_DIR, yearCode, 'compliance-rules.json')
@@ -231,7 +233,7 @@ async function main() {
       try {
         await prefundingValidate(pfText, appName, baseName, yearCode, appPath, appResult, {
           CONFIG, log, logS, logE, logW, md5,
-          PREFUNDING_DATA_DIR, PREFUNDING_CACHE_DIR, PF_SECTIONS
+          PREFUNDING_DATA_DIR, PREFUNDING_CACHE_DIR, PF_RESULTS_DIR, PF_SECTIONS
         })
       } catch (err) { logE(`Prefunding failed: ${err.message}`); appResult.pfError = err.message }
     }
