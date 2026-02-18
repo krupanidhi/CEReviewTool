@@ -628,60 +628,258 @@ function buildApplicationIndex(applicationData) {
 // ─── Applicant Profile Analyzer ─────────────────────────────────────────────
 
 /**
- * Determine applicant characteristics needed for conditional question rules.
- * Returns flags like isNew, isPublicAgency, isCompetingSupplement, requestsRPH, etc.
+ * Helper: get page text from appIndex by page number.
  */
-function analyzeApplicantType(applicantProfile, applicationData) {
+function getPageText(appIndex, pageNum) {
+  const p = appIndex.pages.find(pg => pg.pageNum === pageNum)
+  return p ? p.text : ''
+}
+
+/**
+ * Helper: get text for a form/attachment using TOC links (formPageMap).
+ * Returns the text of ALL pages in the form's range (formPageRanges) if available,
+ * otherwise just the single mapped page.
+ * Also returns the page numbers for source tracking.
+ */
+function getFormText(appIndex, formKey) {
+  const { formPageMap, formPageRanges, pages } = appIndex
+  const startPage = formPageMap.get(formKey)
+  if (!startPage) return { text: '', pageNums: [] }
+
+  const range = formPageRanges?.get(formKey)
+  const endPage = range ? range.end : startPage
+
+  const texts = []
+  const pageNums = []
+  for (let pn = startPage; pn <= endPage; pn++) {
+    const pageData = pages.find(p => p.pageNum === pn)
+    if (pageData) {
+      texts.push(pageData.text)
+      pageNums.push(pn)
+    }
+  }
+  return { text: texts.join('\n'), pageNums }
+}
+
+/**
+ * Determine applicant characteristics needed for conditional question rules.
+ * 
+ * IMPORTANT: Uses appIndex (TOC links → exact form pages) to read ONLY the
+ * specific structured forms for each flag. Does NOT scan all page text.
+ * 
+ * Evidence sources for each flag:
+ *   - Application type (new/competing): Form 1A, SF-424 (Type of Submission field)
+ *   - Organization type (public agency/nonprofit): SF-424 (Type of Applicant), Form 1A
+ *   - Funding types (CHC/MSAW/HP/RPH): Summary Page, SF-424A (budget sections)
+ * 
+ * @param {Object} applicantProfile - Pre-extracted profile from extractApplicantProfile
+ * @param {Object} applicationData - Raw application data (used only if appIndex unavailable)
+ * @param {Object} appIndex - Application index with formPageMap, formPageRanges, pages
+ */
+function analyzeApplicantType(applicantProfile, applicationData, appIndex) {
   const flags = {
     isNew: false,
     isCompetingSupplement: false,
+    isCompetingContinuation: false, // explicit flag — when true, isNew and isCompetingSupplement MUST be false
     isPublicAgency: false,
     isNonprofit: false,
     requestsRPH: false,
     requestsHP: false,
     requestsMSAW: false,
+    requestsPHPC: false,  // Public Housing Primary Care (used in FY24/FY25 rules)
+    _sources: {}, // tracks which form/page each flag was determined from
   }
 
+  // ── 1. Use applicantProfile fields (already extracted from key-value pairs) ──
   const orgType = (applicantProfile?.organizationType || '').toLowerCase()
-  const allText = applicationData?.pages?.map(p => (p.lines || []).map(l => l.content).join(' ')).join(' ').toLowerCase() || ''
-
-  // Determine new vs competing continuation
-  // "New" applicants are those not currently receiving HRSA funding
-  // "Competing Supplement" applicants are adding to existing funding
-  // "Competing Continuation" applicants are renewing existing funding
-  if (/\bnew\s+access\s+point\b/i.test(allText) || /\bnew\s+applicant\b/i.test(allText)) {
-    flags.isNew = true
-  }
-  if (/\bcompeting\s+supplement\b/i.test(allText)) {
-    flags.isCompetingSupplement = true
-  }
-  // If neither explicitly new nor competing supplement, check SF-424 for clues
-  if (!flags.isNew && !flags.isCompetingSupplement) {
-    if (/\bnew\b/i.test(orgType)) flags.isNew = true
-  }
-
-  // Public agency check
-  if (/public\s*agency/i.test(orgType) || /government/i.test(orgType) || /\btribal\b/i.test(orgType)) {
+  if (/public\s*agency/i.test(orgType) || /government/i.test(orgType) || /county/i.test(orgType)) {
     flags.isPublicAgency = true
+    flags._sources.isPublicAgency = `applicantProfile.organizationType: "${applicantProfile.organizationType}"`
   }
-
-  // Nonprofit check
-  if (/non-?profit/i.test(orgType) || /501\s*\(?c\)?\s*\(?3\)?/i.test(allText)) {
+  if (/\btribal\b/i.test(orgType) || /\bindian\b/i.test(orgType)) {
+    flags.isPublicAgency = true // Tribal orgs are treated as public agencies
+    flags._sources.isPublicAgency = `applicantProfile.organizationType: "${applicantProfile.organizationType}" (Tribal)`
+  }
+  if (/non-?profit/i.test(orgType) || /501\s*c/i.test(orgType)) {
     flags.isNonprofit = true
+    flags._sources.isNonprofit = `applicantProfile.organizationType: "${applicantProfile.organizationType}"`
   }
 
-  // Funding type checks (RPH, HP, MSAW)
-  if (/\brph\b/i.test(allText) || /residents?\s+of\s+public\s+housing/i.test(allText)) {
-    flags.requestsRPH = true
+  // Use profile flags if already set
+  if (applicantProfile?.isPublicAgency) flags.isPublicAgency = true
+  if (applicantProfile?.isNonprofit) flags.isNonprofit = true
+  if (applicantProfile?.isTribal) { flags.isPublicAgency = true }
+  if (applicantProfile?.isNewApplicant) {
+    flags.isNew = true
+    flags._sources.isNew = `applicantProfile.isNewApplicant`
   }
-  if (/\bhomeless\s+population\b/i.test(allText) || /\bhp\b.*funding/i.test(allText)) {
-    flags.requestsHP = true
-  }
-  if (/\bmsaw\b/i.test(allText) || /migratory.*seasonal.*agricultural/i.test(allText)) {
-    flags.requestsMSAW = true
+  if (applicantProfile?.isCompetingSupplement) {
+    flags.isCompetingSupplement = true
+    flags._sources.isCompetingSupplement = `applicantProfile.isCompetingSupplement`
   }
 
-  console.log(`👤 Applicant flags: new=${flags.isNew}, competing=${flags.isCompetingSupplement}, publicAgency=${flags.isPublicAgency}, nonprofit=${flags.isNonprofit}, RPH=${flags.requestsRPH}, HP=${flags.requestsHP}`)
+  // ── 2. Read specific form pages via appIndex for authoritative data ──
+  if (appIndex && appIndex.formPageMap) {
+    // 2a. Form 1A — Application Type (New / Competing Continuation / Competing Supplement)
+    const form1a = getFormText(appIndex, 'form 1a')
+    if (form1a.text) {
+      console.log(`   📄 Form 1A found on page(s) ${form1a.pageNums.join(', ')} — reading for application type`)
+      const form1aLower = form1a.text.toLowerCase()
+
+      // Application type detection from Form 1A
+      // IMPORTANT: Check Competing Continuation FIRST — it's the most common type
+      // and prevents false positives from loose "new" matching.
+      if (/competing\s*continuation/i.test(form1aLower)) {
+        flags.isCompetingContinuation = true
+        flags.isNew = false
+        flags.isCompetingSupplement = false
+        flags._sources.applicationType = `Form 1A (page ${form1a.pageNums[0]}): Application Type = Competing Continuation`
+      } else if (/competing\s*supplement/i.test(form1aLower)) {
+        flags.isCompetingSupplement = true
+        flags.isNew = false
+        flags._sources.isCompetingSupplement = `Form 1A (page ${form1a.pageNums[0]}): Application Type = Competing Supplement`
+      } else if (/\bnew\s+(?:access\s+point|applicant|start)\b/i.test(form1a.text) ||
+                 /(?:application|submission)\s*type[^\n]{0,30}\bnew\b/i.test(form1a.text)) {
+        // Only match "new" in specific contexts: "New Access Point", "New Applicant", "New Start",
+        // or "Application Type: ... New" — NOT loose "new" anywhere in the form
+        flags.isNew = true
+        flags._sources.isNew = `Form 1A (page ${form1a.pageNums[0]}): Application Type = New`
+      }
+
+      // Public agency from Form 1A
+      if (!flags.isPublicAgency && /public\s*(?:agency|entity)/i.test(form1aLower)) {
+        // Only set if it's in a field context, not just mentioned in instructions
+        if (/applicant\s*(?:is|type)[^:]*:?\s*(?:.*?)public\s*agency/i.test(form1a.text) ||
+            /organization\s*type[^:]*:?\s*(?:.*?)public/i.test(form1a.text)) {
+          flags.isPublicAgency = true
+          flags._sources.isPublicAgency = `Form 1A (page ${form1a.pageNums[0]})`
+        }
+      }
+    }
+
+    // 2b. SF-424 — Type of Applicant, Type of Submission
+    const sf424 = getFormText(appIndex, 'sf-424')
+    if (sf424.text) {
+      console.log(`   📄 SF-424 found on page(s) ${sf424.pageNums.join(', ')} — reading for applicant/submission type`)
+
+      // Type of Applicant from SF-424
+      const typeMatch = sf424.text.match(/Type\s+of\s+Applicant[^:]*:\s*([^\n]+)/i)
+      if (typeMatch) {
+        const typeVal = typeMatch[1].trim()
+        if (/government|county|city|state|municipal|public/i.test(typeVal)) {
+          flags.isPublicAgency = true
+          flags._sources.isPublicAgency = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}"`
+        }
+        if (/non-?profit|501c/i.test(typeVal)) {
+          flags.isNonprofit = true
+          flags._sources.isNonprofit = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}"`
+        }
+        if (/tribal|indian/i.test(typeVal)) {
+          flags.isPublicAgency = true
+          flags._sources.isPublicAgency = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}" (Tribal)`
+        }
+      }
+
+      // Type of Submission from SF-424 (New, Continuation, Revision)
+      const subMatch = sf424.text.match(/Type\s+of\s+Submission[^:]*:\s*([^\n]+)/i)
+      if (subMatch) {
+        const subVal = subMatch[1].trim().toLowerCase()
+        if (/\bcontinuation\b/.test(subVal) && !/\bnew\b/.test(subVal)) {
+          // "Continuation" without "New" = Competing Continuation
+          flags.isCompetingContinuation = true
+          flags.isNew = false
+          flags.isCompetingSupplement = false
+          flags._sources.applicationType = `SF-424 (page ${sf424.pageNums[0]}): Type of Submission = Continuation`
+        } else if (/\bnew\b/.test(subVal)) {
+          // Only set isNew if NOT already determined as Competing Continuation
+          if (!flags.isCompetingContinuation) {
+            flags.isNew = true
+            flags._sources.isNew = `SF-424 (page ${sf424.pageNums[0]}): Type of Submission = New`
+          }
+        }
+      }
+    }
+
+    // 2c. Summary Page — Funding types (CHC, MSAW, HP, RPH) and attestations
+    const summaryPage = getFormText(appIndex, 'summary page')
+    if (summaryPage.text) {
+      console.log(`   📄 Summary Page found on page(s) ${summaryPage.pageNums.join(', ')} — reading for funding types`)
+      const spText = summaryPage.text
+
+      // Funding type detection from Summary Page
+      // The Summary Page typically has checkboxes or fields for each funding stream
+      // Look for funding type indicators in structured field context
+      if (/\bCHC\b/.test(spText)) {
+        flags._sources.CHC = `Summary Page (page ${summaryPage.pageNums[0]})`
+      }
+
+      // MSAW — look for checked/selected context, not just mention
+      if (/\bMSAW\b/.test(spText) && /(?:migratory|seasonal|agricultural)/i.test(spText)) {
+        flags.requestsMSAW = true
+        flags._sources.requestsMSAW = `Summary Page (page ${summaryPage.pageNums[0]}): MSAW funding indicated`
+      }
+
+      // HP (Homeless Population) — must be in funding context, not just mentioned
+      // Look for "HP" near funding/request/checked indicators
+      if (/(?:homeless\s*(?:population)?|HCH)\s*(?:funding|request|:|\byes\b|\bx\b|☑|✓)/i.test(spText) ||
+          /(?:funding|request)[^.]{0,50}\bHP\b/i.test(spText)) {
+        flags.requestsHP = true
+        flags._sources.requestsHP = `Summary Page (page ${summaryPage.pageNums[0]}): HP funding indicated`
+      }
+
+      // RPH (Residents of Public Housing) / PHPC (Public Housing Primary Care) — must be in funding context
+      // RPH and PHPC refer to the same funding stream across different fiscal years
+      if (/(?:public\s*housing|RPH|PHPC)\s*(?:funding|request|:|\byes\b|\bx\b|☑|✓)/i.test(spText) ||
+          /(?:funding|request)[^.]{0,50}(?:\bRPH\b|\bPHPC\b)/i.test(spText)) {
+        flags.requestsRPH = true
+        flags.requestsPHPC = true  // Same funding stream, different name across FYs
+        flags._sources.requestsRPH = `Summary Page (page ${summaryPage.pageNums[0]}): RPH/PHPC funding indicated`
+        flags._sources.requestsPHPC = flags._sources.requestsRPH
+      }
+
+      // Application type from Summary Page
+      // Check Competing Continuation first — it's the most definitive
+      if (/competing\s*continuation/i.test(spText)) {
+        flags.isCompetingContinuation = true
+        flags.isNew = false
+        flags.isCompetingSupplement = false
+        if (!flags._sources.applicationType) {
+          flags._sources.applicationType = `Summary Page (page ${summaryPage.pageNums[0]}): Competing Continuation`
+        }
+      } else if (!flags.isCompetingContinuation) {
+        // Only check for New/Competing Supplement if NOT already Competing Continuation
+        if (/competing\s*supplement/i.test(spText) && !flags.isCompetingSupplement) {
+          flags.isCompetingSupplement = true
+          flags._sources.isCompetingSupplement = `Summary Page (page ${summaryPage.pageNums[0]}): Competing Supplement`
+        }
+        if (/\bnew\s+(?:access\s+point|applicant|start)\b/i.test(spText) && !flags.isNew) {
+          flags.isNew = true
+          flags._sources.isNew = `Summary Page (page ${summaryPage.pageNums[0]}): New applicant`
+        }
+      }
+    }
+
+    // 2d. SF-424A — Budget sections may confirm funding types
+    const sf424a = getFormText(appIndex, 'sf-424a')
+    if (sf424a.text) {
+      console.log(`   📄 SF-424A found on page(s) ${sf424a.pageNums.join(', ')} — reading for funding distribution`)
+      // If MSAW/HP/RPH amounts are $0 or absent in the budget, they're not requested
+      // This is a secondary check — Summary Page is primary
+    }
+  } else {
+    console.warn(`   ⚠️ appIndex not available — falling back to applicantProfile only`)
+  }
+
+  // Final safety: if Competing Continuation was detected, ensure isNew and isCompetingSupplement are false
+  if (flags.isCompetingContinuation) {
+    flags.isNew = false
+    flags.isCompetingSupplement = false
+  }
+
+  console.log(`👤 Applicant flags: new=${flags.isNew}, competingSupplement=${flags.isCompetingSupplement}, competingContinuation=${flags.isCompetingContinuation}, publicAgency=${flags.isPublicAgency}, nonprofit=${flags.isNonprofit}, RPH=${flags.requestsRPH}, HP=${flags.requestsHP}, MSAW=${flags.requestsMSAW}`)
+  if (Object.keys(flags._sources).length > 0) {
+    console.log(`   Sources: ${JSON.stringify(flags._sources)}`)
+  }
 
   return flags
 }
@@ -709,6 +907,7 @@ function evaluateCondition(rule, applicantFlags) {
       break
     case 'funding_type':
       if (value === 'rph') conditionMet = applicantFlags.requestsRPH
+      if (value === 'ph' || value === 'phpc') conditionMet = applicantFlags.requestsPHPC || applicantFlags.requestsRPH
       if (value === 'hp_or_rph') conditionMet = applicantFlags.requestsHP || applicantFlags.requestsRPH
       break
     default:
@@ -716,16 +915,30 @@ function evaluateCondition(rule, applicantFlags) {
   }
 
   if (!conditionMet && naIfNot) {
-    // Human-friendly reason
+    // Human-friendly reason with source evidence from the specific form pages
+    const sources = applicantFlags._sources || {}
+    const sourceDetail = sources.applicationType || sources.isNew || sources.isCompetingSupplement || ''
+
     const reasons = {
-      'applicant_type:public_agency': 'This question applies only to public agency applicants. The applicant is not a public agency.',
-      'applicant_status:new': 'This question applies only to new applicants. The applicant is not a new applicant.',
-      'applicant_status:new_or_competing': 'This question applies only to new or competing supplement applicants.',
-      'funding_type:rph': 'This question applies only to applicants requesting RPH (Residents of Public Housing) funding. The applicant is not requesting RPH funding.',
-      'funding_type:hp_or_rph': 'This question applies only to applicants requesting HP (Homeless Population) and/or RPH funding. The applicant is not requesting HP or RPH funding.',
+      'applicant_type:public_agency': `This question applies only to public agency applicants.${sources.isPublicAgency ? ' ' + sources.isPublicAgency + '.' : ' The applicant is not identified as a public agency.'}`,
+      'applicant_status:new': `This question applies only to new applicants.${sourceDetail ? ' ' + sourceDetail + '.' : ' The applicant is not a new applicant.'}`,
+      'applicant_status:new_or_competing': `This question applies only to new or competing supplement applicants.${sourceDetail ? ' ' + sourceDetail + '.' : ''}`,
+      'funding_type:rph': `This question applies only to applicants requesting RPH (Residents of Public Housing) funding.${sources.requestsRPH ? ' ' + sources.requestsRPH + '.' : ' The Summary Page does not indicate RPH funding is requested.'}`,
+      'funding_type:rph_or_ph': `This question applies only to applicants requesting RPH or PH funding.${sources.requestsRPH || sources.requestsHP ? '' : ' The Summary Page does not indicate RPH or PH funding is requested.'}`,
+      'funding_type:ph': `This question applies only to applicants requesting PHPC/RPH (Public Housing Primary Care) funding.${sources.requestsPHPC || sources.requestsRPH ? ' ' + (sources.requestsPHPC || sources.requestsRPH) + '.' : ' The Summary Page does not indicate PHPC/RPH funding is requested.'}`,
+      'funding_type:phpc': `This question applies only to applicants requesting PHPC (Public Housing Primary Care) funding.${sources.requestsPHPC || sources.requestsRPH ? ' ' + (sources.requestsPHPC || sources.requestsRPH) + '.' : ' The Summary Page does not indicate PHPC funding is requested.'}`,
+      'funding_type:hp_or_rph': `This question applies only to applicants requesting HP (Homeless Population) and/or RPH funding.${sources.requestsHP || sources.requestsRPH ? '' : ' The Summary Page does not indicate HP or RPH funding is requested.'}`,
     }
     const reason = reasons[`${type}:${value}`] || `This question does not apply to this applicant (${type}: ${value}).`
-    return { applicable: false, reason }
+
+    // Extract page numbers from source strings for UI page links
+    const pageRefs = []
+    for (const src of Object.values(sources)) {
+      const pageMatch = (src || '').match(/page\s+(\d+)/i)
+      if (pageMatch) pageRefs.push(parseInt(pageMatch[1]))
+    }
+
+    return { applicable: false, reason, pageReferences: [...new Set(pageRefs)] }
   }
 
   return { applicable: true }

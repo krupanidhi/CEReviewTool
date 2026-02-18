@@ -855,8 +855,10 @@ router.post('/analyze', async (req, res) => {
     const appIndex = buildApplicationIndex(applicationData)
 
     // 4. Extract applicant profile and analyze type flags
+    //    Pass appIndex so flags are derived from specific form pages (Form 1A, SF-424, Summary Page)
+    //    via TOC links — not from scanning all page text.
     const applicantProfile = extractApplicantProfile(applicationData)
-    const applicantFlags = analyzeApplicantType(applicantProfile, applicationData)
+    const applicantFlags = analyzeApplicantType(applicantProfile, applicationData, appIndex)
     console.log(`👤 Applicant: ${applicantProfile.organizationName || 'Unknown'}`)
 
     // 5. Load SAAT data
@@ -907,7 +909,7 @@ router.post('/analyze', async (req, res) => {
           aiAnswer: 'N/A',
           confidence: 'high',
           evidence: condResult.reason,
-          pageReferences: [],
+          pageReferences: condResult.pageReferences || [],
           reasoning: condResult.reason,
           suggestedResources: q.suggestedResources || rule.suggestedResources || '',
           requiresSAAT: q.requiresSAAT || false,
@@ -966,25 +968,63 @@ router.post('/analyze', async (req, res) => {
           comparisonResults.push(r)
         }
 
-        // Re-evaluate dependent SAAT questions now that the NOFO question (Q10) is answered
-        // Find the NOFO question — it's the one whose rule has saatCheck or no dependsOn among SAAT questions
-        const nofoQ = saatQuestions.find(q => q.rule?.dependsOn === null && q.rule?.answerStrategy === 'saat_compare')
-        const nofoAnswer = nofoQ ? answersByQNum[nofoQ.number] : null
-        if (nofoAnswer && nofoAnswer.toLowerCase() !== 'yes') {
-          for (const q of saatQuestions) {
-            if (q.rule?.dependsOn && !comparisonResults.find(r => r.questionNumber === q.number)) {
-              comparisonResults.push({
-                questionNumber: q.number,
-                question: q.question,
-                aiAnswer: 'N/A',
-                confidence: 'high',
-                evidence: `Question ${nofoQ.number} answered "${nofoAnswer}" — dependent SAAT questions are N/A per checklist instructions.`,
-                pageReferences: [],
-                reasoning: `Dependency: Q${nofoQ.number}=${nofoAnswer}, so this question is automatically N/A.`,
-                suggestedResources: q.suggestedResources || '',
-                requiresSAAT: q.requiresSAAT || false,
-                method: 'rules_dependency'
-              })
+        // Post-batch: enforce ALL dependency chains deterministically.
+        // For each SAAT question with a dependsOn, check if the parent question's answer
+        // disqualifies it. This handles:
+        //   - Q10 (NOFO) → Q11-Q16 (if Q10 ≠ Yes → N/A)
+        //   - Q11 (patient target) → Q20 (if Q11 ≠ Yes → N/A)
+        //   - Any future dependency chains across FYs
+        for (const q of saatQuestions) {
+          if (!q.rule?.dependsOn) continue
+          const depQNum = q.rule.dependsOn.question
+          const depAnswer = answersByQNum[depQNum]
+          const requiredAnswer = q.rule.dependsOn.requiredAnswer
+
+          // Skip if parent not answered yet or parent answer matches required
+          if (!depAnswer) continue
+          if (depAnswer.toLowerCase() === requiredAnswer.toLowerCase()) continue
+
+          // Parent answer doesn't match → override this question to N/A
+          console.log(`   🔗 Q${depQNum}="${depAnswer}" (required "${requiredAnswer}") → Q${q.number} = N/A`)
+          const existingIdx = comparisonResults.findIndex(r => r.questionNumber === q.number)
+          const naResult = {
+            questionNumber: q.number,
+            question: q.question,
+            aiAnswer: 'N/A',
+            confidence: 'high',
+            evidence: `Question ${depQNum} answered "${depAnswer}" — this question requires Q${depQNum}="${requiredAnswer}" to be applicable, per checklist instructions.`,
+            pageReferences: [],
+            reasoning: `Dependency: Q${depQNum}="${depAnswer}" (required "${requiredAnswer}"), so this question is N/A.`,
+            suggestedResources: q.suggestedResources || '',
+            requiresSAAT: q.requiresSAAT || false,
+            method: 'rules_dependency'
+          }
+          if (existingIdx >= 0) {
+            comparisonResults[existingIdx] = naResult
+          } else {
+            comparisonResults.push(naResult)
+          }
+          answersByQNum[q.number] = 'N/A'
+        }
+
+        // Post-batch: retry any SAAT questions that got "Unable to determine"
+        // This happens when the AI batch response is truncated or skips a question.
+        const unansweredSaat = saatQuestions.filter(q => {
+          const answer = answersByQNum[q.number]
+          return answer && /unable\s+to\s+determine/i.test(answer)
+        })
+        if (unansweredSaat.length > 0 && unansweredSaat.length <= 3) {
+          console.log(`   🔄 Retrying ${unansweredSaat.length} unanswered SAAT question(s): ${unansweredSaat.map(q => 'Q' + q.number).join(', ')}`)
+          const retryResults = await answerSAATQuestionsBatch(unansweredSaat, appIndex, saatData, saatSummary, applicantProfile)
+          for (const r of retryResults) {
+            if (r.aiAnswer && !/unable\s+to\s+determine/i.test(r.aiAnswer)) {
+              // Replace the old "Unable to determine" with the retry result
+              const existingIdx = comparisonResults.findIndex(cr => cr.questionNumber === r.questionNumber)
+              if (existingIdx >= 0) {
+                comparisonResults[existingIdx] = r
+              }
+              answersByQNum[r.questionNumber] = r.aiAnswer
+              console.log(`   ✅ Retry Q${r.questionNumber}: ${r.aiAnswer}`)
             }
           }
         }
@@ -2157,21 +2197,17 @@ function extractApplicantProfile(applicationData) {
     }
   }
 
-  // New vs existing applicant
-  if (/new\s*(?:access\s*point|applicant)/i.test(fullText)) {
-    profile.isNewApplicant = true
-    profile.sourcePages.isNewApplicant = findPageForPattern(/new\s*(?:access\s*point|applicant)/i)
-  }
-  if (/competing\s*supplement/i.test(fullText)) {
-    profile.isCompetingSupplement = true
-    profile.sourcePages.isCompetingSupplement = findPageForPattern(/competing\s*supplement/i)
-  }
+  // New vs existing applicant — DO NOT set from full-text scanning.
+  // These flags are determined authoritatively by analyzeApplicantType()
+  // which reads Form 1A, SF-424, and Summary Page via TOC links.
+  // Full-text scanning produces false positives from instructional text.
 
-  // Funding types requested — look in SF-424A, budget sections
+  // Funding types requested — DO NOT set from full-text scanning.
+  // HP/RPH/MSAW appear in checklist instructions, NOFO descriptions, etc.
+  // The authoritative source is the Summary Page, read by analyzeApplicantType().
+  // fundingTypesRequested is populated here only for informational display,
+  // NOT used for condition evaluation.
   if (/\bCHC\b/.test(fullText)) profile.fundingTypesRequested.push('CHC')
-  if (/\bMSAW\b/.test(fullText)) { profile.fundingTypesRequested.push('MSAW'); profile.requestsMSAW = true }
-  if (/\bHP\b/.test(fullText) && /homeless/i.test(fullText)) { profile.fundingTypesRequested.push('HP'); profile.requestsHP = true }
-  if (/\bRPH\b/.test(fullText)) { profile.fundingTypesRequested.push('RPH'); profile.requestsRPH = true }
 
   // ─── Service Area ID extraction (from Summary Page, Form 1A — authoritative forms) ───
   // Priority: Summary Page > Form 1A > key-value pairs > Project Abstract
