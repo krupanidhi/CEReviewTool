@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { Upload, FileText, Loader2, CheckCircle, AlertCircle, GitCompare, X, Plus, Database, Trash2, RefreshCw } from 'lucide-react'
+import { Upload, FileText, Loader2, CheckCircle, AlertCircle, GitCompare, X, Plus, Database, Trash2, RefreshCw, FolderOpen } from 'lucide-react'
 import { uploadDocument, getSettings, getStoredChecklists, loadStoredChecklist, saveStoredChecklist, deleteStoredChecklist } from '../services/api'
+import ApplicationBrowser from './ApplicationBrowser'
 
 export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
   const [applicationFiles, setApplicationFiles] = useState([])
@@ -9,6 +10,8 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
   const [status, setStatus] = useState(null)
   const [uploadedDocs, setUploadedDocs] = useState({ applications: [], checklists: [] })
   const [settings, setSettings] = useState({ multipleApplications: false, multipleChecklists: true })
+  const [appMode, setAppMode] = useState('upload') // 'upload' or 'browse'
+  const [folderApps, setFolderApps] = useState([]) // apps selected from ApplicationBrowser
   const [checklistMode, setChecklistMode] = useState('upload') // 'upload' or 'stored'
   const [storedChecklists, setStoredChecklists] = useState([])
   const [selectedStoredChecklist, setSelectedStoredChecklist] = useState(null)
@@ -102,11 +105,25 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
     }
   }
 
+  const handleFolderAppSelect = (appResult) => {
+    setFolderApps(prev => {
+      // Avoid duplicates by path
+      if (prev.some(a => a.folderPath === appResult.folderPath)) return prev
+      return [...prev, appResult]
+    })
+    setStatus({ type: 'success', message: `Selected: ${appResult.originalName} (${appResult.source === 'cache' ? 'cached' : 'extracted'})` })
+  }
+
+  const removeFolderApp = (index) => {
+    setFolderApps(prev => prev.filter((_, i) => i !== index))
+  }
+
   const handleUploadAll = async () => {
     const hasChecklist = checklistMode === 'stored' ? !!selectedStoredChecklist : checklistFiles.length > 0
+    const hasApps = appMode === 'browse' ? folderApps.length > 0 : applicationFiles.length > 0
     
-    if (applicationFiles.length === 0 || !hasChecklist) {
-      setStatus({ type: 'error', message: 'Please select at least one application and one checklist (upload or stored)' })
+    if (!hasApps || !hasChecklist) {
+      setStatus({ type: 'error', message: 'Please select at least one application and one checklist' })
       return
     }
 
@@ -117,10 +134,18 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
       const applications = []
       const checklists = []
 
-      setStatus({ type: 'info', message: `Uploading ${applicationFiles.length} application(s)...` })
-      for (const file of applicationFiles) {
-        const result = await uploadDocument(file)
-        applications.push(result)
+      if (appMode === 'browse') {
+        // Folder-selected apps are already extracted — use directly
+        setStatus({ type: 'info', message: `Using ${folderApps.length} application(s) from server...` })
+        for (const app of folderApps) {
+          applications.push(app)
+        }
+      } else {
+        setStatus({ type: 'info', message: `Uploading ${applicationFiles.length} application(s)...` })
+        for (const file of applicationFiles) {
+          const result = await uploadDocument(file)
+          applications.push(result)
+        }
       }
 
       if (checklistMode === 'stored' && selectedStoredChecklist) {
@@ -200,7 +225,7 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {/* Application Upload */}
+          {/* Application Upload / Browse */}
           <div className="border-4 border-dashed border-blue-500 rounded-lg p-6 bg-blue-900/10">
             <input
               ref={applicationInputRef}
@@ -215,29 +240,87 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
               <div className="bg-blue-600 text-white px-4 py-2 rounded-lg mb-4 font-bold text-xl">
                 📄 APPLICATION DOCUMENT
               </div>
-              <FileText className="w-16 h-16 mx-auto mb-3 text-blue-400" />
-              <h3 className="text-2xl font-bold text-blue-300 mb-3">
-                Application Document{settings.multipleApplications ? 's' : ''}
-              </h3>
-              <div className="bg-blue-800/50 border-2 border-blue-500 rounded-lg p-3 mb-4">
-                <p className="text-sm text-blue-200 font-semibold mb-2">
-                  ⚠️ UPLOAD YOUR GRANT APPLICATION HERE
-                </p>
-                <p className="text-xs text-gray-300">
-                  Example: Application-242645.pdf<br/>
-                  This is the document you are SUBMITTING for review
-                </p>
+
+              {/* Mode Toggle: Upload vs Browse Server */}
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <button
+                  onClick={() => setAppMode('browse')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                    appMode === 'browse'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-700 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  Browse Server
+                </button>
+                <button
+                  onClick={() => setAppMode('upload')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                    appMode === 'upload'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-700 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Upload New
+                </button>
               </div>
-              <button
-                onClick={() => applicationInputRef.current?.click()}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 mx-auto"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Application{settings.multipleApplications ? 's' : ''}</span>
-              </button>
+
+              {/* BROWSE MODE */}
+              {appMode === 'browse' && (
+                <div className="text-left">
+                  <ApplicationBrowser
+                    onSelect={handleFolderAppSelect}
+                    multiSelect={settings.multipleApplications}
+                  />
+                  {folderApps.length > 0 && (
+                    <div className="mt-3 space-y-1">
+                      <p className="text-xs text-gray-400 font-medium">Selected ({folderApps.length}):</p>
+                      {folderApps.map((app, idx) => (
+                        <div key={idx} className="bg-slate-900 rounded p-2 flex items-center justify-between border border-green-700/50">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-green-300 truncate">{app.originalName}</p>
+                            <p className="text-xs text-gray-500">{app.source === 'cache' ? '📦 Cached' : '✨ Extracted'}</p>
+                          </div>
+                          <button onClick={() => removeFolderApp(idx)} className="ml-2 text-red-400 hover:text-red-300">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* UPLOAD MODE */}
+              {appMode === 'upload' && (
+                <div>
+                  <FileText className="w-16 h-16 mx-auto mb-3 text-blue-400" />
+                  <h3 className="text-2xl font-bold text-blue-300 mb-3">
+                    Application Document{settings.multipleApplications ? 's' : ''}
+                  </h3>
+                  <div className="bg-blue-800/50 border-2 border-blue-500 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-blue-200 font-semibold mb-2">
+                      ⚠️ UPLOAD YOUR GRANT APPLICATION HERE
+                    </p>
+                    <p className="text-xs text-gray-300">
+                      Example: Application-242645.pdf<br/>
+                      This is the document you are SUBMITTING for review
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => applicationInputRef.current?.click()}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 mx-auto"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Application{settings.multipleApplications ? 's' : ''}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
-            {applicationFiles.length > 0 && (
+            {applicationFiles.length > 0 && appMode === 'upload' && (
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {applicationFiles.map((file, idx) => (
                   <div key={idx} className="bg-slate-900 rounded p-3 flex items-center justify-between border border-slate-600">
@@ -411,7 +494,7 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
         <div className="flex items-center justify-center">
           <button
             onClick={handleUploadAll}
-            disabled={applicationFiles.length === 0 || (checklistMode === 'upload' ? checklistFiles.length === 0 : !selectedStoredChecklist) || uploading}
+            disabled={((appMode === 'upload' ? applicationFiles.length === 0 : folderApps.length === 0)) || (checklistMode === 'upload' ? checklistFiles.length === 0 : !selectedStoredChecklist) || uploading}
             className="bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 text-white px-8 py-3 rounded-lg font-medium transition-colors flex items-center space-x-2"
           >
             {uploading ? (
@@ -461,11 +544,11 @@ export default function EnhancedComparisonUpload({ onDocumentsUploaded }) {
         )}
 
         {/* Summary */}
-        {(applicationFiles.length > 0 || checklistFiles.length > 0 || selectedStoredChecklist) && (
+        {(applicationFiles.length > 0 || folderApps.length > 0 || checklistFiles.length > 0 || selectedStoredChecklist) && (
           <div className="mt-4 p-4 bg-slate-900 rounded-lg border border-slate-600">
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-400">
-                {applicationFiles.length} application(s) • {checklistMode === 'stored' && selectedStoredChecklist ? `1 stored checklist (${selectedStoredChecklist.displayName})` : `${checklistFiles.length} checklist(s)`} selected
+                {appMode === 'browse' ? folderApps.length : applicationFiles.length} application(s) • {checklistMode === 'stored' && selectedStoredChecklist ? `1 stored checklist (${selectedStoredChecklist.displayName})` : `${checklistFiles.length} checklist(s)`} selected
               </span>
               {uploadedDocs.applications.length > 0 && (
                 <span className="text-green-400">
