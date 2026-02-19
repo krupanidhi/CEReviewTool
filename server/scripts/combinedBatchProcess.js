@@ -73,6 +73,28 @@ const logW = m => console.log(`[${ts()}] ⚠️  ${m}`)
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const exists = async p => { try { await fs.access(p); return true } catch { return false } }
 const findPDFs = async d => (await fs.readdir(d, { withFileTypes: true })).filter(e => e.isFile() && e.name.toLowerCase().endsWith('.pdf')).map(e => path.join(d, e.name))
+
+/**
+ * Recursively find all PDFs under a directory (supports FY/NOFO folder structure).
+ * e.g., applications/FY26/HRSA-26-002/*.pdf
+ */
+const findPDFsRecursive = async (dir, maxDepth = 3, currentDepth = 0) => {
+  if (currentDepth > maxDepth) return []
+  const results = []
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name)
+      if (entry.isFile() && entry.name.toLowerCase().endsWith('.pdf')) {
+        results.push(fullPath)
+      } else if (entry.isDirectory()) {
+        const subResults = await findPDFsRecursive(fullPath, maxDepth, currentDepth + 1)
+        results.push(...subResults)
+      }
+    }
+  } catch { /* ignore unreadable dirs */ }
+  return results
+}
 const md5 = c => crypto.createHash('md5').update(c).digest('hex')
 
 function extractFundingOpp(text) {
@@ -114,11 +136,11 @@ async function main() {
   console.log('  Combined Batch — CE Review + Pre-Funding Review')
   console.log('═'.repeat(70) + '\n')
 
-  // ---- External Endpoints ----
-  log('── External Endpoints ──')
-  log(`  🌐 Azure Document Intelligence: ${CONFIG.AZURE_DOC_ENDPOINT || '(not set)'}`)
-  log(`  🌐 Azure OpenAI:                ${CONFIG.AZURE_OPENAI_ENDPOINT || '(not set)'}`)
-  log(`  🤖 OpenAI Deployment:           ${CONFIG.AZURE_OPENAI_DEPLOYMENT}`)
+  // ---- External Endpoints (logged once at startup) ----
+  log('── Azure Endpoints ──')
+  log(`  🌐 Document Intelligence: ${CONFIG.AZURE_DOC_ENDPOINT || '(not set)'}`)
+  log(`  🌐 OpenAI Endpoint:       ${CONFIG.AZURE_OPENAI_ENDPOINT || '(not set)'}`)
+  log(`  🤖 OpenAI Deployment:     ${CONFIG.AZURE_OPENAI_DEPLOYMENT}`)
 
   // ---- API Endpoints ----
   log('── API Endpoints ──')
@@ -157,12 +179,18 @@ async function main() {
   log(`🔄 Mode: ${mode} (CE: ${runCE ? 'YES' : 'NO'}, Prefunding: ${runPF ? 'YES' : 'NO'})`)
   if (runCE) log(`📋 CE Scope: ${ceScope} (Compliance: ${ceScope !== 'checklist-only' ? 'YES' : 'NO'}, Checklist: ${ceScope !== 'compliance-only' ? 'YES' : 'NO'})`)
 
-  // Verify applications folder
-  if (!(await exists(APPLICATIONS_DIR))) { logE(`Applications folder not found: ${APPLICATIONS_DIR}`); process.exit(1) }
-  const appPDFs = await findPDFs(APPLICATIONS_DIR)
-  if (!appPDFs.length) { logE('No PDFs found in applications/'); process.exit(1) }
-  log(`📄 ${appPDFs.length} application(s) in ${APPLICATIONS_DIR}`)
-  appPDFs.forEach(f => log(`  - ${path.basename(f)}`))
+  // Verify applications folder — support --folder arg for targeting a subfolder
+  // e.g., --folder FY26/HRSA-26-002  or  --folder HRSA-26-002
+  const folderArg = getArg('folder')
+  const targetDir = folderArg ? path.join(APPLICATIONS_DIR, folderArg) : APPLICATIONS_DIR
+  if (!(await exists(targetDir))) { logE(`Applications folder not found: ${targetDir}`); process.exit(1) }
+
+  // Use recursive search to find PDFs in FY/NOFO subfolders
+  const appPDFs = await findPDFsRecursive(targetDir)
+  if (!appPDFs.length) { logE(`No PDFs found in ${targetDir}`); process.exit(1) }
+  log(`📄 ${appPDFs.length} application(s) in ${targetDir}`)
+  // Show relative paths for clarity
+  appPDFs.forEach(f => log(`  - ${path.relative(APPLICATIONS_DIR, f)}`))
 
   const confirm = await prompt(`\n🚀 Process ${appPDFs.length} app(s) in "${mode}" mode${runCE ? ` (ce-scope: ${ceScope})` : ''}? (y/n): `)
   if (confirm.toLowerCase() !== 'y') { log('Aborted.'); process.exit(0) }
@@ -258,6 +286,21 @@ async function main() {
     if (r.pfCompliant !== undefined) parts.push(`PF:${r.pfCompliant}C/${r.pfNonCompliant}NC`)
     console.log(`  ${parts.join(' | ')}`)
   })
+
+  // ---- Output Locations ----
+  console.log('\n' + '─'.repeat(70))
+  console.log('  OUTPUT LOCATIONS')
+  console.log('─'.repeat(70))
+  if (runCE) {
+    console.log(`  📂 CE Review JSON results:         ${PROCESSED_APPS_DIR}`)
+    const ceFiles = comp.filter(r => !r.ceError).map(r => r.ceOutputFile || r.application.replace('.pdf', ''))
+    ceFiles.forEach(f => console.log(`     └─ ${f}`))
+  }
+  if (runPF) {
+    console.log(`  📂 Prefunding Review JSON results: ${PF_RESULTS_DIR}`)
+    const pfFiles = comp.filter(r => !r.pfError).map(r => r.pfOutputFile || r.application.replace('.pdf', ''))
+    pfFiles.forEach(f => console.log(`     └─ ${f}`))
+  }
   console.log('')
 }
 

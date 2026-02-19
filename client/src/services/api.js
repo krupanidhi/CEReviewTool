@@ -464,6 +464,19 @@ export async function deleteProcessedApplication(id) {
 }
 
 /**
+ * Delete ALL processed applications and their cached data
+ * @returns {Promise<Object>} Delete result with count
+ */
+export async function deleteAllProcessedApplications() {
+  try {
+    const response = await apiClient.delete('/processed-applications/all')
+    return response.data
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to delete all processed applications')
+  }
+}
+
+/**
  * Reprocess an application (clear cache and re-run comparison)
  * @param {string} id - Application ID
  * @param {Object} data - { applicationData, checklistData, selectedSections }
@@ -612,5 +625,37 @@ export async function checkHealth() {
     return response.data
   } catch (error) {
     throw new Error('API is not available')
+  }
+}
+
+// ============================================================
+// Applications Browser API
+// ============================================================
+
+/**
+ * Browse applications organized by FY → NOFO → PDF files
+ * @returns {Promise<Object>} Folder structure with fiscal years, NOFOs, and application files
+ */
+export async function browseApplications() {
+  try {
+    const response = await apiClient.get('/applications/browse')
+    return response.data
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to browse applications')
+  }
+}
+
+/**
+ * Extract an application PDF from the applications folder using Azure DI.
+ * Uses cached extraction if available.
+ * @param {string} relPath - Relative path within applications/ (e.g., "FY26/HRSA-26-002/file.pdf")
+ * @returns {Promise<Object>} Extracted application data
+ */
+export async function extractApplicationFromFolder(relPath) {
+  try {
+    const response = await apiClient.post('/applications/extract', { path: relPath })
+    return response.data
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to extract application')
   }
 }

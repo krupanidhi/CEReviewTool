@@ -727,23 +727,32 @@ function analyzeApplicantType(applicantProfile, applicationData, appIndex) {
       const form1aLower = form1a.text.toLowerCase()
 
       // Application type detection from Form 1A
-      // IMPORTANT: Check Competing Continuation FIRST — it's the most common type
-      // and prevents false positives from loose "new" matching.
-      if (/competing\s*continuation/i.test(form1aLower)) {
-        flags.isCompetingContinuation = true
-        flags.isNew = false
-        flags.isCompetingSupplement = false
-        flags._sources.applicationType = `Form 1A (page ${form1a.pageNums[0]}): Application Type = Competing Continuation`
-      } else if (/competing\s*supplement/i.test(form1aLower)) {
-        flags.isCompetingSupplement = true
-        flags.isNew = false
-        flags._sources.isCompetingSupplement = `Form 1A (page ${form1a.pageNums[0]}): Application Type = Competing Supplement`
-      } else if (/\bnew\s+(?:access\s+point|applicant|start)\b/i.test(form1a.text) ||
-                 /(?:application|submission)\s*type[^\n]{0,30}\bnew\b/i.test(form1a.text)) {
-        // Only match "new" in specific contexts: "New Access Point", "New Applicant", "New Start",
-        // or "Application Type: ... New" — NOT loose "new" anywhere in the form
-        flags.isNew = true
-        flags._sources.isNew = `Form 1A (page ${form1a.pageNums[0]}): Application Type = New`
+      // CRITICAL: Must parse the actual "Application Type" FIELD VALUE, not do a
+      // broad text search. Forms contain instructional text like "This form will
+      // pre-populate for competing continuation applicants" and "Competing
+      // continuation applicants only" which cause false positives.
+      //
+      // The field appears as:
+      //   "Application Type: New"  or  "Application Type\nNew"
+      //   "Application Type: Competing Continuation"
+      //   "Application Type: Competing Supplement"
+      const appTypeMatch = form1a.text.match(/Application\s+Type[:\s]*\n?\s*(New|Competing\s+Continuation|Competing\s+Supplement)/i)
+      if (appTypeMatch) {
+        const appTypeVal = appTypeMatch[1].trim().toLowerCase()
+        console.log(`   📋 Form 1A Application Type field: "${appTypeMatch[1].trim()}"`)
+        if (/competing\s*continuation/i.test(appTypeVal)) {
+          flags.isCompetingContinuation = true
+          flags.isNew = false
+          flags.isCompetingSupplement = false
+          flags._sources.applicationType = `Form 1A (page ${form1a.pageNums[0]}): Application Type = Competing Continuation`
+        } else if (/competing\s*supplement/i.test(appTypeVal)) {
+          flags.isCompetingSupplement = true
+          flags.isNew = false
+          flags._sources.isCompetingSupplement = `Form 1A (page ${form1a.pageNums[0]}): Application Type = Competing Supplement`
+        } else if (/\bnew\b/i.test(appTypeVal)) {
+          flags.isNew = true
+          flags._sources.isNew = `Form 1A (page ${form1a.pageNums[0]}): Application Type = New`
+        }
       }
 
       // Public agency from Form 1A
@@ -805,56 +814,95 @@ function analyzeApplicantType(applicantProfile, applicationData, appIndex) {
     if (summaryPage.text) {
       console.log(`   📄 Summary Page found on page(s) ${summaryPage.pageNums.join(', ')} — reading for funding types`)
       const spText = summaryPage.text
+      const spPage = summaryPage.pageNums[0]
 
-      // Funding type detection from Summary Page
-      // The Summary Page typically has checkboxes or fields for each funding stream
-      // Look for funding type indicators in structured field context
-      if (/\bCHC\b/.test(spText)) {
-        flags._sources.CHC = `Summary Page (page ${summaryPage.pageNums[0]})`
+      // Funding type detection from Summary Page — AMOUNT-AWARE
+      // The Summary Page always lists all four funding types (CHC, MSAW, HP, RPH)
+      // even when the requested amount is $0.00. We must parse the dollar amounts
+      // and only set flags when the amount is greater than $0.
+      //
+      // Typical format:
+      //   Community Health Center - CHC-330(e)    $5,020,600.00
+      //   Migratory and Seasonal ... - MSAW-330(g)  $0.00
+      //   Homeless Population - HP-330(h)         $379,400.00
+      //   Residents of Public Housing - RPH-330(i)  $0.00
+
+      // Helper: find a funding type keyword, then extract the NEXT dollar amount
+      // within 200 chars. Returns { amount, raw } or null if not found.
+      function parseFundingAmount(text, pattern) {
+        const match = text.match(pattern)
+        if (!match) return null
+        // Search from the keyword match position forward for the next $amount
+        const afterMatch = text.substring(match.index, match.index + 200)
+        const amountMatch = afterMatch.match(/\$([\d,]+(?:\.\d{2})?)/)
+        if (!amountMatch) return null
+        const amount = parseFloat(amountMatch[1].replace(/,/g, ''))
+        return { amount, raw: amountMatch[0] }
       }
 
-      // MSAW — look for checked/selected context, not just mention
-      if (/\bMSAW\b/.test(spText) && /(?:migratory|seasonal|agricultural)/i.test(spText)) {
+      // CHC
+      const chcAmount = parseFundingAmount(spText, /(?:Community\s*Health\s*Center|CHC)/i)
+      if (chcAmount && chcAmount.amount > 0) {
+        flags._sources.CHC = `Summary Page (page ${spPage}): CHC ${chcAmount.raw}`
+      }
+
+      // MSAW
+      const msawAmount = parseFundingAmount(spText, /(?:Migratory|MSAW)/i)
+      if (msawAmount && msawAmount.amount > 0) {
         flags.requestsMSAW = true
-        flags._sources.requestsMSAW = `Summary Page (page ${summaryPage.pageNums[0]}): MSAW funding indicated`
+        flags._sources.requestsMSAW = `Summary Page (page ${spPage}): MSAW funding ${msawAmount.raw}`
+      } else if (msawAmount) {
+        console.log(`   💰 MSAW listed but amount is ${msawAmount.raw} — not requested`)
       }
 
-      // HP (Homeless Population) — must be in funding context, not just mentioned
-      // Look for "HP" near funding/request/checked indicators
-      if (/(?:homeless\s*(?:population)?|HCH)\s*(?:funding|request|:|\byes\b|\bx\b|☑|✓)/i.test(spText) ||
-          /(?:funding|request)[^.]{0,50}\bHP\b/i.test(spText)) {
+      // HP (Homeless Population)
+      const hpAmount = parseFundingAmount(spText, /(?:Homeless\s*Population|HP-330)/i)
+      if (hpAmount && hpAmount.amount > 0) {
         flags.requestsHP = true
-        flags._sources.requestsHP = `Summary Page (page ${summaryPage.pageNums[0]}): HP funding indicated`
+        flags._sources.requestsHP = `Summary Page (page ${spPage}): HP funding ${hpAmount.raw}`
+      } else if (hpAmount) {
+        console.log(`   💰 HP listed but amount is ${hpAmount.raw} — not requested`)
       }
 
-      // RPH (Residents of Public Housing) / PHPC (Public Housing Primary Care) — must be in funding context
-      // RPH and PHPC refer to the same funding stream across different fiscal years
-      if (/(?:public\s*housing|RPH|PHPC)\s*(?:funding|request|:|\byes\b|\bx\b|☑|✓)/i.test(spText) ||
-          /(?:funding|request)[^.]{0,50}(?:\bRPH\b|\bPHPC\b)/i.test(spText)) {
+      // RPH (Residents of Public Housing) / PHPC (Public Housing Primary Care)
+      const rphAmount = parseFundingAmount(spText, /(?:Public\s*Housing|RPH|PHPC)/i)
+      if (rphAmount && rphAmount.amount > 0) {
         flags.requestsRPH = true
-        flags.requestsPHPC = true  // Same funding stream, different name across FYs
-        flags._sources.requestsRPH = `Summary Page (page ${summaryPage.pageNums[0]}): RPH/PHPC funding indicated`
+        flags.requestsPHPC = true
+        flags._sources.requestsRPH = `Summary Page (page ${spPage}): RPH/PHPC funding ${rphAmount.raw}`
         flags._sources.requestsPHPC = flags._sources.requestsRPH
+      } else if (rphAmount) {
+        console.log(`   💰 RPH listed but amount is ${rphAmount.raw} — not requested`)
       }
+
+      console.log(`   💰 Funding amounts: CHC=${chcAmount?.raw || 'N/F'}, MSAW=${msawAmount?.raw || 'N/F'}, HP=${hpAmount?.raw || 'N/F'}, RPH=${rphAmount?.raw || 'N/F'}`)
 
       // Application type from Summary Page
-      // Check Competing Continuation first — it's the most definitive
-      if (/competing\s*continuation/i.test(spText)) {
-        flags.isCompetingContinuation = true
-        flags.isNew = false
-        flags.isCompetingSupplement = false
-        if (!flags._sources.applicationType) {
-          flags._sources.applicationType = `Summary Page (page ${summaryPage.pageNums[0]}): Competing Continuation`
-        }
-      } else if (!flags.isCompetingContinuation) {
-        // Only check for New/Competing Supplement if NOT already Competing Continuation
-        if (/competing\s*supplement/i.test(spText) && !flags.isCompetingSupplement) {
-          flags.isCompetingSupplement = true
-          flags._sources.isCompetingSupplement = `Summary Page (page ${summaryPage.pageNums[0]}): Competing Supplement`
-        }
-        if (/\bnew\s+(?:access\s+point|applicant|start)\b/i.test(spText) && !flags.isNew) {
-          flags.isNew = true
-          flags._sources.isNew = `Summary Page (page ${summaryPage.pageNums[0]}): New applicant`
+      // CRITICAL: Must parse the actual "Application Type" FIELD VALUE, not do a
+      // broad text search. The Summary Page contains instructional text like
+      // "Competing continuation applicants only" in section headers (items 9, 10)
+      // which cause false positives for New applicants.
+      //
+      // The field appears as: "Application Type: New" or "Application Type: Competing Continuation"
+      const spAppTypeMatch = spText.match(/Application\s+Type[:\s]*\n?\s*(New|Competing\s+Continuation|Competing\s+Supplement)/i)
+      if (spAppTypeMatch) {
+        const spAppTypeVal = spAppTypeMatch[1].trim().toLowerCase()
+        console.log(`   📋 Summary Page Application Type field: "${spAppTypeMatch[1].trim()}"`)
+        if (/competing\s*continuation/i.test(spAppTypeVal)) {
+          flags.isCompetingContinuation = true
+          flags.isNew = false
+          flags.isCompetingSupplement = false
+          flags._sources.applicationType = `Summary Page (page ${spPage}): Application Type = Competing Continuation`
+        } else if (/competing\s*supplement/i.test(spAppTypeVal)) {
+          if (!flags.isCompetingContinuation) {
+            flags.isCompetingSupplement = true
+            flags._sources.isCompetingSupplement = `Summary Page (page ${spPage}): Application Type = Competing Supplement`
+          }
+        } else if (/\bnew\b/i.test(spAppTypeVal)) {
+          if (!flags.isCompetingContinuation) {
+            flags.isNew = true
+            flags._sources.isNew = `Summary Page (page ${spPage}): Application Type = New`
+          }
         }
       }
     }
@@ -903,6 +951,7 @@ function evaluateCondition(rule, applicantFlags) {
       break
     case 'applicant_status':
       if (value === 'new') conditionMet = applicantFlags.isNew
+      if (value === 'new_or_supplemental') conditionMet = applicantFlags.isNew || applicantFlags.isCompetingSupplement
       if (value === 'new_or_competing') conditionMet = applicantFlags.isNew || applicantFlags.isCompetingSupplement
       break
     case 'funding_type':
@@ -922,6 +971,7 @@ function evaluateCondition(rule, applicantFlags) {
     const reasons = {
       'applicant_type:public_agency': `This question applies only to public agency applicants.${sources.isPublicAgency ? ' ' + sources.isPublicAgency + '.' : ' The applicant is not identified as a public agency.'}`,
       'applicant_status:new': `This question applies only to new applicants.${sourceDetail ? ' ' + sourceDetail + '.' : ' The applicant is not a new applicant.'}`,
+      'applicant_status:new_or_supplemental': `This question applies only to new (Type 1) or supplemental (Type 3) applicants; not required for competing continuation (Type 2).${sourceDetail ? ' ' + sourceDetail + '.' : ''}`,
       'applicant_status:new_or_competing': `This question applies only to new or competing supplement applicants.${sourceDetail ? ' ' + sourceDetail + '.' : ''}`,
       'funding_type:rph': `This question applies only to applicants requesting RPH (Residents of Public Housing) funding.${sources.requestsRPH ? ' ' + sources.requestsRPH + '.' : ' The Summary Page does not indicate RPH funding is requested.'}`,
       'funding_type:rph_or_ph': `This question applies only to applicants requesting RPH or PH funding.${sources.requestsRPH || sources.requestsHP ? '' : ' The Summary Page does not indicate RPH or PH funding is requested.'}`,
@@ -942,6 +992,136 @@ function evaluateCondition(rule, applicantFlags) {
   }
 
   return { applicable: true }
+}
+
+// ─── Completeness Check (Standard Q1) ────────────────────────────────────────
+
+/**
+ * Evaluate a completeness_check rule: determine which attachments are required
+ * for this applicant type, then verify each is present in the application index.
+ *
+ * @param {Object} rule - The rule with lookFor (always-required) and conditionalAttachments
+ * @param {Object} appIndex - Application index with formPageMap, tocEntries
+ * @param {Object} applicantFlags - Flags from analyzeApplicantType
+ * @returns {{ aiAnswer: string, confidence: string, evidence: string, reasoning: string, pageReferences: number[] }}
+ */
+function evaluateCompletenessCheck(rule, appIndex, applicantFlags) {
+  const { formPageMap, tocEntries } = appIndex
+
+  // Helper: check if a document name is found in the formPageMap or tocEntries
+  function isDocumentPresent(name) {
+    const lower = name.toLowerCase()
+    // Check formPageMap (canonical keys)
+    for (const [key] of formPageMap) {
+      if (key.includes(lower) || lower.includes(key)) return true
+    }
+    // Check TOC entries by name
+    for (const entry of tocEntries) {
+      const entryLower = entry.name.toLowerCase()
+      if (entryLower.includes(lower) || lower.includes(entryLower)) return true
+    }
+    // Check by attachment number pattern
+    const attMatch = name.match(/Attachment\s+(\d+)/i)
+    if (attMatch) {
+      const attNum = attMatch[1]
+      const attKey = `attachment ${attNum}`
+      if (formPageMap.has(attKey)) return true
+      for (const entry of tocEntries) {
+        if (entry.name.toLowerCase().includes(attKey)) return true
+      }
+    }
+    return false
+  }
+
+  // 1. Check always-required attachments
+  const alwaysRequired = rule.lookFor || []
+  const found = []
+  const missing = []
+
+  for (const docName of alwaysRequired) {
+    if (isDocumentPresent(docName)) {
+      found.push(docName)
+    } else {
+      missing.push(docName)
+    }
+  }
+
+  // 2. Check conditional attachments based on applicant type
+  const conditionalAttachments = rule.conditionalAttachments || []
+  const skipped = [] // conditional attachments that don't apply
+  const conditionalRequired = [] // conditional attachments that DO apply
+
+  for (const ca of conditionalAttachments) {
+    const cond = ca.condition
+    let applies = false
+
+    if (cond.type === 'applicant_type') {
+      if (cond.value === 'public_agency') applies = applicantFlags.isPublicAgency
+      else if (cond.value === 'nonprofit') applies = applicantFlags.isNonprofit
+    } else if (cond.type === 'applicant_status') {
+      if (cond.value === 'new') applies = applicantFlags.isNew
+      else if (cond.value === 'new_or_supplemental') applies = applicantFlags.isNew || applicantFlags.isCompetingSupplement
+      else if (cond.value === 'new_or_competing') applies = applicantFlags.isNew || applicantFlags.isCompetingSupplement
+    }
+
+    if (applies) {
+      conditionalRequired.push(ca.name)
+      // Check if present using the lookFor patterns
+      const present = (ca.lookFor || [ca.name]).some(n => isDocumentPresent(n))
+      if (present) {
+        found.push(ca.name)
+      } else {
+        missing.push(ca.name)
+      }
+    } else {
+      skipped.push(`${ca.name} (${ca.description})`)
+    }
+  }
+
+  // 3. Build result
+  const totalRequired = alwaysRequired.length + conditionalRequired.length
+  const aiAnswer = missing.length === 0 ? 'Yes' : 'No'
+  const confidence = 'high'
+
+  // Build evidence
+  const evidenceParts = []
+  evidenceParts.push(`Checked ${totalRequired} required attachments for this applicant type.`)
+  if (found.length > 0) {
+    evidenceParts.push(`Present (${found.length}): ${found.join(', ')}.`)
+  }
+  if (missing.length > 0) {
+    evidenceParts.push(`Missing (${missing.length}): ${missing.join(', ')}.`)
+  }
+  if (skipped.length > 0) {
+    evidenceParts.push(`Not required for this applicant: ${skipped.join('; ')}.`)
+  }
+
+  // Build reasoning
+  const flagSummary = []
+  if (applicantFlags.isPublicAgency) flagSummary.push('public agency')
+  if (applicantFlags.isNonprofit) flagSummary.push('nonprofit')
+  if (applicantFlags.isNew) flagSummary.push('new applicant')
+  if (applicantFlags.isCompetingSupplement) flagSummary.push('competing supplement')
+  if (applicantFlags.isCompetingContinuation) flagSummary.push('competing continuation')
+  const typeDesc = flagSummary.length > 0 ? flagSummary.join(', ') : 'existing applicant'
+
+  const reasoning = `Applicant type: ${typeDesc}. ${totalRequired} attachments are required. ${found.length} found, ${missing.length} missing. ${skipped.length} conditional attachments not applicable.`
+
+  // Page references from TOC entries for found documents
+  const pageRefs = []
+  for (const entry of tocEntries) {
+    if (entry.destPage) pageRefs.push(entry.destPage)
+  }
+  // Just include TOC page(s) as reference
+  const tocPages = [...new Set(tocEntries.filter(e => e.tocPage).map(e => e.tocPage))]
+
+  return {
+    aiAnswer,
+    confidence,
+    evidence: evidenceParts.join(' '),
+    reasoning,
+    pageReferences: tocPages.length > 0 ? tocPages : pageRefs.slice(0, 3)
+  }
 }
 
 // ─── Suggested Resources Parser ─────────────────────────────────────────────
@@ -1366,6 +1546,7 @@ export {
   buildApplicationIndex,
   analyzeApplicantType,
   evaluateCondition,
+  evaluateCompletenessCheck,
   answerPresenceQuestion,
   extractRelevantPages,
   parseSuggestedResources,

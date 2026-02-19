@@ -247,6 +247,22 @@ class ApplicationProcessingService {
   }
 
   /**
+   * Delete ALL processed applications and their cached data
+   * @returns {number} Number of applications deleted
+   */
+  async deleteAllApplications() {
+    const count = this.applications.size
+    const ids = Array.from(this.applications.keys())
+    for (const id of ids) {
+      await this.deleteApplicationData(id)
+    }
+    this.applications.clear()
+    await this.saveIndex()
+    console.log(`🗑️ Deleted all ${count} processed applications`)
+    return count
+  }
+
+  /**
    * Mark an application for reprocessing (clears cached data, sets status to 'pending_reprocess')
    */
   async markForReprocessing(id) {

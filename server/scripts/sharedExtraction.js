@@ -187,10 +187,13 @@ export function convertToCEFormat(analyzeResult) {
       level: 1
     }))
 
-  // Key-value pairs
+  // Key-value pairs — include pageNumber to match UI path (enhancedDocumentIntelligence.js)
+  // pageNumber is used by extractApplicantProfile for source tracking of applicant type flags
   const keyValuePairs = (analyzeResult.keyValuePairs || []).map(kv => ({
     key: kv.key?.content || '',
-    value: kv.value?.content || ''
+    value: kv.value?.content || '',
+    confidence: kv.confidence,
+    pageNumber: kv.key?.boundingRegions?.[0]?.pageNumber || 1
   })).filter(kv => kv.key && kv.value)
 
   return {

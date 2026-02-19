@@ -65,7 +65,7 @@ export async function prefundingValidate(pfText, appName, baseName, yearCode, ap
   await cachePrefundingResults(pfText, appName, baseName, appPath, sectionResults, ctx)
 
   // Write per-application JSON result file for compare-all-results.js
-  await writeAppResultJSON(appName, sectionResults, PF_RESULTS_DIR, log, logS, logE)
+  await writeAppResultJSON(appName, sectionResults, PF_RESULTS_DIR, appResult, log, logS, logE)
 }
 
 /**
@@ -300,7 +300,7 @@ async function cachePrefundingResults(pfText, appName, baseName, appPath, sectio
  * Format matches the sample provided:
  * { applicationNumber, filename, timestamp, results: { sectionName: { compliantItems, nonCompliantItems, notApplicableItems } } }
  */
-async function writeAppResultJSON(appName, sectionResults, PF_RESULTS_DIR, log, logS, logE) {
+async function writeAppResultJSON(appName, sectionResults, PF_RESULTS_DIR, appResult, log, logS, logE) {
   try {
     if (!PF_RESULTS_DIR) {
       log('⏭️  PF_RESULTS_DIR not set, skipping per-app JSON output')
@@ -321,9 +321,11 @@ async function writeAppResultJSON(appName, sectionResults, PF_RESULTS_DIR, log, 
     }
 
     const safeBaseName = appName.replace(/\.pdf$/i, '').replace(/[^a-zA-Z0-9_\-]/g, '_')
-    const outputPath = path.join(PF_RESULTS_DIR, `${safeBaseName}.json`)
+    const pfFileName = `${safeBaseName}.json`
+    const outputPath = path.join(PF_RESULTS_DIR, pfFileName)
     await fs.writeFile(outputPath, JSON.stringify(resultData, null, 2))
     logS(`PF result JSON → ${outputPath}`)
+    appResult.pfOutputFile = pfFileName
   } catch (err) {
     logE(`Failed to write PF result JSON: ${err.message}`)
   }

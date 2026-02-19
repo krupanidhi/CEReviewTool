@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Loader2 } from 'lucide-react'
-import { getProcessedApplications, getProcessedApplication, deleteProcessedApplication } from '../services/api'
+import { getProcessedApplications, getProcessedApplication, deleteProcessedApplication, deleteAllProcessedApplications } from '../services/api'
 import { bulkExportComplianceReport, bulkExportChecklistComparison } from '../utils/bulkExport'
 
 export default function Dashboard({ onViewResults }) {
@@ -67,6 +67,17 @@ export default function Dashboard({ onViewResults }) {
       setApplications(prev => prev.filter(a => a.id !== id))
     } catch (error) {
       console.error('Failed to delete application:', error)
+    }
+  }
+
+  const handleDeleteAll = async () => {
+    if (!confirm(`Delete all ${applications.length} processed applications? This cannot be undone.`)) return
+    try {
+      await deleteAllProcessedApplications()
+      setApplications([])
+      setCurrentPage(1)
+    } catch (error) {
+      console.error('Failed to delete all applications:', error)
     }
   }
 
@@ -148,6 +159,15 @@ export default function Dashboard({ onViewResults }) {
             >
               {exporting === 'checklist' ? <Loader2 style={{ width: 14, height: 14 }} className="animate-spin" /> : '📋'}
               Bulk Export Checklist Comparison
+            </button>
+            <button
+              onClick={handleDeleteAll}
+              disabled={!!exporting}
+              style={{ padding: '8px 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: '600', cursor: exporting ? 'not-allowed' : 'pointer', transition: 'all 0.3s', display: 'flex', alignItems: 'center', gap: '6px', opacity: exporting ? 0.5 : 1 }}
+              onMouseEnter={(e) => { if (!exporting) e.currentTarget.style.background = '#b91c1c' }}
+              onMouseLeave={(e) => { if (!exporting) e.currentTarget.style.background = '#dc2626' }}
+            >
+              🗑️ Clear All
             </button>
           </div>
         )}

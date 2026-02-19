@@ -286,6 +286,20 @@ router.post('/save', async (req, res) => {
 })
 
 /**
+ * DELETE /api/processed-applications/all
+ * Delete ALL processed applications and their cached data
+ */
+router.delete('/all', async (req, res) => {
+  try {
+    const count = await applicationProcessingService.deleteAllApplications()
+    res.json({ success: true, message: `Deleted ${count} processed applications`, count })
+  } catch (error) {
+    console.error('❌ Delete all applications error:', error)
+    res.status(500).json({ error: 'Failed to delete all applications', message: error.message })
+  }
+})
+
+/**
  * DELETE /api/processed-applications/:id
  * Delete a processed application and its cached data
  */

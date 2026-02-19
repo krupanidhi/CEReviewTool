@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import { analyzeDocumentEnhanced } from '../services/enhancedDocumentIntelligence.js'
 import { transformToStructured } from '../services/structuredDocumentTransformer.js'
+import { extractTocLinks } from '../services/pdfLinkExtractor.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -72,6 +73,24 @@ export async function ceReview(ceData, appName, appPath, yearCode, fyLabel, fund
     log('⏭️  Skipping compliance report (ce-scope: checklist-only)')
   }
 
+  // Extract TOC links from the application PDF and attach to ceData.
+  // This ensures the checklist endpoints build the same formPageMap as the UI path
+  // (which extracts tocLinks during upload). Without this, the endpoint falls back
+  // to text-based TOC parsing, which can resolve different pages and cause
+  // inconsistent answers (e.g., Q21/Q22 mismatch between batch and UI).
+  if (appPath && !ceData.tocLinks) {
+    try {
+      const pdfBuffer = await fs.readFile(appPath)
+      const tocLinks = await extractTocLinks(pdfBuffer)
+      if (tocLinks.length > 0) {
+        ceData.tocLinks = tocLinks
+        logS(`Extracted ${tocLinks.length} TOC links from PDF for checklist analysis`)
+      }
+    } catch (err) {
+      logW(`TOC link extraction skipped: ${err.message}`)
+    }
+  }
+
   // Run checklist Q&A (if scope includes it)
   let qaResults = {}
   if (runChecklist) {
@@ -94,7 +113,7 @@ export async function ceReview(ceData, appName, appPath, yearCode, fyLabel, fund
 
   // Cache results for CE dashboard tiles
   const selSections = mainSectionNumbers.map(n => ({ sectionTitle: `${n}.`, checklistName: userGuideName }))
-  await cacheCEResults(appName, userGuideName, ceResult, selSections, runChecklist ? qaResults : null, applicationId, ctx)
+  await cacheCEResults(appName, userGuideName, ceResult, selSections, runChecklist ? qaResults : null, applicationId, appResult, ctx)
 }
 
 /**
@@ -305,7 +324,7 @@ async function registerApplicationPDF(appPath, appName, ctx) {
   }
 }
 
-async function cacheCEResults(appName, checklistName, compResult, selectedSections, qaResults, applicationId, ctx) {
+async function cacheCEResults(appName, checklistName, compResult, selectedSections, qaResults, applicationId, appResult, ctx) {
   const { CONFIG, retryF, logS, logE, PROCESSED_APPS_DIR } = ctx
   try {
     await retryF(`${CONFIG.CE_SERVER_URL}/api/processed-applications/save`,
@@ -317,8 +336,10 @@ async function cacheCEResults(appName, checklistName, compResult, selectedSectio
   if (qaResults) {
     await fs.mkdir(PROCESSED_APPS_DIR, { recursive: true })
     const sanitized = appName.replace(/[^a-zA-Z0-9.-]/g, '_')
-    await fs.writeFile(path.join(PROCESSED_APPS_DIR, `${sanitized}_checklist_comparison.json`),
+    const ceChecklistFile = `${sanitized}_checklist_comparison.json`
+    await fs.writeFile(path.join(PROCESSED_APPS_DIR, ceChecklistFile),
       JSON.stringify({ applicationName: appName, generatedAt: new Date().toISOString(), ...qaResults }, null, 2)).catch(() => {})
+    appResult.ceOutputFile = ceChecklistFile
   }
 }
 

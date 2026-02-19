@@ -1,11 +1,242 @@
-# CE Review Tool — Architecture & Data Reference
+# CE Review Tool — Architecture & End-to-End Guide
 
-## Parsed Document Structure
+This document covers the **complete system** — from initial setup through rule generation, application processing, and result viewing. It is the single source of truth for how the system works.
 
-When a PDF is uploaded via `/api/upload`, Azure Document Intelligence extracts it into a JSON structure saved in two forms:
+---
 
-### 1. Extraction JSON (`extractions/` folder)
-**Path:** `extractions/<timestamp>_<filename>_extraction.json`
+## Table of Contents
+
+1. [Quick Start — End-to-End](#1-quick-start--end-to-end)
+2. [Folder Structure & Purpose](#2-folder-structure--purpose)
+3. [Configuration](#3-configuration)
+4. [Pipeline Overview](#4-pipeline-overview)
+5. [Step 1: User Guide Extraction (DI — One-Time per FY)](#5-step-1-user-guide-extraction)
+6. [Step 2: Rule Generation (AI — One-Time per FY)](#6-step-2-rule-generation)
+7. [Step 3: Application Processing (Per Application)](#7-step-3-application-processing)
+8. [Batch Processing](#8-batch-processing)
+9. [Checklist Rules Engine](#9-checklist-rules-engine)
+10. [SAAT Integration](#10-saat-integration)
+11. [Application Index & Page Resolution](#11-application-index--page-resolution)
+12. [AI Response Parsing](#12-ai-response-parsing)
+13. [Logs](#13-logs)
+14. [Troubleshooting](#14-troubleshooting)
+
+---
+
+## 1. Quick Start — End-to-End
+
+### First-Time Setup for a New Fiscal Year (e.g., FY26)
+
+```
+STEP 1 — Place source files:
+  userGuides/FY26/              ← Drop the User Guide PDF here
+  checklistQuestions/FY26/      ← Drop Standard + Program-Specific checklist PDFs here
+  SAAT/FY26/                    ← Drop the SAAT CSV export here
+  applications/FY26/HRSA-26-xxx/ ← Drop application PDFs here
+
+STEP 2 — Extract user guide (one-time, auto-cached):
+  The user guide is extracted automatically on first use (batch or UI).
+  Or manually: upload via the UI and it will be cached as *_extraction.json.
+
+STEP 3 — Generate rules (one-time per FY):
+  node server/scripts/generateRules.js FY26
+
+STEP 4 — Start servers:
+  cd server && node server.js          # CE server on port 3002
+  cd client && npm run dev             # Client on port 5173
+
+STEP 5 — Process applications:
+  Option A: UI — Upload via browser at http://localhost:5173
+  Option B: Batch — node server/scripts/combinedBatchProcess.js
+```
+
+### Re-Processing After Rule Changes
+
+If you regenerate rules (Step 3), the server picks up the new JSON files **automatically on the next API call** — no restart needed for rule JSON changes. However, if `checklistRules.js` code was modified, **restart the CE server**.
+
+---
+
+## 2. Folder Structure & Purpose
+
+```
+CEReviewTool/
+│
+├── applications/                        # Application PDFs to process
+│   └── FY26/
+│       └── HRSA-26-002/
+│           ├── Application-242645.pdf
+│           └── Application-243284.pdf
+│
+├── userGuides/                          # User Guide PDFs (one per FY)
+│   └── FY26/
+│       ├── FY26 SAC Application User Guide_Approved.pdf        ← source PDF
+│       ├── FY26 SAC Application User Guide_Approved_extraction.json  ← DI output (auto-cached)
+│       └── FY26 SAC Application User Guide_Approved_structured.json  ← structured (auto-cached)
+│
+├── checklistQuestions/                  # Checklist questions + generated rules (per FY)
+│   └── FY26/
+│       ├── ProgramSpecificQuestions.pdf                  ← source checklist PDF
+│       ├── ProgramSpecificQuestions_questions.json       ← extracted questions (from DI)
+│       ├── ProgramSpecificRules.json                    ← AI-generated rules ★
+│       ├── StandardChecklist.pdf                        ← source checklist PDF
+│       ├── StandardChecklist_questions.json             ← extracted questions (from DI)
+│       └── StandardRules.json                           ← AI-generated rules ★
+│
+├── SAAT/                                # SAAT CSV exports (one per FY)
+│   └── FY26/
+│       └── SAC-SAAT-Export-1720_02_06-2026.csv
+│
+├── data/                                # Default/fallback checklist question files
+│   ├── ProgramSpecificQuestions.json
+│   └── CE Standard Checklist_structured.json
+│
+├── processed-applications/              # Cached results → CE dashboard tiles
+│   ├── index.json
+│   └── Application-243284_checklist_comparison.json
+│
+├── pf-results/                          # Prefunding review results (JSON)
+├── extractions/                         # Azure DI extraction output (per uploaded doc)
+├── documents/                           # Uploaded PDFs with UUID prefix + metadata JSON
+├── stored-checklists/                   # Cached user guide extractions (legacy)
+├── logs/                                # Processing log text files
+├── cache/                               # Key-value pair cache
+│
+├── server/
+│   ├── server.js                        # Express server entry point (port 3002)
+│   ├── routes/
+│   │   ├── qaComparison.js              # Checklist Q&A API routes (standard + program-specific)
+│   │   ├── compare.js                   # Compliance comparison API route
+│   │   └── processedApplications.js     # Dashboard cache CRUD routes
+│   ├── services/
+│   │   ├── checklistRules.js            # Rules engine: condition eval, completeness check, page lookup
+│   │   ├── saatService.js               # SAAT CSV loading, matching, summary builder
+│   │   └── pdfLinkExtractor.js          # PDF TOC hyperlink extraction
+│   └── scripts/
+│       ├── generateRules.js             # ★ AI rule generation script (one-time per FY)
+│       ├── combinedBatchProcess.js      # Batch processing entry point
+│       ├── combinedBatchCE.js           # CE review batch functions
+│       ├── combinedBatchPF.js           # Prefunding review batch functions
+│       └── sharedExtraction.js          # Shared Azure DI extraction + format converters
+│
+├── client/
+│   ├── src/components/Dashboard.jsx     # Main dashboard with application tiles
+│   └── vite.config.js                   # Dev server config (port 5173, proxy → 3002)
+│
+├── .env                                 # Azure credentials + config
+└── ARCHITECTURE.md                      # This file
+```
+
+### Key Folder Purposes
+
+| Folder | Purpose | When Created |
+|--------|---------|--------------|
+| `userGuides/FY26/` | Store User Guide PDF + auto-cached DI extraction | Manual (PDF), auto (JSON) |
+| `checklistQuestions/FY26/` | Checklist PDFs, extracted questions, **generated rules** | Manual (PDF), auto (JSON) |
+| `SAAT/FY26/` | SAAT CSV for service area validation (Q10-Q16) | Manual |
+| `applications/` | Application PDFs organized by FY/NOFO | Manual |
+| `processed-applications/` | Cached results displayed on dashboard | Auto (after processing) |
+| `extractions/` | Raw DI output for uploaded application PDFs | Auto (after upload) |
+| `documents/` | Uploaded PDFs with UUID prefix for page viewer | Auto (after upload) |
+
+---
+
+## 3. Configuration
+
+### Environment Variables (`.env`)
+
+```env
+# Azure Document Intelligence (for PDF extraction)
+VITE_AZURE_DOC_ENDPOINT=https://your-di-resource.cognitiveservices.azure.com
+VITE_AZURE_DOC_KEY=your-di-key
+
+# Azure OpenAI (for AI-based rule generation and question answering)
+VITE_AZURE_OPENAI_ENDPOINT=https://your-openai-resource.openai.azure.com
+VITE_AZURE_OPENAI_KEY=your-openai-key
+VITE_AZURE_OPENAI_DEPLOYMENT=gpt-4o         # deployment name
+
+# Server URLs
+BATCH_SERVER_URL=http://localhost:3002       # CE server (used by batch scripts)
+BACKEND_URL=http://localhost:3001            # Prefunding backend (optional)
+```
+
+### Ports
+
+| Service | Port | Config |
+|---------|------|--------|
+| CE Server | 3002 | `server/server.js` (or `.env PORT=3002`) |
+| Client (Vite) | 5173 | `client/vite.config.js` |
+| Prefunding Backend | 3001 | Separate project |
+
+### Fiscal Year Auto-Detection
+
+The system extracts `HRSA-XX-NNN` from the application PDF text → derives `FYXX` → resolves all paths:
+
+| Detected | Derived FY | Resolves To |
+|----------|-----------|-------------|
+| `HRSA-26-002` | `FY26` | `userGuides/FY26/`, `checklistQuestions/FY26/`, `SAAT/FY26/` |
+| `HRSA-27-001` | `FY27` | `userGuides/FY27/`, `checklistQuestions/FY27/`, `SAAT/FY27/` |
+
+---
+
+## 4. Pipeline Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    ONE-TIME SETUP (per Fiscal Year)                      │
+│                                                                         │
+│  User Guide PDF ──→ Azure DI ──→ _extraction.json (cached)             │
+│                                       │                                 │
+│  Checklist PDFs ──→ Azure DI ──→ _questions.json (cached)              │
+│                                       │                                 │
+│                          ┌────────────┴────────────┐                    │
+│                          │   generateRules.js       │                   │
+│                          │   (AI interprets User    │                   │
+│                          │    Guide to derive rules)│                   │
+│                          └────────────┬────────────┘                    │
+│                                       │                                 │
+│                          StandardRules.json + ProgramSpecificRules.json  │
+│                          (cached — reused for ALL apps in this FY)      │
+└─────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    PER-APPLICATION PROCESSING                           │
+│                                                                         │
+│  Application PDF ──→ Azure DI ──→ extraction JSON                      │
+│                                       │                                 │
+│                          ┌────────────┴────────────┐                    │
+│                          │   Rules Engine           │                   │
+│                          │   (checklistRules.js)    │                   │
+│                          │                          │                   │
+│                          │   Loads rules from JSON  │                   │
+│                          │   Evaluates conditions   │                   │
+│                          │   Dispatches to strategy │                   │
+│                          └────────────┬────────────┘                    │
+│                                       │                                 │
+│                          Checklist answers (Yes/No/N/A)                 │
+│                          + Compliance report                            │
+│                          → cached in processed-applications/            │
+│                          → displayed on dashboard                       │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key insight**: DI extraction and rule generation happen **once per FY**. Only application processing happens per-application.
+
+---
+
+## 5. Step 1: User Guide Extraction
+
+The User Guide PDF is extracted via Azure Document Intelligence **once** and cached as JSON.
+
+### Automatic (during batch or UI processing)
+The system checks for `userGuides/FY26/*_extraction.json`. If not found, it extracts the PDF automatically and caches the result.
+
+### Manual (if needed)
+Upload the User Guide PDF via the UI. The extraction is saved to `userGuides/FY26/` as:
+- `*_extraction.json` — Raw DI output (sections, tables, key-value pairs)
+- `*_structured.json` — Clean section-based format
+
+### Extraction JSON Structure
 
 ```json
 {
@@ -13,7 +244,6 @@ When a PDF is uploaded via `/api/upload`, Azure Document Intelligence extracts i
   "pages": [
     {
       "pageNumber": 1,
-      "width": 8.5, "height": 11, "unit": "inch",
       "lines": [{ "content": "line text", "boundingBox": [...] }],
       "words": [{ "content": "word", "confidence": 0.99 }],
       "selectionMarks": [{ "state": "selected" }]
@@ -27,314 +257,233 @@ When a PDF is uploaded via `/api/upload`, Azure Document Intelligence extracts i
       "title": "3.1.1.1 Completing Form 1A",
       "pageNumber": 15,
       "content": [{ "text": "paragraph text", "pageNumber": 15 }],
-      "role": "numberedSection",
       "sectionNumber": "3.1.1.1",
       "sectionType": "requirement",
       "depth": 4
     }
   ],
-  "keyValuePairs": [{ "key": "Field Name", "value": "Field Value", "confidence": 0.95 }],
-  "tables": [
-    {
-      "id": "table_0_page_5",
-      "pageNumber": 5,
-      "rowCount": 10, "columnCount": 4,
-      "structuredData": [{ "Column1": "val", "Column2": "val" }],
-      "formQuestions": [{ "question": "...", "answer": "..." }]
-    }
-  ],
-  "metadata": { "pageCount": 160, "analyzedAt": "2026-...", "extractionQuality": "production" }
+  "tables": [...],
+  "keyValuePairs": [...],
+  "metadata": { "pageCount": 54, "analyzedAt": "2026-..." }
 }
 ```
 
-### 2. Structured JSON (`extractions/` folder)
-**Path:** `extractions/<timestamp>_<filename>_structured.json`
-
-A cleaner key/value pair format generated by `structuredDocumentTransformer.js`.
-
-### 3. Document Metadata
-**Path:** `documents/<uuid>-<filename>.json`
-
-Contains upload metadata, file paths, and references to the extraction files.
-
 ---
 
-## File Locations
+## 6. Step 2: Rule Generation
 
-| Data Type | Location | Description |
-|-----------|----------|-------------|
-| Uploaded PDFs | `documents/` | Raw uploaded files with UUID prefix |
-| Extraction JSON | `extractions/` | Full Azure Doc Intelligence output per document |
-| Stored Checklists | `stored-checklists/` | Cached user guide/checklist extractions (reusable) |
-| Checklist Questions | `data/` | Default checklist question files (fallback) |
-| Processed Results | `processed-applications/` | Cached compliance + checklist comparison results |
-| Processing Logs | `logs/` | Text log files from each processing session |
-| Key-Value Cache | `cache/` | Cached key-value pair extractions |
+### What Are Rules?
 
-### Checklist Question Files (for QA Comparison)
+Rules are JSON files that tell the system **how to answer each checklist question** — what to look for, where to look, what conditions apply, and what strategy to use. They are derived from the User Guide's actual compliance guidance.
 
-These are **pre-filled checklist documents** (not the user guide). They contain the reviewer's Yes/No/N/A answers:
-
-| File | Default Location | Description |
-|------|-----------------|-------------|
-| `ProgramSpecificQuestions.json` | `data/` | Program-specific eligibility questions with user answers |
-| `CE Standard Checklist_structured.json` | `data/` | Standard CE checklist questions with user answers |
-
-**Dynamic Resolution:** The QA comparison routes (`/api/qa-comparison/*`) resolve these files dynamically:
-1. Explicit path via `checklistPath` parameter in request body
-2. Filename pattern search across `data/`, `extractions/`, `stored-checklists/`
-3. Fallback to default `data/` folder
-
----
-
-## Section Extraction & Processing
-
-### How sections are extracted from a User Guide PDF:
-
-1. **Upload** → Azure Document Intelligence `prebuilt-layout` model
-2. **TOC Detection** → Scans pages 2-10 for top-level numbered sections (dynamic, not limited to 1-4)
-3. **Section Parsing** → Paragraphs with `role: title/sectionHeading` or matching `^\d+(\.\d+)*\.?\s+` pattern
-4. **Classification:**
-   - `organizational_header` (depth 1): e.g., "3." — skipped during processing
-   - `category_header` (depth 2): e.g., "3.1" — skipped during processing
-   - `requirement` (depth 3+): e.g., "3.1.1.1" — **processed as leaf sections**
-
-### Chunked Processing Flow:
-
-1. User selects sections → extract main section numbers (e.g., "3", "4")
-2. Filter all checklist sections matching those numbers
-3. Identify **leaf sections only** (no children = actual requirements)
-4. Group leaves by second-level parent (3.1, 3.2, 3.3, 4, etc.)
-5. **Sort chunks numerically** (3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 4)
-6. Process each chunk as a separate AI call with retry (max 3 attempts)
-7. **Deduplicate** results by `checklistSection` title
-8. Merge into final compliance report
-
----
-
-## Folder Structure (UI & Batch)
-
-Both the UI and batch processing use the same folder structure, rooted at the project directory:
-
-```
-CEReviewTool/
-├── applications/                    # Application PDFs to process
-│   ├── Application-242645.pdf
-│   ├── Application-242700.pdf
-│   └── ...
-│
-├── userGuides/                      # User guides organized by Funding Opp or Fiscal Year
-│   ├── HRSA-26-004/
-│   │   └── FY26 SAC Application User Guide_Approved.pdf
-│   ├── FY25/
-│   │   └── FY25 Service Area Competition User Guide.pdf
-│   ├── FY24/
-│   │   └── FY24SACUserGuide.pdf
-│   └── ...
-│
-├── checklistQuestions/               # Checklist question files organized by fiscal year
-│   ├── FY26/
-│   │   ├── CE Standard Checklist_structured.json
-│   │   └── ProgramSpecificQuestions.json
-│   ├── FY25/
-│   │   └── 2025 CE Review Program specific Checklist.pdf
-│   └── ...
-│
-├── SAAT/                            # SAAT CSV exports organized by fiscal year
-│   ├── FY26/
-│   │   └── SAC-SAAT-Export-1720_02_06-2026.csv
-│   ├── FY25/
-│   │   └── ...
-│   └── ...
-│
-├── data/                            # Default/fallback checklist question files
-│   ├── ProgramSpecificQuestions.json
-│   └── CE Standard Checklist_structured.json
-│
-├── stored-checklists/               # Cached user guide extractions (auto-saved)
-├── processed-applications/          # Cached compliance + checklist comparison results
-├── extractions/                     # Azure Doc Intelligence extraction output
-├── documents/                       # Uploaded document metadata
-├── logs/                            # Processing log text files
-└── cache/                           # Key-value pair cache
-```
-
-### Fiscal Year Derivation
-
-The fiscal year is **automatically derived** from the Funding Opportunity Number found in the application:
-
-| Funding Opp Number | Derived FY | Used For |
-|---------------------|-----------|----------|
-| `HRSA-26-004` | `FY26` | SAAT folder, checklistQuestions folder, userGuides folder |
-| `HRSA-25-001` | `FY25` | Same pattern |
-
-**Logic:** Extract the 2-digit year from `HRSA-XX-NNN` → prefix with `FY` → e.g., `FY26`
-
-This is used to automatically resolve:
-- **SAAT data:** `SAAT/FY26/*.csv`
-- **Checklist questions:** `checklistQuestions/FY26/ProgramSpecificQuestions.json`
-- **Standard checklist:** `checklistQuestions/FY26/CE Standard Checklist_structured.json`
-
----
-
-## SAAT Integration
-
-The SAAT (Service Area Analysis Tool) CSV data is automatically loaded during program-specific QA comparison to validate Questions 11-15:
-
-| Question | SAAT Validation |
-|----------|----------------|
-| **Q11** | Form 1A total unduplicated patients >= 75% of SAAT `patient_target` |
-| **Q12** | Application proposes ALL `service_type` values from SAAT |
-| **Q13** | Requested annual SAC funding <= SAAT `total_funding` |
-| **Q14** | Application maintains funding distribution (CHC/MSAW/HP/RPH) from SAAT |
-| **Q15** | Application serves patients for each population type with non-zero funding |
-
-**API:** `GET /api/saat/data?fundingOpp=HRSA-26-004`
-
-**CSV columns used:** `announcement_number`, `patient_target`, `total_funding`, `chc_funding`, `msaw_funding`, `hp_funding`, `rph_funding`, `service_type`, `zip`, `pct_patients`
-
----
-
-### CE-Only Batch Script Usage:
+### Command
 
 ```bash
-# Interactive mode (prompts for paths):
-node server/scripts/batchProcess.js
+# Generate BOTH standard and program-specific rules for FY26:
+node server/scripts/generateRules.js FY26
 
-# CLI arguments:
-node server/scripts/batchProcess.js \
-  --applications "C:/path/to/applications" \
-  --userguides "C:/path/to/userGuides" \
-  --checklists "C:/path/to/checklistQuestions" \
-  --funding-opp "HRSA-26-004" \
-  --year "2026"
+# Standard rules only:
+node server/scripts/generateRules.js FY26 --type standard
 
-# Or via npm:
-npm run batch
+# Program-specific rules only:
+node server/scripts/generateRules.js FY26 --type programspecific
+```
+
+### What It Reads
+
+| Input | Path | Description |
+|-------|------|-------------|
+| User Guide extraction | `userGuides/FY26/*_extraction.json` | Raw text from DI (must exist) |
+| Standard questions | `checklistQuestions/FY26/StandardChecklist_questions.json` | Extracted checklist questions |
+| Program-specific questions | `checklistQuestions/FY26/ProgramSpecificQuestions_questions.json` | Extracted checklist questions |
+
+### What It Produces
+
+| Output | Path | Description |
+|--------|------|-------------|
+| Standard rules | `checklistQuestions/FY26/StandardRules.json` | Rules for standard checklist (Q1-Q2) |
+| Program-specific rules | `checklistQuestions/FY26/ProgramSpecificRules.json` | Rules for program-specific checklist (Q1-Q22) |
+
+### Standard Rules — Completeness Check (Q1)
+
+The AI reads User Guide **section 2.3.2** and derives the attachment requirement matrix:
+
+- **Always-required attachments** → `lookFor` array
+- **Conditional attachments** → `conditionalAttachments` array with conditions:
+  - `applicant_type: public_agency` — Public agency only (e.g., Attachment 6)
+  - `applicant_status: new` — New applicants only (e.g., Attachment 8, 11)
+  - `applicant_status: new_or_supplemental` — New + Supplemental only (e.g., Attachment 12)
+
+### Validation Matrix
+
+After generation, the script prints an **attachment requirement matrix** for human review:
+
+```
+  Attachment                              Type 1 (New)  Type 2 (CC)  Type 3 (Supp)
+  ─────────────────────────────────────────────────────────────────────────────────
+  Attachment 1: Service Area Map          Required      Required     Required
+  Attachment 6: Co-Applicant Agreement    If PA         If PA        If PA
+  Attachment 8: Articles of Incorporation Required      NOT req      NOT req
+  Attachment 11: Evidence of Nonprofit    Required      NOT req      NOT req
+  Attachment 12: Operational Plan         Required      NOT req      Required
+```
+
+**Always verify this matrix against User Guide section 2.3.2 before using the rules.**
+
+### Program-Specific Rules — Answer Strategies
+
+The AI assigns each question an `answerStrategy`:
+
+| Strategy | Description | AI Required? |
+|----------|-------------|-------------|
+| `document_review` | Check if a document/attachment exists | No (deterministic) |
+| `eligibility_check` | Verify entity eligibility from documents | Yes (focused pages) |
+| `saat_compare` | Cross-reference application vs SAAT CSV data | Yes (AI + SAAT) |
+| `completeness_check` | Check all required attachments are present | No (deterministic) |
+| `prior_answers_summary` | Synthesize all prior answers for final determination | Yes (AI synthesis) |
+
+### Rule JSON Structure
+
+```json
+{
+  "questionNumber": 4,
+  "question": "Does the application include Attachment 12: Operational Plan?",
+  "answerStrategy": "document_review",
+  "lookFor": ["Attachment 12: Operational Plan"],
+  "complianceGuidance": "Required for Type 1 (New) and Type 3 (Supplemental)...",
+  "condition": {
+    "type": "applicant_status",
+    "value": "new_or_supplemental",
+    "naIfNot": true
+  },
+  "dependsOn": null,
+  "description": "Checks for inclusion of Operational Plan."
+}
 ```
 
 ---
 
-### Combined Batch Script (CE Review + Prefunding Review):
+## 7. Step 3: Application Processing
 
-Extracts each application PDF **once** via Azure Document Intelligence, then runs
-both CE Review and Prefunding Review using the same extraction result.
+### Via UI (Single Application)
 
-#### Files:
-- `server/scripts/combinedBatchProcess.js` — Main entry point
-- `server/scripts/combinedBatchCE.js` — CE Review batch functions
-- `server/scripts/combinedBatchPF.js` — Prefunding Review batch functions
-- `server/scripts/sharedExtraction.js` — Shared Azure DI extraction + format converters
+1. Open `http://localhost:5173`
+2. Upload application PDF → Azure DI extracts it
+3. Select user guide → system loads cached extraction
+4. Run compliance comparison + checklist Q&A
+5. Results appear on dashboard
 
-#### Data Folder Structure:
+### Via Batch (Multiple Applications)
+
+See [Section 8: Batch Processing](#8-batch-processing).
+
+### Processing Flow (Per Application)
+
 ```
-CEReviewTool/
-├── applications/                    ← Common folder for all PDFs
-│   └── Application-242645.pdf
-├── userGuides/
-│   └── HRSA-26-004/                 ← Resolved from Funding Opp Number
-│       └── FY26 SAC Application User Guide_Approved.pdf
-├── checklistQuestions/
-│   └── FY26/                        ← Resolved from year code (FY + xx)
-│       ├── CE Standard Checklist_structured.json
-│       └── ProgramSpecificQuestions.json
-├── SAAT/
-│   └── FY26/
-│       └── SAC-SAAT-Export-*.csv
-└── processed-applications/          ← CE dashboard cache
-    ├── index.json
-    └── app_*.json
-
-AIPrefundingReview/data/
-├── 26/compliance-rules.json         ← Resolved from year code (xx)
-└── cache/                           ← Prefunding dashboard cache
-    └── <md5hash>_v1.0.json
+Application PDF
+  │
+  ├─→ Azure DI extraction (pages, tables, forms)
+  │
+  ├─→ Build Application Index (formPageMap, formPageRanges)
+  │     Maps every form/attachment to physical page numbers
+  │
+  ├─→ Detect applicant type (new/competing continuation/supplemental)
+  │     Detect: isNew, isCompetingContinuation, isCompetingSupplement,
+  │             isPublicAgency, isNonprofit
+  │
+  ├─→ Load rules for FY (from checklistQuestions/FY26/*Rules.json)
+  │
+  ├─→ For each checklist question:
+  │     1. Evaluate CONDITION → N/A if not applicable
+  │     2. Evaluate DEPENDENCY → N/A if prerequisite not met
+  │     3. Dispatch to ANSWER STRATEGY:
+  │        • document_review  → deterministic presence check
+  │        • completeness_check → check all attachments (with conditions)
+  │        • saat_compare     → AI + SAAT CSV data
+  │        • eligibility_check / ai_focused → AI + targeted pages only
+  │        • prior_answers_summary → AI synthesis of all prior answers
+  │
+  └─→ Cache results → Dashboard tile
 ```
 
-#### Year Auto-Detection:
-The script extracts `Funding Opportunity Number: HRSA-xx-004` from the PDF content.
-The `xx` (e.g., `26`) is used to resolve:
-- **CE Review:** `userGuides/HRSA-xx-004/`, `checklistQuestions/FYxx/`, `SAAT/FYxx/`
-- **Prefunding:** `AIPrefundingReview/data/xx/compliance-rules.json`
+---
 
-#### Usage:
+## 8. Batch Processing
+
+### Combined Batch (CE Review + Prefunding Review)
+
+Extracts each application PDF **once** via Azure DI, then runs both reviews.
+
+#### Files
+
+| File | Purpose |
+|------|---------|
+| `server/scripts/combinedBatchProcess.js` | Main entry point — orchestrates everything |
+| `server/scripts/combinedBatchCE.js` | CE Review: user guide resolution, compliance, checklist Q&A |
+| `server/scripts/combinedBatchPF.js` | Prefunding Review: section-by-section validation |
+| `server/scripts/sharedExtraction.js` | Shared Azure DI extraction + format converters |
+
+#### Commands
+
 ```bash
-# Interactive (prompts for mode):
+# Interactive (prompts for mode and scope):
 node server/scripts/combinedBatchProcess.js
 
-# Run both reviews:
+# Both CE + Prefunding:
 node server/scripts/combinedBatchProcess.js --mode both
 
 # CE Review only:
 node server/scripts/combinedBatchProcess.js --mode ce-only
 
-# Prefunding Review only:
+# Prefunding only:
 node server/scripts/combinedBatchProcess.js --mode prefunding-only
+
+# CE with specific scope:
+node server/scripts/combinedBatchProcess.js --mode ce-only --ce-scope checklist-only
+node server/scripts/combinedBatchProcess.js --mode ce-only --ce-scope compliance-only
+
+# Target a specific subfolder:
+node server/scripts/combinedBatchProcess.js --folder FY26/HRSA-26-002
 ```
 
-#### Combined Batch Steps (per application):
-1. **Extract** PDF via Azure Document Intelligence (called **once**, shared)
+#### Prerequisites
+
+- **CE server must be running** on port 3002 (batch calls its API endpoints)
+- **Rules JSON must exist** for the FY being processed
+- **SAAT CSV must exist** if processing program-specific questions Q10-Q16
+
+#### Batch Steps (Per Application)
+
+1. **Extract** PDF via Azure DI (called once, shared between CE and PF)
 2. **Convert** raw result to CE JSON format + Prefunding plain text format
-3. **CE Review** (if enabled):
-   - Upload user guide to CE server → get checklist sections
+3. **Auto-detect** Funding Opportunity Number (`HRSA-XX-NNN`) → derive FY
+4. **CE Review** (if enabled):
+   - Resolve user guide (load cached extraction or extract from PDF)
    - Run compliance comparison (single-call with chunked fallback)
-   - Run checklist Q&A (Standard + Program-Specific)
-   - Cache to `processed-applications/` → **CE dashboard tile**
-4. **Prefunding Review** (if enabled):
+   - Run checklist Q&A via `POST /api/qa-comparison/standard-analyze` and `/analyze`
+   - Cache results → CE dashboard tile
+5. **Prefunding Review** (if enabled):
    - Load compliance rules for detected year
-   - Run all-sections validation via Azure OpenAI (single call)
-   - Cache to `AIPrefundingReview/data/cache/` → **Prefunding dashboard tile**
+   - Run all-sections validation via Azure OpenAI
+   - Cache results → Prefunding dashboard tile
 
-#### Dashboard Integration:
-- **CE Review dashboard:** Results cached via `POST /api/processed-applications/save`,
-  visible as tiles in the Dashboard tab (port 3002)
-- **Prefunding dashboard:** Results cached as `<md5>_v1.0.json` in `data/cache/`,
-  visible as tiles in the Applications tab (port 3001)
+#### Dashboard Integration
 
-#### Prefunding Cache Format:
-```json
-{
-  "fileHash": "md5 of extracted text",
-  "manualVersion": "v1.0",
-  "timestamp": "ISO date",
-  "applicationName": "Application-242645",
-  "extractedContent": "full extracted text with PAGE markers",
-  "results": {
-    "Sliding Fee Discount Program": {
-      "compliantItems": [{ "element", "status", "evidence", "evidenceLocation", "reasoning" }],
-      "nonCompliantItems": [...],
-      "notApplicableItems": [...]
-    }
-  }
-}
-```
-
-### CE-Only Batch Processing Steps (per application):
-1. Upload & analyze user guide PDF (once, reused for all applications)
-2. **Skip already-processed applications** (checks `processed-applications/` cache)
-3. Upload & analyze application PDF
-4. Run chunked compliance comparison (leaf sections only, with retry + dedup)
-5. Run checklist Q&A comparison (Standard + Program-Specific, with SAAT data)
-6. Cache all results to `processed-applications/`
-
-### Batch Output:
-- Compliance report cached in `processed-applications/`
-- Checklist comparison cached in `processed-applications/<app>_checklist_comparison.json`
-- Already-processed applications are **skipped** (delete cached file to re-process)
-- Results viewable in the CE Review dashboard
+| Review | Cache Location | Visible On |
+|--------|---------------|------------|
+| CE Review | `processed-applications/` via `POST /api/processed-applications/save` | CE Dashboard (port 5173) |
+| Prefunding | `AIPrefundingReview/data/cache/<md5>_v1.0.json` | Prefunding Dashboard (port 3001) |
 
 ---
 
-## Checklist Q&A Rules Engine
+## 9. Checklist Rules Engine
 
-The checklist Q&A system uses a **rules-based dispatch engine** that routes each question to the most efficient answer strategy. Only questions that truly need AI interpretation are sent to the AI — and even then, only with the specific pages relevant to that question (not the entire 160-page document).
-
-### Architecture Overview
+### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Checklist Question Input                         │
-│  (parsed from checklistQuestions/FY26/*.json via Azure DI)         │
+│  (loaded from checklistQuestions/FY26/*Rules.json)                  │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │
                     ┌──────▼──────┐
@@ -342,332 +491,215 @@ The checklist Q&A system uses a **rules-based dispatch engine** that routes each
                     │   Check     │  Is this question applicable?
                     └──────┬──────┘
                            │
-              ┌────────────┼─── N/A (condition not met)
-              │            │         → method: 'rules_condition'
-              │            │         → No AI call
+              ┌────────────┼─── N/A (condition not met) → method: 'rules_condition'
+              │            │
               │     ┌──────▼──────┐
               │     │ Dependency  │  Q11-Q15 depend on Q10=Yes
               │     │   Check     │
               │     └──────┬──────┘
               │            │
-              │  ┌─────────┼─── N/A (dependency not met)
-              │  │         │         → method: 'rules_dependency'
-              │  │         │         → No AI call
-              │  │  ┌──────▼──────────────────────────────────┐
-              │  │  │         Answer Strategy Dispatch         │
-              │  │  │                                          │
-              │  │  │  'presence'     → answerPresenceQuestion │ No AI
-              │  │  │  'saat_compare' → answerSAATBatch        │ AI + SAAT data
-              │  │  │  'ai_focused'   → answerFocusedBatch     │ AI + focused pages
-              │  │  └──────────────────────────────────────────┘
+              │  ┌─────────┼─── N/A (dependency not met) → method: 'rules_dependency'
+              │  │         │
+              │  │  ┌──────▼──────────────────────────────────────────┐
+              │  │  │         Answer Strategy Dispatch                 │
+              │  │  │                                                  │
+              │  │  │  'document_review'      → presence check    (no AI)
+              │  │  │  'completeness_check'   → attachment matrix (no AI)
+              │  │  │  'saat_compare'         → AI + SAAT data         │
+              │  │  │  'eligibility_check'    → AI + focused pages     │
+              │  │  │  'ai_focused'           → AI + focused pages     │
+              │  │  │  'prior_answers_summary'→ AI synthesis of priors │
+              │  │  └─────────────────────────────────────────────────┘
               │  │
               ▼  ▼
         ┌─────────────┐
-        │   Results    │  Sorted by question number
-        │   + Pages    │  Page refs resolved server-side via formPageMap/formPageRanges
+        │   Results    │  Yes/No/N/A + evidence + reasoning + page refs
         └─────────────┘
 ```
+
+### Condition Types
+
+| Condition | Value | Meaning |
+|-----------|-------|---------|
+| `applicant_type` | `public_agency` | Only public agency applicants |
+| `applicant_status` | `new` | Only Type 1 (New) applicants |
+| `applicant_status` | `new_or_supplemental` | Type 1 (New) + Type 3 (Supplemental) |
+| `applicant_status` | `new_or_competing` | New or competing supplement (legacy alias) |
+| `funding_type` | `rph` | Only RPH funding requestors |
+| `funding_type` | `hp_or_rph` | HP and/or RPH funding |
+
+### Completeness Check (Standard Q1 / Program-Specific Q21)
+
+Evaluates whether all required attachments are present:
+
+1. Check `lookFor` array — these are **always required** for all applicant types
+2. Check `conditionalAttachments` — each has a `condition` that determines applicability:
+   - If condition met → check if attachment is present → Missing or Found
+   - If condition not met → "Not required for this applicant"
+3. Result: Yes (all present) / No (any missing) with detailed evidence
 
 ### Source Files
 
 | File | Purpose |
 |------|---------|
-| `server/services/checklistRules.js` | Rules definitions, application index builder, presence checker, page extraction |
-| `server/routes/qaComparison.js` | API routes, AI dispatch, SAAT batch, focused batch, response parsing |
+| `server/services/checklistRules.js` | Rules engine: loading, condition eval, completeness check, page lookup |
+| `server/routes/qaComparison.js` | API routes: AI dispatch, SAAT batch, focused batch, response parsing |
 | `server/services/saatService.js` | SAAT CSV loading, service area matching, summary builder |
 | `server/services/pdfLinkExtractor.js` | PDF TOC hyperlink extraction for exact page destinations |
 
----
-
-### Question Rules (`PROGRAM_SPECIFIC_RULES`)
-
-Defined in `server/services/checklistRules.js`. Each rule has:
-
-```js
-{
-  questionNumber: 8,              // Matches checklist Q number
-  answerStrategy: 'ai_focused',   // How to answer: 'presence' | 'saat_compare' | 'ai_focused'
-  lookFor: ['Form 5A'],           // Form/attachment names to find in the application index
-  condition: null,                // Applicant-type condition for N/A (null = always applicable)
-  focusPages: ['Form 5A'],        // Which pages to send to AI (for ai_focused strategy)
-  aiQuestion: 'On Form 5A...',    // Rewritten question for AI clarity (for ai_focused strategy)
-  description: 'Check Form 5A...' // Human-readable summary
-}
-```
-
-### Answer Strategies
-
-#### 1. `presence` — No AI Required
-
-**Used by:** Q1 (Project Narrative), Q3 (Attachment 11), Q4 (Attachment 12)
-
-Checks if a required form/attachment exists in the application's Table of Contents index. Returns Yes/No deterministically with the page number where the document starts.
-
-**Logic:**
-1. Parse `suggestedResources` from the checklist question (primary lookup hint)
-2. Fall back to `rule.lookFor` names
-3. Look up each name in `formPageMap` (exact match, then partial match)
-4. If found → **Yes** with page reference; if not found → **No**
-
-**Method tag:** `rules_presence`
-
-#### 2. `rules_condition` / `rules_dependency` — No AI Required
-
-**Used by:** Q2 (public agency only), Q5 (new applicants only), Q16-Q19 (conditional)
-
-Before any answer strategy runs, two checks happen:
-
-- **Condition check** (`evaluateCondition`): Compares rule conditions against applicant flags derived from the application text. Conditions include:
-  - `applicant_type: public_agency` — Only public agencies
-  - `applicant_status: new` — Only new applicants
-  - `applicant_status: new_or_competing` — New or competing supplement
-  - `funding_type: rph` — Only RPH funding requestors
-  - `funding_type: hp_or_rph` — HP and/or RPH funding
-
-- **Dependency check**: Q11-Q15 all have `dependsOn: { question: 10, requiredAnswer: 'Yes' }`. If Q10 ≠ Yes, they are automatically N/A.
-
-**Method tags:** `rules_condition`, `rules_dependency`
-
-#### 3. `saat_compare` — AI + SAAT Reference Data
-
-**Used by:** Q10-Q16 (service area validation questions)
-
-These questions require cross-referencing the application against the **SAAT CSV** (Service Area Analysis Tool) data published by HRSA.
-
-**Logic:**
-1. Load SAAT CSV for the fiscal year (`SAAT/FY26/*.csv`)
-2. Match the applicant to a service area by zip code overlap
-3. Build a SAAT summary with patient targets, funding amounts, service types, zip codes
-4. Collect relevant form pages (Form 1A, SF-424A, Form 5B, Summary Page)
-5. Send all SAAT questions as a **single batch** to AI with SAAT data + form pages
-6. AI applies specific rules per question (e.g., Q11: patients ≥ 75% of target)
-
-**SAAT-specific AI rules in the prompt:**
-| Question | Rule |
-|----------|------|
-| Q10 | NOFO matches AND valid service area from SAAT |
-| Q11 | Form 1A patients ≥ 75% of SAAT Patient Target |
-| Q12 | Applicant proposes ALL SAAT Service Types |
-| Q13 | Annual SAC funding ≤ SAAT Total Funding |
-| Q14 | Funding distribution matches SAAT (CHC/MSAW/HP/RPH) |
-| Q15 | All SAAT population types served |
-| Q16 | Form 5B zip codes cover ≥ 75% of SAAT patient percentage |
-
-**Method tag:** `rules_saat_ai`
-
-#### 4. `ai_focused` — AI + Targeted Pages Only
-
-**Used by:** Q5-Q9, Q17-Q19 (questions requiring interpretation)
-
-Instead of sending the entire 160-page document, the system extracts **only the 2-10 pages** relevant to each question and sends those to the AI.
-
-**Logic:**
-1. Parse `suggestedResources` from checklist question → look up pages in `formPageMap`
-2. Fall back to `rule.focusPages` / `rule.lookFor`
-3. Expand pages using `formPageRanges` (multi-page form awareness):
-   - If a form spans multiple pages (e.g., Form 5A: pages 143-145), include ALL pages
-   - If no range found, include target page + next page as fallback
-4. Cap at 10 pages per question
-5. Group questions into batches of 4 to minimize AI calls
-6. Each batch gets a focused system prompt with writing style instructions
-7. AI returns JSON array with answer, evidence, reasoning per question
-
-**Method tag:** `rules_focused_ai`
-
----
-
-### Application Index (`buildApplicationIndex`)
-
-The foundation of the rules engine. Built once per application, it maps every form/attachment to its physical page number(s).
-
-**Three data structures:**
-
-| Structure | Type | Purpose |
-|-----------|------|---------|
-| `formPageMap` | `Map<string, number>` | Canonical form key → first physical page number |
-| `formPageRanges` | `Map<string, {start, end}>` | Canonical form key → full page range |
-| `pages` | `Array<{pageNum, text}>` | All page text for extraction |
-
-**Index building priority (highest to lowest):**
-
-1. **PDF TOC hyperlinks** (`pdfLinkExtractor.js`) — Exact link destinations from the PDF's clickable Table of Contents. Most accurate source.
-2. **Text-based TOC entries** — Parsed from TOC pages by matching `N. Name ... PageNum` patterns.
-3. **Page header scanning** — Fallback: scan each page's first few lines for form/attachment headers.
-4. **Alias resolution** — Copy missing canonical keys from alternative names (e.g., "Services Provided" → `form 5a`).
-
-**Multi-page form awareness:**
-When multiple TOC entries share the same canonical key (e.g., "Form 5A - Required Services" on page 143, "Form 5A - Additional Services" on page 144, "Form 5A - Specialty Services" on page 145):
-- `formPageMap` stores the **first** (lowest) page: `form 5a → 143`
-- `formPageRanges` stores the **full range**: `form 5a → { start: 143, end: 145 }`
-
-**Canonical key normalization** uses `formPatterns` — a list of ~40 regex patterns that map document text to normalized keys:
-```
-"Application for Federal Assistance" → 'sf-424'
-"Services Provided"                  → 'form 5a'
-"Service Sites"                      → 'form 5b'
-"Evidence of Nonprofit..."           → 'attachment 11'
-"Operational Plan"                   → 'operational plan'
-```
-
----
-
-### Page Offset (`pageOffset`)
-
-HRSA application PDFs often have a cover page, so physical page 2 may show "Page Number: 1" in the footer. The system detects this offset:
-
-- **Backend:** `pageOffset` is calculated by comparing physical page numbers with footer "Page Number: N" text. Stored in the index and returned in API responses.
-- **Frontend:** Page reference badges display `physicalPage - pageOffset` (the footer number) but navigate to the physical page in the PDF viewer.
-
----
-
-### Page Reference Resolution (`resolvePageRefsFromIndex`)
-
-After the AI returns evidence text, page references are resolved **server-side** (not from AI-provided page numbers, which are unreliable):
-
-1. Scan evidence + reasoning text for form/attachment mentions (e.g., "Form 5A", "Attachment 11")
-2. Look up each mention in `formPageRanges`:
-   - **Compact forms (≤5 pages):** Include full page range (e.g., Form 5A → pages 143, 144, 145)
-   - **Large sections (>5 pages):** Include only start page (e.g., Project Narrative → page 12)
-3. Also extract explicit "page N" references from the AI text
-4. Cap at 5 page references per question
-
----
-
-### Standard Checklist (`/api/qa-comparison/standard-analyze`)
-
-The standard checklist uses a **simpler pipeline** — all questions go directly to AI with a full application summary (no rules-based dispatch). This is because standard checklist questions are broad and don't map cleanly to specific forms.
-
-**Pipeline:**
-1. Parse checklist questions from `checklistQuestions/FY26/StandardChecklist_structured.json`
-2. Filter out metadata sections (e.g., "Other comments", "GMS Recommendation")
-3. Build application summary text
-4. Send all questions to AI in a single call
-5. Parse AI JSON response (with fallback strategies for malformed JSON)
-6. Resolve page references server-side via `buildPageIndex`
-
----
-
-### AI Response Parsing (`parseAIResponse`)
-
-The AI returns JSON arrays, but responses can be malformed. The parser uses 5 fallback strategies:
-
-1. **Direct parse** — Clean markdown fences, fix malformed `pageReferences` arrays (e.g., `[SF-424, 11]` → `[]`), then `JSON.parse`
-2. **Regex array extraction** — Find `[...]` in the response and parse it
-3. **Truncated JSON repair** — If braces are unbalanced, truncate to last complete object and close the array
-4. **Individual object extraction** — Regex-match each `{"questionNumber":...}` object separately
-5. **Failure** — Log raw response for debugging, return empty array
-
-The `pageReferences` sanitization is critical: the AI sometimes puts form names like `[SF-424, 11]` instead of page numbers `[4, 11]`, which breaks JSON parsing. Since page refs are resolved server-side anyway, these are safely replaced with `[]`.
-
----
-
-### Question Flow Summary (Program-Specific, 19 Questions)
+### Question Flow Summary (Program-Specific, 22 Questions)
 
 | Q# | Strategy | Condition | What It Checks |
 |----|----------|-----------|----------------|
-| Q1 | `presence` | — | Project Narrative exists |
-| Q2 | `presence` | Public agency only | Attachment 6 (Co-Applicant Agreement) |
-| Q3 | `presence` | New applicants only | Attachment 11 (Nonprofit/Agency Status) |
-| Q4 | `presence` | New/competing only | Attachment 12 (Operational Plan) |
-| Q5 | `ai_focused` | New applicants only | Entity type verification from Attachment 11 |
-| Q6 | `ai_focused` | — | Substantive role (Budget Narrative + Form 5A) |
-| Q7 | `ai_focused` | — | All required primary health care services |
-| Q8 | `ai_focused` | — | Form 5A: General Primary Medical Care in Column I/II |
-| Q9 | `ai_focused` | — | Services accessible to all populations |
+| Q1 | `document_review` | — | Project Narrative exists |
+| Q2 | `document_review` | Public agency only | Attachment 6 (Co-Applicant Agreement) |
+| Q3 | `document_review` | New applicants only | Attachment 11 (Nonprofit/Agency Status) |
+| Q4 | `document_review` | New/supplemental only | Attachment 12 (Operational Plan) |
+| Q5 | `eligibility_check` | New applicants only | Entity type verification |
+| Q6 | `eligibility_check` | — | Substantive role (not pass-through) |
+| Q7 | `document_review` | — | All required primary health care services |
+| Q8 | `document_review` | — | Form 5A: General Primary Medical Care |
+| Q9 | `document_review` | — | Services accessible to all populations |
 | Q10 | `saat_compare` | — | NOFO match + valid SAAT service area |
 | Q11 | `saat_compare` | Q10=Yes | Patient target ≥ 75% of SAAT |
 | Q12 | `saat_compare` | Q10=Yes | All SAAT service types proposed |
 | Q13 | `saat_compare` | Q10=Yes | Funding ≤ SAAT total |
 | Q14 | `saat_compare` | Q10=Yes | Funding distribution matches SAAT |
 | Q15 | `saat_compare` | Q10=Yes | All SAAT population types served |
-| Q16 | `saat_compare` | New/competing only | Zip codes cover ≥ 75% of SAAT patients |
-| Q17 | `ai_focused` | New/competing only | Full-time permanent site on Form 5B |
-| Q18 | `ai_focused` | RPH funding only | Public housing resident consultation |
-| Q19 | `ai_focused` | HP/RPH funding only | Supplement-not-supplant attestation |
-
-### FY-Aware Rule Loading (`loadRulesForFiscalYear`)
-
-Rules are **not hardcoded per fiscal year**. Instead, they are stored as JSON files alongside the checklist questions they govern, and loaded dynamically based on the application's fiscal year.
-
-**File structure:**
-```
-checklistQuestions/
-├── FY26/
-│   ├── ProgramSpecificQuestions.pdf           (source checklist)
-│   ├── ProgramSpecificQuestions_structured.json (auto-extracted via Azure DI)
-│   ├── ProgramSpecificRules.json              ← rules for FY26
-│   ├── StandardChecklist.pdf
-│   ├── StandardChecklist_structured.json
-│   └── StandardRules.json                     ← rules for FY26
-├── FY27/
-│   ├── ProgramSpecificQuestions.pdf
-│   ├── ProgramSpecificRules.json              ← different rules for FY27 (auto-generated or manual)
-│   └── ...
-```
-
-**Resolution order** (in `loadRulesForFiscalYear()`):
-
-1. **Cached JSON** — Load `checklistQuestions/<FY>/ProgramSpecificRules.json` (or `StandardRules.json`). If found, use it immediately.
-2. **Auto-generate via AI** — If no cached JSON exists but the structured checklist questions JSON is available, use AI (`generateRulesFromChecklist()`) to analyze the questions and produce rules. The generated rules are then **cached to disk** so they're reused for all subsequent applications in that FY.
-3. **Hardcoded fallback** — If neither JSON nor structured questions exist, fall back to the `PROGRAM_SPECIFIC_RULES` / `STANDARD_RULES` arrays in `checklistRules.js` (originally written for FY26).
-
-**Auto-generation flow:**
-```
-New FY detected (e.g., FY27)
-  → No ProgramSpecificRules.json found
-  → ProgramSpecificQuestions_structured.json exists
-  → AI analyzes all questions:
-      - Determines answerStrategy (presence / saat_compare / ai_focused)
-      - Identifies forms/attachments to look for
-      - Detects applicant-type conditions (new, public agency, RPH, etc.)
-      - Identifies question dependencies (Q11-Q15 depend on Q10)
-      - Rewrites questions for AI clarity
-  → Saves ProgramSpecificRules.json
-  → All future FY27 applications use cached rules (no AI call)
-```
-
-**What this means for new fiscal years:**
-- **If questions are identical** — Drop the checklist PDF in `checklistQuestions/FY27/`, copy the previous FY's rules JSON. Done.
-- **If questions changed** — Drop the checklist PDF, let the system auto-extract questions via Azure DI, then auto-generate rules via AI on the first application. Review the generated `ProgramSpecificRules.json` and adjust if needed.
-- **Manual override** — You can always hand-edit the rules JSON. The system will use whatever is in the file.
-
-### Adding or Modifying Rules
-
-To manually add a new question rule, edit `checklistQuestions/<FY>/ProgramSpecificRules.json`:
-
-```json
-{
-  "questionNumber": 20,
-  "answerStrategy": "ai_focused",
-  "lookFor": ["Form 12"],
-  "condition": null,
-  "focusPages": ["Form 12"],
-  "aiQuestion": "Does Form 12 show...",
-  "description": "Check Form 12 for..."
-}
-```
-
-To add a new form pattern for index recognition, add to `formPatterns` in `buildApplicationIndex`:
-
-```js
-{ regex: /New\s+Form\s+Name/i, key: 'new form name' }
-```
+| Q16 | `saat_compare` | New/supplemental, Q10=Yes | Zip codes ≥ 75% of SAAT patients |
+| Q17 | `document_review` | New/supplemental only | Full-time permanent site on Form 5B |
+| Q18 | `document_review` | RPH funding only | Public housing resident consultation |
+| Q19 | `document_review` | HP/RPH funding only | Supplement-not-supplant attestation |
+| Q20 | `saat_compare` | Q11=Yes | Funding reduction if patients < 95% of target |
+| Q21 | `prior_answers_summary` | — | Overall completeness (synthesizes Q1-Q20) |
+| Q22 | `prior_answers_summary` | — | Overall eligibility (synthesizes Q1-Q21) |
 
 ---
 
-## Logs
+## 10. SAAT Integration
+
+The SAAT (Service Area Analysis Tool) CSV is loaded during program-specific Q&A to validate Q10-Q16.
+
+**Path:** `SAAT/FY26/SAC-SAAT-Export-*.csv`
+
+**API:** `GET /api/saat/data?fundingOpp=HRSA-26-004`
+
+**CSV columns used:** `announcement_number`, `patient_target`, `total_funding`, `chc_funding`, `msaw_funding`, `hp_funding`, `rph_funding`, `service_type`, `zip`, `pct_patients`
+
+| Question | SAAT Validation |
+|----------|----------------|
+| Q10 | NOFO matches AND valid service area from SAAT |
+| Q11 | Form 1A patients ≥ 75% of SAAT `patient_target` |
+| Q12 | Application proposes ALL `service_type` values from SAAT |
+| Q13 | Annual SAC funding ≤ SAAT `total_funding` |
+| Q14 | Funding distribution matches SAAT (CHC/MSAW/HP/RPH) |
+| Q15 | All SAAT population types served |
+| Q16 | Form 5B zip codes cover ≥ 75% of SAAT patient percentage |
+
+---
+
+## 11. Application Index & Page Resolution
+
+### `buildApplicationIndex()`
+
+Built once per application. Maps every form/attachment to physical page numbers.
+
+**Three data structures:**
+
+| Structure | Type | Purpose |
+|-----------|------|---------|
+| `formPageMap` | `Map<string, number>` | Form key → first physical page number |
+| `formPageRanges` | `Map<string, {start, end}>` | Form key → full page range |
+| `pages` | `Array<{pageNum, text}>` | All page text for extraction |
+
+**Index building priority (highest to lowest):**
+
+1. **PDF TOC hyperlinks** — Exact link destinations from the PDF's clickable TOC. Most accurate.
+2. **Text-based TOC entries** — Parsed from TOC pages by matching `N. Name ... PageNum` patterns.
+3. **Page header scanning** — Fallback: scan each page's first few lines for form/attachment headers.
+4. **Alias resolution** — Copy missing canonical keys from alternative names.
+
+### Page Offset
+
+HRSA application PDFs often have a cover page, so physical page 2 may show "Page Number: 1". The system detects this offset:
+- **Backend:** `pageOffset` calculated from footer "Page Number: N" text
+- **Frontend:** Badges display footer number, but navigate to physical page
+
+### Page Reference Resolution
+
+After AI returns evidence, page references are resolved **server-side** (not from AI page numbers):
+1. Scan evidence text for form/attachment mentions
+2. Look up each in `formPageRanges`
+3. Include full page range for compact forms (≤5 pages), start page only for large sections
+4. Cap at 5 page references per question
+
+---
+
+## 12. AI Response Parsing
+
+The AI returns JSON arrays, but responses can be malformed. The parser (`parseAIResponse`) uses 5 fallback strategies:
+
+1. **Direct parse** — Clean markdown fences, fix malformed `pageReferences`, then `JSON.parse`
+2. **Regex array extraction** — Find `[...]` in the response and parse it
+3. **Truncated JSON repair** — If braces unbalanced, truncate to last complete object
+4. **Individual object extraction** — Regex-match each `{"questionNumber":...}` separately
+5. **Failure** — Log raw response for debugging, return empty array
+
+---
+
+## 13. Logs
 
 ### UI Log Viewer
-- **Slide-out panel** accessible via green terminal button (bottom-right)
-- Persisted to `localStorage` (survives browser refresh, max 500 entries)
+- Slide-out panel via green terminal button (bottom-right)
+- Persisted to `localStorage` (max 500 entries, survives refresh)
 - Filter by level: All / Info / Warn / Error
 - Download as `.txt` file
-- Clear button removes from both UI and localStorage
 
 ### Server-Side Logs
-- **Auto-saved** to `logs/` folder as text files after each workflow completes
+- Auto-saved to `logs/` folder after each workflow
 - Filename: `ce-review-logs_<timestamp>.txt`
-- Contains all processing logs with timestamps, levels, and data
-- API endpoints:
-  - `POST /api/logs/save` — save logs from client
-  - `GET /api/logs` — list saved log files
+- API: `POST /api/logs/save`, `GET /api/logs`
+
+---
+
+## 14. Troubleshooting
+
+### Common Issues
+
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| "Rules file not found" | Rules not generated for this FY | Run `node server/scripts/generateRules.js FY26` |
+| Q1 says "Missing: Attachment 8" for CC app | Old rules with wrong conditions | Regenerate rules: `node server/scripts/generateRules.js FY26 --type standard` |
+| SAAT questions all N/A | Q10 answered No (service area not matched) | Check SAAT CSV exists in `SAAT/FY26/` and SA ID extraction |
+| "User guide folder not found" | Missing user guide for this FY | Place PDF in `userGuides/FY26/` |
+| Batch results differ from UI | TOC links not extracted in batch | Batch now extracts TOC links from PDF (fixed) |
+| Dashboard shows stale results | Old cached results | Clear via dashboard "Clear All" button or delete `processed-applications/` |
+
+### After Changing Rules JSON
+
+Rules JSON files are loaded **from disk on each API call** — no server restart needed. Just regenerate and re-process.
+
+### After Changing `checklistRules.js` Code
+
+Code changes require a **server restart** (kill and re-run `node server/server.js`).
+
+### Regenerating Everything for a New FY
+
+```bash
+# 1. Place source files
+#    userGuides/FY27/*.pdf
+#    checklistQuestions/FY27/*.pdf  (checklist PDFs)
+#    SAAT/FY27/*.csv
+
+# 2. Extract checklist questions (if not already done)
+#    Upload checklist PDFs via UI or let batch auto-extract
+
+# 3. Generate rules
+node server/scripts/generateRules.js FY27
+
+# 4. Verify the attachment matrix output matches the User Guide
+
+# 5. Process applications
+node server/scripts/combinedBatchProcess.js --folder FY27
+```
+

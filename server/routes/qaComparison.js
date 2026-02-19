@@ -10,6 +10,7 @@ import { transformToStructured } from '../services/structuredDocumentTransformer
 import {
   loadRulesForFiscalYear,
   buildApplicationIndex, analyzeApplicantType, evaluateCondition,
+  evaluateCompletenessCheck,
   answerPresenceQuestion, extractRelevantPages,
   parseSuggestedResources, lookupFormPages
 } from '../services/checklistRules.js'
@@ -798,6 +799,56 @@ router.get('/questions', async (req, res) => {
 })
 
 /**
+ * Determine if a document_review question is a pure presence/inclusion check.
+ * These can be answered deterministically by checking if the attachment/form
+ * exists in the application's TOC page references (formPageMap) — no AI needed.
+ *
+ * A question is presence-only if:
+ *   1. The question text asks about document inclusion/presence
+ *      (e.g., "Does the application include Attachment 12: Operational Plan?")
+ *   2. The rule's lookFor items are attachment/form names (not content queries)
+ *
+ * Content-evaluation questions (e.g., "Does the applicant propose to operate..."
+ * or "Does the applicant demonstrate consultation...") require AI to read and
+ * interpret the document content, so they are NOT presence-only.
+ */
+function isPresenceOnlyQuestion(questionText, rule) {
+  if (!questionText) return false
+  const q = questionText.toLowerCase()
+
+  // Pattern 1: "Does the application include [Attachment/Form]?"
+  // Pattern 2: "Did the applicant include [a document]?"
+  // These are pure presence checks — just verify the document exists in TOC
+  const presencePatterns = [
+    /does the application include/i,
+    /did the applicant include/i,
+    /does the application contain/i,
+    /is .+ included in the application/i,
+  ]
+
+  const isPresenceText = presencePatterns.some(p => p.test(q))
+  if (!isPresenceText) return false
+
+  // Verify the lookFor items are attachment/form names (not content queries)
+  const lookFor = rule.lookFor || []
+  if (lookFor.length === 0) return false
+
+  // If lookFor contains attachment numbers or form names, it's a presence check
+  const hasAttachmentOrForm = lookFor.some(item =>
+    /attachment\s+\d+/i.test(item) ||
+    /form\s+\d+/i.test(item) ||
+    /project\s+narrative/i.test(item) ||
+    /budget\s+narrative/i.test(item) ||
+    /organizational\s+chart/i.test(item) ||
+    /bylaws/i.test(item) ||
+    /sliding\s+fee/i.test(item) ||
+    /co-?applicant\s+agreement/i.test(item)
+  )
+
+  return hasAttachmentOrForm
+}
+
+/**
  * POST /api/qa-comparison/analyze
  * Run AI analysis to derive answers from application evidence and compare with user answers
  */
@@ -942,11 +993,50 @@ router.post('/analyze', async (req, res) => {
       }
 
       // Route by answer strategy
-      if (rule.answerStrategy === 'saat_compare') {
+      if (rule.answerStrategy === 'completeness_check') {
+        // Deterministic: check TOC for required attachments based on applicant type
+        const result = evaluateCompletenessCheck(rule, appIndex, applicantFlags)
+        comparisonResults.push({
+          questionNumber: q.number,
+          question: q.question,
+          aiAnswer: result.aiAnswer,
+          confidence: result.confidence,
+          evidence: result.evidence,
+          pageReferences: result.pageReferences,
+          reasoning: result.reasoning,
+          suggestedResources: q.suggestedResources || '',
+          requiresSAAT: false,
+          method: 'rules_completeness_check'
+        })
+        answersByQNum[q.number] = result.aiAnswer
+        console.log(`   Q${q.number}: completeness_check → ${result.aiAnswer}`)
+      } else if (rule.answerStrategy === 'prior_answers_summary') {
+        // Deferred: must be processed after all other questions are answered
+        aiQuestionsToAsk.push({ ...q, rule, isDeferredSummary: true })
+      } else if (rule.answerStrategy === 'saat_compare') {
         // SAAT questions — collect for batch AI call with SAAT data + complianceGuidance
         aiQuestionsToAsk.push({ ...q, rule, isSAAT: true })
+      } else if (rule.answerStrategy === 'document_review' && isPresenceOnlyQuestion(q.question, rule)) {
+        // Deterministic: check TOC page references for attachment/document existence
+        // If the attachment key exists in formPageMap (resolved from TOC links), it exists.
+        // No AI text search needed — TOC page references are authoritative.
+        const result = answerPresenceQuestion(rule, appIndex, q.suggestedResources)
+        comparisonResults.push({
+          questionNumber: q.number,
+          question: q.question,
+          aiAnswer: result.aiAnswer,
+          confidence: result.confidence,
+          evidence: result.evidence,
+          pageReferences: result.pageReferences,
+          reasoning: result.reasoning,
+          suggestedResources: q.suggestedResources || '',
+          requiresSAAT: false,
+          method: 'rules_presence_check'
+        })
+        answersByQNum[q.number] = result.aiAnswer
+        console.log(`   Q${q.number}: presence_check → ${result.aiAnswer} (TOC-based, no AI)`)
       } else {
-        // document_review, eligibility_check, or any other strategy
+        // eligibility_check, content-based document_review, or any other strategy
         // All go to focused AI with complianceGuidance from the rule
         aiQuestionsToAsk.push({ ...q, rule })
       }
@@ -1031,10 +1121,38 @@ router.post('/analyze', async (req, res) => {
       }
 
       // 6b. Handle focused AI questions — each gets only its relevant pages
+      //     Exclude deferred summary questions (they are resolved after all AI answers)
       if (focusedQuestions.length > 0) {
-        const focusedResults = await answerFocusedQuestionsBatch(focusedQuestions, appIndex, applicantProfile)
-        comparisonResults.push(...focusedResults)
+        const actualFocused = focusedQuestions.filter(q => !q.isDeferredSummary)
+        if (actualFocused.length > 0) {
+          const focusedResults = await answerFocusedQuestionsBatch(actualFocused, appIndex, applicantProfile)
+          for (const r of focusedResults) {
+            answersByQNum[r.questionNumber] = r.aiAnswer
+          }
+          comparisonResults.push(...focusedResults)
+        }
       }
+    }
+
+    // 6c. Process deferred prior_answers_summary questions AFTER all other answers are known
+    //     Uses AI to intelligently evaluate the nature of each finding, not just count No answers.
+    const deferredQuestions = aiQuestionsToAsk.filter(q => q.isDeferredSummary)
+    for (const q of deferredQuestions) {
+      const result = await evaluatePriorAnswersSummary(q, answersByQNum, comparisonResults)
+      comparisonResults.push({
+        questionNumber: q.number,
+        question: q.question,
+        aiAnswer: result.aiAnswer,
+        confidence: result.confidence,
+        evidence: result.evidence,
+        pageReferences: result.pageReferences,
+        reasoning: result.reasoning,
+        suggestedResources: q.suggestedResources || '',
+        requiresSAAT: false,
+        method: result.method
+      })
+      answersByQNum[q.number] = result.aiAnswer
+      console.log(`   Q${q.number}: prior_answers_summary → ${result.aiAnswer} (${result.method})`)
     }
 
     // 7. Sort results by question number and calculate summary
@@ -1109,7 +1227,12 @@ router.get('/standard-questions', async (req, res) => {
 
 /**
  * POST /api/qa-comparison/standard-analyze
- * Run AI analysis for Standard Checklist questions against application evidence
+ * Run rules-based AI analysis for Standard Checklist questions.
+ * Uses the same pipeline as /analyze (program-specific):
+ *   - Load rules from StandardRules.json
+ *   - Build application index (TOC → page map)
+ *   - Extract applicant profile + type flags
+ *   - For each question: evaluate condition / completeness_check / focused AI
  */
 router.post('/standard-analyze', async (req, res) => {
   try {
@@ -1119,14 +1242,15 @@ router.post('/standard-analyze', async (req, res) => {
       return res.status(400).json({ error: 'Application data is required' })
     }
 
-    console.log('\n🔍 ===== STANDARD CHECKLIST COMPARISON START =====')
+    console.log('\n🔍 ===== RULES-BASED STANDARD CHECKLIST START =====')
+    console.log(`📦 applicationData: ${applicationData.pages?.length || 0} pages`)
 
-    // 0. Extract Funding Opportunity Number and derive fiscal year for path resolution
+    // 0. Extract Funding Opportunity Number and derive fiscal year
     const fundingOppNumber = extractFundingOppNumber(applicationData)
     const fiscalYear = fundingOppNumber ? deriveFiscalYear(fundingOppNumber) : null
     console.log(`🔢 Funding Opportunity: ${fundingOppNumber || 'Not found'}, Fiscal Year: ${fiscalYear || 'Unknown'}`)
 
-    // 1. Parse standard checklist (dynamic path resolution with fiscal year)
+    // 1. Parse standard checklist questions
     const dataPath = await resolveChecklistPath('standard', fiscalYear, req.body.checklistPath)
     const raw = await fs.readFile(dataPath, 'utf-8')
     const scData = JSON.parse(raw)
@@ -1137,10 +1261,12 @@ router.post('/standard-analyze', async (req, res) => {
       checklistType: 'standard',
       sourcePath: dataPath
     })
-
     console.log(`📋 Parsed ${userQuestions.length} standard checklist questions from ${dataPath}`)
 
-    // 1b. Extract PDF TOC links if not already present
+    // 1b. Load rules from StandardRules.json
+    const standardRules = await loadRulesForFiscalYear(fiscalYear, 'standard')
+
+    // 2. Extract PDF TOC links if not already present
     if (!applicationData.tocLinks) {
       try {
         const pdfPath = await findApplicationPdf(applicationData)
@@ -1157,63 +1283,167 @@ router.post('/standard-analyze', async (req, res) => {
       }
     }
 
-    // 2. Prepare application evidence
-    const applicationSummary = buildApplicationSummary(applicationData)
+    // 3. Build application index (TOC → page map) — deterministic, no AI
+    const appIndex = buildApplicationIndex(applicationData)
 
-    // 3. Build AI prompt
-    const questionsForAI = userQuestions.map(q => {
-      let line = `Q${q.number}: ${q.question}`
-      const qualifier = detectConditionalQualifier(q.question)
-      if (qualifier) line += `\n  ⚠️ CONDITIONAL: ${qualifier}`
-      if (q.suggestedResources) line += `\n  → Look in: ${q.suggestedResources}`
-      return line
-    }).join('\n\n')
+    // 4. Extract applicant profile and analyze type flags
+    const applicantProfile = extractApplicantProfile(applicationData)
+    const applicantFlags = analyzeApplicantType(applicantProfile, applicationData, appIndex)
+    console.log(`👤 Applicant: ${applicantProfile.organizationName || 'Unknown'} (${applicantProfile.organizationType || 'Unknown'})`)
+    console.log(`   Flags: public_agency=${applicantFlags.isPublicAgency}, nonprofit=${applicantFlags.isNonprofit}, new=${applicantFlags.isNew}, competing_supp=${applicantFlags.isCompetingSupplement}`)
 
-    const { systemPrompt, userPrompt } = buildAnalysisPrompt({
-      questionsForAI,
-      applicationSummary,
-      saatQuestionNums: [],
-      saatData: null,
-      saatSummary: '',
-      fundingOppNumber,
-      fiscalYear,
-      checklistType: 'Standard'
-    })
+    // 5. Process each question using rules (same pattern as /analyze)
+    const comparisonResults = []
+    const aiQuestionsToAsk = []
+    const answersByQNum = {}
 
-    console.log(`📝 Sending ${userQuestions.length} standard questions to AI...`)
+    for (const q of userQuestions) {
+      const rule = standardRules.find(r => r.questionNumber === q.number)
 
-    // 4. Call Azure OpenAI
-    const response = await client.getChatCompletions(deployment, [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
-    ], {
-      temperature: 0.1,
-      maxTokens: 8000
-    })
+      if (!rule) {
+        // No rule for this question — send to AI
+        console.log(`   Q${q.number}: No rule → AI general ("${q.question.substring(0, 60)}...")`)
+        aiQuestionsToAsk.push(q)
+        continue
+      }
 
-    const aiResponseText = response.choices[0]?.message?.content || ''
-    const finishReason2 = response.choices[0]?.finishReason || 'unknown'
-    console.log(`🤖 Standard AI response length: ${aiResponseText.length} chars, finishReason: ${finishReason2}`)
-    console.log(`🤖 Standard AI response last 100 chars: ...${aiResponseText.slice(-100)}`)
+      console.log(`   Q${q.number}: ${rule.answerStrategy} → "${q.question.substring(0, 60)}..."`)
 
-    // 5. Parse AI response and build comparison results with server-side page resolution
-    const aiAnswers = parseAIResponse(aiResponseText)
-    console.log(`🤖 Standard parsed ${aiAnswers.length} AI answers`)
-    const pageIndex = buildPageIndex(applicationData)
-    const comparisonResults = buildComparisonResults(userQuestions, aiAnswers, pageIndex)
+      // Check condition (applicant type, etc.)
+      const condResult = evaluateCondition(rule, applicantFlags)
+      if (!condResult.applicable) {
+        comparisonResults.push({
+          questionNumber: q.number,
+          question: q.question,
+          aiAnswer: 'N/A',
+          confidence: 'high',
+          evidence: condResult.reason,
+          pageReferences: condResult.pageReferences || [],
+          reasoning: condResult.reason,
+          suggestedResources: q.suggestedResources || rule.suggestedResources || '',
+          requiresSAAT: false,
+          method: 'rules_condition'
+        })
+        answersByQNum[q.number] = 'N/A'
+        continue
+      }
 
-    // 6. Summary
+      // Check dependency
+      if (rule.dependsOn) {
+        const depQNum = rule.dependsOn.question
+        const depAnswer = answersByQNum[depQNum]
+        if (depAnswer && depAnswer.toLowerCase() !== rule.dependsOn.requiredAnswer.toLowerCase()) {
+          comparisonResults.push({
+            questionNumber: q.number,
+            question: q.question,
+            aiAnswer: 'N/A',
+            confidence: 'high',
+            evidence: `Per the checklist instructions, since Question ${depQNum} was answered "${depAnswer}", this question is not applicable.`,
+            pageReferences: [],
+            reasoning: `Dependency: Q${depQNum}=${depAnswer}, so this question is N/A.`,
+            suggestedResources: q.suggestedResources || rule.suggestedResources || '',
+            requiresSAAT: false,
+            method: 'rules_dependency'
+          })
+          answersByQNum[q.number] = 'N/A'
+          continue
+        }
+      }
+
+      // Route by answer strategy
+      if (rule.answerStrategy === 'completeness_check') {
+        // Deterministic: check TOC for required attachments based on applicant type
+        const result = evaluateCompletenessCheck(rule, appIndex, applicantFlags)
+        comparisonResults.push({
+          questionNumber: q.number,
+          question: q.question,
+          aiAnswer: result.aiAnswer,
+          confidence: result.confidence,
+          evidence: result.evidence,
+          pageReferences: result.pageReferences,
+          reasoning: result.reasoning,
+          suggestedResources: q.suggestedResources || '',
+          requiresSAAT: false,
+          method: 'rules_completeness_check'
+        })
+        answersByQNum[q.number] = result.aiAnswer
+        console.log(`   Q${q.number}: completeness_check → ${result.aiAnswer}`)
+      } else if (rule.answerStrategy === 'prior_answers_summary') {
+        // Deferred: must be processed after all other questions are answered
+        aiQuestionsToAsk.push({ ...q, rule, isDeferredSummary: true })
+      } else if (rule.answerStrategy === 'document_review' && isPresenceOnlyQuestion(q.question, rule)) {
+        // Deterministic: check TOC page references for attachment/document existence
+        const result = answerPresenceQuestion(rule, appIndex, q.suggestedResources)
+        comparisonResults.push({
+          questionNumber: q.number,
+          question: q.question,
+          aiAnswer: result.aiAnswer,
+          confidence: result.confidence,
+          evidence: result.evidence,
+          pageReferences: result.pageReferences,
+          reasoning: result.reasoning,
+          suggestedResources: q.suggestedResources || '',
+          requiresSAAT: false,
+          method: 'rules_presence_check'
+        })
+        answersByQNum[q.number] = result.aiAnswer
+        console.log(`   Q${q.number}: presence_check → ${result.aiAnswer} (TOC-based, no AI)`)
+      } else {
+        // eligibility_check, content-based document_review, or any other strategy → focused AI
+        aiQuestionsToAsk.push({ ...q, rule })
+      }
+    }
+
+    // 6. Process AI questions with focused pages (same as program-specific)
+    const actualAIQuestions = aiQuestionsToAsk.filter(q => !q.isDeferredSummary)
+    if (actualAIQuestions.length > 0) {
+      console.log(`\n🤖 Sending ${actualAIQuestions.length} standard questions to AI (focused prompts)...`)
+      const focusedResults = await answerFocusedQuestionsBatch(actualAIQuestions, appIndex, applicantProfile)
+      for (const r of focusedResults) {
+        answersByQNum[r.questionNumber] = r.aiAnswer
+      }
+      comparisonResults.push(...focusedResults)
+    }
+
+    // 6b. Process deferred prior_answers_summary questions AFTER all other answers are known
+    //     Uses AI to intelligently evaluate the nature of each finding, not just count No answers.
+    const deferredStdQuestions = aiQuestionsToAsk.filter(q => q.isDeferredSummary)
+    for (const q of deferredStdQuestions) {
+      const result = await evaluatePriorAnswersSummary(q, answersByQNum, comparisonResults)
+      comparisonResults.push({
+        questionNumber: q.number,
+        question: q.question,
+        aiAnswer: result.aiAnswer,
+        confidence: result.confidence,
+        evidence: result.evidence,
+        pageReferences: result.pageReferences,
+        reasoning: result.reasoning,
+        suggestedResources: q.suggestedResources || '',
+        requiresSAAT: false,
+        method: result.method
+      })
+      answersByQNum[q.number] = result.aiAnswer
+      console.log(`   Q${q.number}: prior_answers_summary → ${result.aiAnswer} (${result.method})`)
+    }
+
+    // 7. Sort results by question number and calculate summary
+    comparisonResults.sort((a, b) => a.questionNumber - b.questionNumber)
     const summary = calculateSummary(comparisonResults)
 
-    console.log(`📊 Standard Checklist Summary: ${summary.totalQuestions} questions — Yes: ${summary.yesCount}, No: ${summary.noCount}, N/A: ${summary.naCount}`)
-    console.log('🔍 ===== STANDARD CHECKLIST COMPARISON COMPLETE =====\n')
+    // Log results
+    console.log('\n📋 Final Standard Results:')
+    comparisonResults.forEach(r => {
+      console.log(`   Q${r.questionNumber}: ${r.aiAnswer} (${r.method || 'ai'}) → pages [${(r.pageReferences || []).join(', ')}]`)
+    })
+    console.log(`\n📊 Standard Summary: ${summary.totalQuestions} questions — Yes: ${summary.yesCount}, No: ${summary.noCount}, N/A: ${summary.naCount}`)
+    console.log('🔍 ===== RULES-BASED STANDARD CHECKLIST COMPLETE =====\n')
 
     res.json({
       success: true,
       summary,
       metadata,
       results: comparisonResults,
-      pageOffset: pageIndex.pageOffset || 0
+      pageOffset: appIndex.pageOffset || 0
     })
 
   } catch (error) {
@@ -1305,8 +1535,6 @@ async function findApplicationPdf(applicationData) {
 
   console.log(`🔗 findApplicationPdf: looking for Application-${appNumber}.pdf`)
 
-  const docsRoot = join(__dirname, '../../documents')
-
   // Search recursively: check root and all subdirectories
   async function searchDir(dir) {
     try {
@@ -1325,7 +1553,146 @@ async function findApplicationPdf(applicationData) {
     return null
   }
 
-  return searchDir(docsRoot)
+  // Search both documents/ and applications/ folders (FY/NOFO structure)
+  const searchRoots = [
+    join(__dirname, '../../documents'),
+    join(__dirname, '../../applications')
+  ]
+
+  for (const root of searchRoots) {
+    const found = await searchDir(root)
+    if (found) return found
+  }
+
+  return null
+}
+
+// ─── Prior Answers Summary (AI-Based Eligibility Synthesis) ─────────────────
+
+/**
+ * Evaluate a prior_answers_summary question (e.g., "Is the applicant eligible?")
+ * by sending ALL prior answers with their evidence and reasoning to AI.
+ *
+ * This replaces the naive "any No = ineligible" logic. The AI understands that:
+ *   - Some "No" answers are eligibility-blocking (e.g., wrong NOFO, not a valid entity)
+ *   - Some "No" answers are compliance deficiencies (e.g., missing attachment)
+ *   - Some "N/A" answers are expected (e.g., question doesn't apply to this applicant type)
+ *   - The overall eligibility determination is a judgment call, not a simple count
+ *
+ * Universal: works for any checklist type, any fiscal year, any number of questions.
+ *
+ * @param {Object} q - The deferred summary question object
+ * @param {Object} answersByQNum - Map of question number → answer string
+ * @param {Array} comparisonResults - All prior results with evidence/reasoning
+ * @returns {Object} Result object with aiAnswer, confidence, evidence, reasoning
+ */
+async function evaluatePriorAnswersSummary(q, answersByQNum, comparisonResults) {
+  const priorAnswers = Object.entries(answersByQNum)
+    .filter(([qNum]) => parseInt(qNum) < q.number)
+    .sort(([a], [b]) => parseInt(a) - parseInt(b))
+
+  const noAnswers = priorAnswers.filter(([, ans]) => /^no$/i.test(ans))
+  const yesAnswers = priorAnswers.filter(([, ans]) => /^yes$/i.test(ans))
+  const naAnswers = priorAnswers.filter(([, ans]) => /^n\/a$/i.test(ans))
+
+  // Fast path: if all answers are Yes or N/A, no AI needed — clearly eligible
+  if (noAnswers.length === 0) {
+    return {
+      aiAnswer: 'Yes',
+      confidence: 'high',
+      evidence: `All ${priorAnswers.length} prior checklist questions were answered Yes (${yesAnswers.length}) or N/A (${naAnswers.length}). No compliance issues were identified.`,
+      reasoning: `All prior questions passed. The applicant meets all requirements evaluated in this checklist.`,
+      pageReferences: [],
+      method: 'rules_prior_answers_summary'
+    }
+  }
+
+  // There are "No" answers — send to AI for intelligent synthesis
+  // Build a structured summary of all prior answers for the AI
+  const answerSummaryLines = priorAnswers.map(([qNum, ans]) => {
+    const result = comparisonResults.find(r => r.questionNumber === parseInt(qNum))
+    const question = result?.question || `Question ${qNum}`
+    const evidence = result?.evidence || ''
+    const reasoning = result?.reasoning || ''
+    // Truncate evidence to keep prompt manageable
+    const evidenceShort = evidence.length > 300 ? evidence.substring(0, 300) + '...' : evidence
+    return `Q${qNum} [${ans.toUpperCase()}]: ${question}\n  Evidence: ${evidenceShort}\n  Reasoning: ${reasoning}`
+  })
+
+  const complianceGuidance = q.rule?.complianceGuidance || ''
+
+  const systemPrompt = `You are an expert HRSA grant reviewer making a final eligibility determination based on all prior checklist findings.
+
+YOUR TASK: Given the summary of all prior checklist question answers (Yes, No, N/A) with their evidence and reasoning, determine the overall eligibility of the applicant.
+
+CRITICAL INSTRUCTIONS:
+- Not all "No" answers are equal. You must evaluate the NATURE and SIGNIFICANCE of each finding:
+  * A "No" on a service area/NOFO match question means the applicant applied for a service area not announced under this NOFO — this is an eligibility-blocking finding.
+  * A "No" on a document inclusion question means a required attachment is missing — this is a compliance deficiency.
+  * A "No" on a content/eligibility question means a substantive requirement is not met.
+  * "N/A" answers are expected when questions don't apply to this applicant type — they are NOT deficiencies.
+- Consider the checklist as a whole: are the findings collectively disqualifying, or are they minor/addressable?
+- Your answer must be "Yes" (eligible) or "No" (not eligible).
+${complianceGuidance ? `\nCOMPLIANCE GUIDANCE: ${complianceGuidance}` : ''}
+
+WRITING STYLE:
+- Write "evidence" as a clear summary paragraph listing the key findings and their significance.
+- Write "reasoning" explaining WHY the applicant is or is not eligible based on the nature of the findings.
+- Be specific about which questions drive the determination and why.
+
+Return ONLY a JSON object (not an array):
+{"aiAnswer":"Yes","confidence":"high","evidence":"...","reasoning":"..."}`
+
+  const userPrompt = `SUMMARY QUESTION: ${q.question}
+
+PRIOR CHECKLIST ANSWERS (${priorAnswers.length} total — ${yesAnswers.length} Yes, ${noAnswers.length} No, ${naAnswers.length} N/A):
+
+${answerSummaryLines.join('\n\n')}`
+
+  try {
+    console.log(`   Prior answers summary: ${priorAnswers.length} answers (${noAnswers.length} No), sending to AI...`)
+    const response = await client.getChatCompletions(deployment, [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ], { temperature: 0.1, maxTokens: 1500 })
+
+    const aiText = response.choices[0]?.message?.content || ''
+    console.log(`   Prior answers AI response: ${aiText.length} chars, finishReason: ${response.choices[0]?.finishReason}`)
+
+    // Parse the AI response
+    let cleaned = aiText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
+    try {
+      const parsed = JSON.parse(cleaned)
+      const answer = (parsed.aiAnswer || '').trim()
+      // Validate answer is Yes or No
+      if (/^(yes|no)$/i.test(answer)) {
+        return {
+          aiAnswer: answer.charAt(0).toUpperCase() + answer.slice(1).toLowerCase(),
+          confidence: parsed.confidence || 'high',
+          evidence: parsed.evidence || '',
+          reasoning: parsed.reasoning || '',
+          pageReferences: [],
+          method: 'rules_prior_answers_ai'
+        }
+      }
+    } catch (parseErr) {
+      console.warn(`   ⚠️ Failed to parse prior_answers AI response: ${parseErr.message}`)
+    }
+  } catch (aiErr) {
+    console.error(`   ❌ Prior answers AI error: ${aiErr.message}`)
+  }
+
+  // Fallback only if AI call fails entirely — use the old deterministic logic
+  console.warn(`   ⚠️ Prior answers AI failed — falling back to deterministic logic`)
+  const noQNums = noAnswers.map(([qNum]) => `Q${qNum}`).join(', ')
+  return {
+    aiAnswer: 'No',
+    confidence: 'medium',
+    evidence: `${noAnswers.length} of ${priorAnswers.length} prior checklist questions were answered No: ${noQNums}. AI-based synthesis was unavailable.`,
+    reasoning: `Questions answered No (${noQNums}) — AI synthesis failed, using conservative deterministic fallback.`,
+    pageReferences: [],
+    method: 'rules_prior_answers_summary_fallback'
+  }
 }
 
 // ─── Rules-Based AI Helpers ──────────────────────────────────────────────────

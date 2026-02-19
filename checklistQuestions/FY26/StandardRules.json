@@ -1,0 +1,82 @@
+[
+  {
+    "questionNumber": 1,
+    "question": "Does the application contain all required attachments listed in the guidance?",
+    "section": "Standard Review Checklist",
+    "answerStrategy": "completeness_check",
+    "suggestedResources": "",
+    "lookFor": [
+      "Attachment 1: Service Area Map and Table",
+      "Attachment 2: Bylaws",
+      "Attachment 3: Project Organizational Chart",
+      "Attachment 4: Position Descriptions for Key Management Staff",
+      "Attachment 5: Biographical Sketches for Key Management Staff",
+      "Attachment 7: Summary of Contracts and Agreements",
+      "Attachment 9: Collaboration Documentation",
+      "Attachment 10: Sliding Fee Discount Schedule(s)",
+      "Attachment 13: Health Center Program Requirements Compliance"
+    ],
+    "conditionalAttachments": [
+      {
+        "name": "Attachment 6: Co-Applicant Agreement",
+        "lookFor": [
+          "Attachment 6: Co-Applicant Agreement"
+        ],
+        "condition": {
+          "type": "applicant_type",
+          "value": "public_agency"
+        },
+        "description": "Required only for public agency applicants as indicated on Form 1A."
+      },
+      {
+        "name": "Attachment 8: Articles of Incorporation",
+        "lookFor": [
+          "Attachment 8: Articles of Incorporation"
+        ],
+        "condition": {
+          "type": "applicant_status",
+          "value": "new"
+        },
+        "description": "Required only for Type 1 (New) applicants."
+      },
+      {
+        "name": "Attachment 11: Evidence of Nonprofit, Public Agency, or Tribal or Urban Indian Organization Status",
+        "lookFor": [
+          "Attachment 11: Evidence of Nonprofit, Public Agency, or Tribal or Urban Indian Organization Status"
+        ],
+        "condition": {
+          "type": "applicant_status",
+          "value": "new"
+        },
+        "description": "Required only for Type 1 (New) applicants."
+      },
+      {
+        "name": "Attachment 12: Operational Plan",
+        "lookFor": [
+          "Attachment 12: Operational Plan"
+        ],
+        "condition": {
+          "type": "applicant_status",
+          "value": "new_or_supplemental"
+        },
+        "description": "Required for Type 1 (New) and Type 3 (Supplemental) applicants."
+      }
+    ],
+    "complianceGuidance": "Section 2.3.2 of the FY 2026 SAC User Guide specifies the required appendices for each application type. Attachments 1, 2, 3, 4, 5, 7, 9, 10, and 13 are required for all application types (Type 1 New, Type 2 Competing Continuation, Type 3 Supplemental). Attachment 6 (Co-Applicant Agreement) is required only for public agency applicants as indicated on Form 1A. Attachment 8 (Articles of Incorporation) and Attachment 11 (Evidence of Nonprofit, Public Agency, or Tribal or Urban Indian Organization Status) are required only for Type 1 (New) applicants. Attachment 12 (Operational Plan) is required for Type 1 (New) and Type 3 (Supplemental) applicants. All other attachments are optional or as applicable. The application must include all required attachments for the applicant's type and status to be considered complete.",
+    "condition": null,
+    "dependsOn": null,
+    "description": "Verifies that all required attachments are present according to application type and applicant status."
+  },
+  {
+    "questionNumber": 2,
+    "question": "Is the applicant an eligible entity as mentioned in the guidance (e.g. non-profit, governmental unit)?",
+    "section": "Standard Review Checklist",
+    "answerStrategy": "eligibility_check",
+    "suggestedResources": "",
+    "lookFor": [],
+    "complianceGuidance": "Per the FY 2026 SAC User Guide (see Form 1A - General Information Worksheet and Attachment 11 guidance), eligible applicants must be public or private nonprofit entities, including tribal or urban Indian organizations, as defined in the Notice of Funding Opportunity (NOFO). For new applicants, Attachment 11 (Evidence of Nonprofit, Public Agency, or Tribal or Urban Indian Organization Status) is required to document eligibility. The applicant's business entity type must align with the type entered in SAM.gov and be consistent with the eligibility requirements. Ineligible entities include for-profit organizations and those not meeting the statutory requirements for Health Center Program funding.",
+    "condition": null,
+    "dependsOn": null,
+    "description": "Checks that the applicant is an eligible entity type (public or private nonprofit, tribal, or urban Indian organization) as required."
+  }
+]

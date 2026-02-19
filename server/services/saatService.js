@@ -253,17 +253,26 @@ export function matchApplicantToServiceArea(saatData, applicantProfile, applicat
   const appSaId = applicantProfile?.serviceAreaId
   if (appSaId) {
     // Clean the ID for comparison (remove asterisks, whitespace)
+    // Compare as integers to handle zero-padding: SAAT CSV has '001' but app may have '1'
     const cleanAppId = appSaId.replace(/[*\s]/g, '')
+    const appIdNum = parseInt(cleanAppId, 10)
     for (const area of areas) {
       const cleanAreaId = (area.id || '').replace(/[*\s]/g, '')
-      if (cleanAreaId === cleanAppId) {
+      const areaIdNum = parseInt(cleanAreaId, 10)
+      if (!isNaN(appIdNum) && !isNaN(areaIdNum) && appIdNum === areaIdNum) {
         saatData.matchedArea = area
         saatData.matchMethod = `Matched by Service Area ID: ${appSaId} (from application forms)`
         console.log(`📊 SAAT Match: SA ${area.id} (${area.city}, ${area.state}) — SA ID match`)
         return saatData
       }
     }
-    console.log(`📊 SAAT: Applicant SA ID ${appSaId} not found in SAAT CSV (${areas.map(a => a.id).join(', ')})`)
+    // SA ID was extracted from the application but NOT found in SAAT for this NOFO.
+    // This is a strong signal: the applicant is applying for a service area not announced
+    // under this NOFO. Do NOT fall through to loose matching strategies.
+    saatData.matchedArea = null
+    saatData.matchMethod = `Applicant SA ID ${appSaId} not found in SAAT for ${saatData.announcementNumber} (${areas.length} areas: ${areas.slice(0, 10).map(a => a.id).join(', ')}${areas.length > 10 ? '...' : ''})`
+    console.log(`📊 SAAT: Applicant SA ID ${appSaId} NOT in SAAT CSV — NOT falling through to loose matching`)
+    return saatData
   }
 
   // Strategy 2: Match by zip code overlap
@@ -300,16 +309,20 @@ export function matchApplicantToServiceArea(saatData, applicantProfile, applicat
     }
   }
 
-  // Strategy 4: Match by city/state from full application text
+  // Strategy 4: Match by city+state appearing TOGETHER in application text
+  // Require "City, ST" or "City ST" pattern — NOT city and state independently
+  // (matching them independently causes false positives: e.g., "AZ" appears everywhere in any AZ application)
   const fullText = extractFullText(applicationData)
   for (const area of areas) {
     if (!area.city) continue
-    const cityPattern = new RegExp(`\\b${escapeRegex(area.city)}\\b`, 'i')
-    const statePattern = new RegExp(`\\b${escapeRegex(area.state)}\\b`, 'i')
-    if (cityPattern.test(fullText) && statePattern.test(fullText)) {
+    // Match "Casa Grande, AZ" or "Casa Grande AZ" (city followed by state within ~5 chars)
+    const cityStatePattern = new RegExp(
+      `\\b${escapeRegex(area.city)}\\b[,\\s]{1,5}\\b${escapeRegex(area.state)}\\b`, 'i'
+    )
+    if (cityStatePattern.test(fullText)) {
       saatData.matchedArea = area
-      saatData.matchMethod = `Matched by city/state in application text: ${area.city}, ${area.state}`
-      console.log(`📊 SAAT Match: SA ${area.id} (${area.city}, ${area.state}) — text city/state match`)
+      saatData.matchMethod = `Matched by city/state pair in application text: ${area.city}, ${area.state} (low confidence — SA ID not extracted)`
+      console.log(`📊 SAAT Match: SA ${area.id} (${area.city}, ${area.state}) — text city+state pair match`)
       return saatData
     }
   }
