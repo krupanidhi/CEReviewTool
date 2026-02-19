@@ -188,9 +188,11 @@ export default function ChecklistComparison({ comparisonData }) {
           if (cached.standard) {
             setStdR(cached.standard.results); setStdS(cached.standard.summary)
             if (cached.standard.metadata) setStdM(cached.standard.metadata)
+            if (cached.standard.pageOffset != null) setStdPO(cached.standard.pageOffset)
           }
           if (cached.programSpecific) {
             setPsqR(cached.programSpecific.results); setPsqS(cached.programSpecific.summary)
+            if (cached.programSpecific.pageOffset != null) setPsqPO(cached.programSpecific.pageOffset)
           }
         }
       } catch (e) { setError(e.message) }

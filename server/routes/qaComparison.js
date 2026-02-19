@@ -1779,8 +1779,8 @@ Return ONLY a JSON array:
     for (const q of saatQuestions) {
       const aiResult = aiAnswers.find(a => a.questionNumber === q.number)
       if (aiResult) {
-        // Resolve page references from evidence text using the appIndex
-        const resolvedPages = resolvePageRefsFromIndex(aiResult.evidence, aiResult.reasoning, q.question, appIndex)
+        // Resolve page references from evidence text using the appIndex + rule lookFor
+        const resolvedPages = resolvePageRefsFromIndex(aiResult.evidence, aiResult.reasoning, q.question, appIndex, q.rule)
         results.push({
           questionNumber: q.number,
           question: q.question,
@@ -1923,7 +1923,7 @@ Return ONLY a JSON array:
       for (const q of group.questions) {
         const aiResult = aiAnswers.find(a => a.questionNumber === q.number)
         if (aiResult) {
-          const resolvedPages = resolvePageRefsFromIndex(aiResult.evidence, aiResult.reasoning, q.question, appIndex)
+          const resolvedPages = resolvePageRefsFromIndex(aiResult.evidence, aiResult.reasoning, q.question, appIndex, q.rule)
           results.push({
             questionNumber: q.number,
             question: q.question,
@@ -1975,16 +1975,66 @@ Return ONLY a JSON array:
 
 /**
  * Resolve page references from AI evidence text using the application index.
- * Extracts form/attachment mentions and maps them to actual pages via formPageMap.
+ * 
+ * PRIORITY ORDER:
+ *   1. Rule's lookFor targets → direct TOC page lookup (most accurate)
+ *   2. Evidence/reasoning text → form/attachment mention extraction
+ *   3. Explicit "page N" references from AI text (least reliable)
+ * 
+ * @param {string} evidence - AI evidence text
+ * @param {string} reasoning - AI reasoning text
+ * @param {string} question - The checklist question text
+ * @param {Object} appIndex - Application index with formPageMap, formPageRanges, pages
+ * @param {Object} [rule] - Optional rule with lookFor array for primary TOC lookup
  */
-function resolvePageRefsFromIndex(evidence, reasoning, question, appIndex) {
+function resolvePageRefsFromIndex(evidence, reasoning, question, appIndex, rule) {
   const { formPageMap, formPageRanges, pages } = appIndex
   if (!formPageMap || formPageMap.size === 0) return []
 
   const combinedText = [evidence || '', reasoning || '', question || ''].join(' ')
   const foundPages = new Set()
 
-  // Extract form/attachment mentions
+  // PRIORITY 1: Use rule's lookFor targets for direct TOC page lookup.
+  // This ensures that if a rule targets "Attachment 11", we always include
+  // Attachment 11's exact TOC page — even if the AI evidence text doesn't
+  // mention it by that exact name.
+  if (rule?.lookFor && Array.isArray(rule.lookFor)) {
+    for (const target of rule.lookFor) {
+      const normalized = target.toLowerCase()
+      // Try formPageMap exact match
+      if (formPageMap.has(normalized)) {
+        foundPages.add(formPageMap.get(normalized))
+        continue
+      }
+      // Try extracting "Attachment N" pattern from the target
+      const attMatch = target.match(/Attachment\s+(\d+)/i)
+      if (attMatch) {
+        const attKey = `attachment ${attMatch[1]}`
+        if (formPageMap.has(attKey)) {
+          foundPages.add(formPageMap.get(attKey))
+          continue
+        }
+      }
+      // Try extracting "Form N[A-Z]?" pattern from the target
+      const formMatch = target.match(/Form\s+(\d+[A-Za-z]?)/i)
+      if (formMatch) {
+        const formKey = `form ${formMatch[1].toLowerCase()}`
+        if (formPageMap.has(formKey)) {
+          foundPages.add(formPageMap.get(formKey))
+          continue
+        }
+      }
+      // Try partial match
+      for (const [mapKey, page] of formPageMap) {
+        if (mapKey.includes(normalized) || normalized.includes(mapKey)) {
+          foundPages.add(page)
+          break
+        }
+      }
+    }
+  }
+
+  // PRIORITY 2: Extract form/attachment mentions from evidence + reasoning text
   const patterns = [
     { regex: /Attachment\s*(\d+)/gi, keyFn: m => `attachment ${m[1]}` },
     { regex: /SF[-\s]?424\s*([A-Z]?)/gi, keyFn: m => `sf-424${(m[1]||'').toLowerCase()}`.trim() },

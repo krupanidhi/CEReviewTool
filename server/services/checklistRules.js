@@ -436,6 +436,35 @@ function buildApplicationIndex(applicationData) {
   const tocLinks = applicationData.tocLinks || []
   const formPageRanges = new Map() // key → { start, end } page range
 
+  // Collect TOC link TEXT even when destPage is undefined.
+  // Some PDFs have link annotations whose page destinations pdfjs can't resolve,
+  // but the link text still tells us what documents exist in the application.
+  // This "manifest" helps validate header-scanned entries later.
+  const tocLinkNames = new Set()
+  for (const link of tocLinks) {
+    if (link.text && link.text.length > 3) tocLinkNames.add(link.text)
+  }
+  if (tocLinkNames.size > 0 && tocLinks.every(l => !l.destPage)) {
+    console.log(`🔗 PDF has ${tocLinkNames.size} TOC link labels (destinations unresolvable — will use header scanning)`)
+  }
+
+  // Pre-compute placeholder pages: pages with < 100 chars of real (non-footer) content.
+  // These are stub pages like "Attachment 6: Co-Applicant. Not Applicable." that have
+  // a header but no meaningful content. We skip them from formPageMap so page references
+  // always point to pages with actual evidence.
+  const FOOTER_PATTERN_TOC = /^EHB Application Number:.*|^Page Number:.*|^Funding Opportunity Number:.*|^Received Date:.*|^Tracking Number:.*|^Grant Number:.*/i
+  const placeholderPages = new Set()
+  for (const p of pages) {
+    const realContent = p.lines
+      .filter(l => !FOOTER_PATTERN_TOC.test(l.trim()))
+      .join('')
+      .replace(/\s+/g, '')
+    if (realContent.length < 100) placeholderPages.add(p.pageNum)
+  }
+  if (placeholderPages.size > 0) {
+    console.log(`📄 Detected ${placeholderPages.size} placeholder pages (< 100 chars real content)`)
+  }
+
   if (tocLinks.length > 0) {
     console.log(`🔗 Using ${tocLinks.length} PDF TOC hyperlinks as primary page source`)
 
@@ -446,6 +475,12 @@ function buildApplicationIndex(applicationData) {
       const text = link.text
       if (!text || !link.destPage) continue
       const page = link.destPage
+
+      // Quality gate: skip placeholder pages (e.g., "Attachment 6: Not Applicable.")
+      if (placeholderPages.has(page)) {
+        console.log(`   ⚠️ Skipping TOC link to placeholder page ${page}: "${text.substring(0, 60)}"`)
+        continue
+      }
 
       // Store raw text as key (each sub-section gets its own entry)
       if (text.length > 3) {
@@ -551,15 +586,25 @@ function buildApplicationIndex(applicationData) {
 
   // 3b. SECONDARY: Scan non-TOC page headers to fill gaps.
   // Only add entries that are NOT already in formPageMap (TOC takes priority).
+  // Reuses the pre-computed placeholderPages set from above to reject stub pages.
+  const headerScannedKeys = [] // track order for range building
+
   for (const p of pages) {
     if (tocPageNums.has(p.pageNum)) continue
+
+    const isPlaceholder = placeholderPages.has(p.pageNum)
 
     const headerLines = p.lines.slice(0, 5)
     const headerText = headerLines.join('\n')
 
     for (const pattern of formPatterns) {
       if (!formPageMap.has(pattern.key) && headerText.match(pattern.regex)) {
-        formPageMap.set(pattern.key, p.pageNum)
+        if (!isPlaceholder) {
+          formPageMap.set(pattern.key, p.pageNum)
+          headerScannedKeys.push({ key: pattern.key, page: p.pageNum })
+        } else {
+          console.log(`   ⚠️ Skipping placeholder page ${p.pageNum} for ${pattern.key}`)
+        }
       }
     }
 
@@ -571,10 +616,30 @@ function buildApplicationIndex(applicationData) {
       while ((am = attRegex.exec(line)) !== null) {
         const key = `attachment ${am[1]}`
         if (!formPageMap.has(key)) {
-          formPageMap.set(key, p.pageNum)
+          if (!isPlaceholder) {
+            formPageMap.set(key, p.pageNum)
+            headerScannedKeys.push({ key, page: p.pageNum })
+          } else {
+            console.log(`   ⚠️ Skipping placeholder page ${p.pageNum} for ${key}`)
+          }
         }
       }
     }
+  }
+
+  // 3b-ii. Build formPageRanges from header-scanned entries when PDF links
+  // didn't provide ranges. This gives us page ranges even when PDF link
+  // resolution fails (e.g., app 243163 where all destPages are undefined).
+  if (formPageRanges.size === 0 && headerScannedKeys.length > 1) {
+    // Sort by page number
+    headerScannedKeys.sort((a, b) => a.page - b.page)
+    for (let i = 0; i < headerScannedKeys.length; i++) {
+      const { key, page } = headerScannedKeys[i]
+      const nextPage = i + 1 < headerScannedKeys.length ? headerScannedKeys[i + 1].page : page + 1
+      const endPage = nextPage > page ? nextPage - 1 : page
+      formPageRanges.set(key, { start: page, end: endPage })
+    }
+    console.log(`📄 Built ${formPageRanges.size} page ranges from header scanning`)
   }
 
   // 3c. Alias map: common alternative names → canonical key
@@ -755,13 +820,37 @@ function analyzeApplicantType(applicantProfile, applicationData, appIndex) {
         }
       }
 
-      // Public agency from Form 1A
-      if (!flags.isPublicAgency && /public\s*(?:agency|entity)/i.test(form1aLower)) {
-        // Only set if it's in a field context, not just mentioned in instructions
-        if (/applicant\s*(?:is|type)[^:]*:?\s*(?:.*?)public\s*agency/i.test(form1a.text) ||
-            /organization\s*type[^:]*:?\s*(?:.*?)public/i.test(form1a.text)) {
-          flags.isPublicAgency = true
-          flags._sources.isPublicAgency = `Form 1A (page ${form1a.pageNums[0]})`
+      // Business Entity from Form 1A — authoritative source for applicant type
+      // The checkbox section appears as:
+      //   Business Entity
+      //   [_] Tribal
+      //   [_] Urban Indian
+      //   [ X ] Private, non-profit (non-Tribal or Urban Indian)
+      //   [_] Public (non-Tribal or Urban Indian)
+      // The checked item has [X] or [ X ] while unchecked has [_] or [ _ ]
+      const form1aPage = form1a.pageNums[0]
+      const checkedBE = form1a.text.match(/\[\s*X\s*\]\s*(.+?)(?:\n|$)/gi)
+      if (checkedBE) {
+        for (const match of checkedBE) {
+          const val = match.replace(/\[\s*X\s*\]\s*/i, '').trim().toLowerCase()
+          if (/private.*non-?profit/i.test(val) || /non-?profit/i.test(val)) {
+            flags.isNonprofit = true
+            flags.isPublicAgency = false
+            flags._sources.isNonprofit = `Form 1A (page ${form1aPage}): Business Entity = "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`
+            console.log(`   📋 Form 1A Business Entity: "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`)
+          } else if (/\bpublic\b/i.test(val) && !/non-?profit/i.test(val)) {
+            flags.isPublicAgency = true
+            flags._sources.isPublicAgency = `Form 1A (page ${form1aPage}): Business Entity = "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`
+            console.log(`   📋 Form 1A Business Entity: "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`)
+          } else if (/\btribal\b/i.test(val)) {
+            flags.isPublicAgency = true
+            flags._sources.isPublicAgency = `Form 1A (page ${form1aPage}): Business Entity = "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`
+            console.log(`   📋 Form 1A Business Entity: "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`)
+          } else if (/urban\s*indian/i.test(val)) {
+            flags.isPublicAgency = true
+            flags._sources.isPublicAgency = `Form 1A (page ${form1aPage}): Business Entity = "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`
+            console.log(`   📋 Form 1A Business Entity: "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`)
+          }
         }
       }
     }
@@ -771,21 +860,21 @@ function analyzeApplicantType(applicantProfile, applicationData, appIndex) {
     if (sf424.text) {
       console.log(`   📄 SF-424 found on page(s) ${sf424.pageNums.join(', ')} — reading for applicant/submission type`)
 
-      // Type of Applicant from SF-424
+      // Type of Applicant from SF-424 — secondary to Form 1A Business Entity
       const typeMatch = sf424.text.match(/Type\s+of\s+Applicant[^:]*:\s*([^\n]+)/i)
       if (typeMatch) {
         const typeVal = typeMatch[1].trim()
         if (/government|county|city|state|municipal|public/i.test(typeVal)) {
           flags.isPublicAgency = true
-          flags._sources.isPublicAgency = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}"`
+          if (!flags._sources.isPublicAgency) flags._sources.isPublicAgency = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}"`
         }
         if (/non-?profit|501c/i.test(typeVal)) {
           flags.isNonprofit = true
-          flags._sources.isNonprofit = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}"`
+          if (!flags._sources.isNonprofit) flags._sources.isNonprofit = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}"`
         }
         if (/tribal|indian/i.test(typeVal)) {
           flags.isPublicAgency = true
-          flags._sources.isPublicAgency = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}" (Tribal)`
+          if (!flags._sources.isPublicAgency) flags._sources.isPublicAgency = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}" (Tribal)`
         }
       }
 
@@ -1197,12 +1286,34 @@ function lookupFormPages(names, formPageMap) {
   const foundItems = []
   for (const name of names) {
     const normalized = name.toLowerCase()
-    // Exact match
+    // 1. Exact match on full name
     if (formPageMap.has(normalized)) {
       foundItems.push({ name, page: formPageMap.get(normalized) })
       continue
     }
-    // Partial match (either direction)
+    // 2. Extract canonical key (e.g., "attachment 11" from "Attachment 11: Evidence of Nonprofit...")
+    //    This prevents "attachment 11" from matching "attachment 1" via substring.
+    let found = false
+    const attMatch = normalized.match(/attachment\s+(\d+)/)
+    if (attMatch) {
+      const canonKey = `attachment ${attMatch[1]}`
+      if (formPageMap.has(canonKey)) {
+        foundItems.push({ name, page: formPageMap.get(canonKey) })
+        found = true
+      }
+    }
+    if (!found) {
+      const formMatch = normalized.match(/form\s+(\d+[a-z]?)/)
+      if (formMatch) {
+        const canonKey = `form ${formMatch[1]}`
+        if (formPageMap.has(canonKey)) {
+          foundItems.push({ name, page: formPageMap.get(canonKey) })
+          found = true
+        }
+      }
+    }
+    if (found) continue
+    // 3. Partial match (either direction) — last resort
     for (const [key, page] of formPageMap) {
       if (key.includes(normalized) || normalized.includes(key)) {
         foundItems.push({ name, page })
