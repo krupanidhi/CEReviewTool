@@ -27,9 +27,10 @@ export async function ceReview(ceData, appName, appPath, yearCode, fyLabel, fund
   const runChecklist = ceScope !== 'compliance-only'
 
   // Step 0: Register the application PDF in documents/ so the page viewer can serve it
+  // Also saves ceData as analysis.data so the Chat panel has context for this application
   let applicationId = null
   if (appPath) {
-    applicationId = await registerApplicationPDF(appPath, appName, ctx)
+    applicationId = await registerApplicationPDF(appPath, appName, ctx, ceData)
   }
 
   // Resolve user guide folder: userGuides/FYxx/
@@ -291,7 +292,7 @@ async function runCEChecklist(applicationData, ctx) {
  * page viewer can serve it via GET /api/documents/:id/file.
  * Returns the documentId (UUID prefix).
  */
-async function registerApplicationPDF(appPath, appName, ctx) {
+async function registerApplicationPDF(appPath, appName, ctx, ceData = null) {
   const { log, logS, logE } = ctx
   try {
     const ceRoot = path.resolve(path.dirname(path.dirname(__dirname)))
@@ -315,8 +316,22 @@ async function registerApplicationPDF(appPath, appName, ctx) {
       size: (await fs.stat(appPath)).size,
       uploadedAt: new Date().toISOString()
     }
+
+    // Include extraction data so the Chat panel can use it (no extra API calls needed)
+    if (ceData && ceData.pages) {
+      metadata.analysis = {
+        success: true,
+        data: ceData,
+        metadata: {
+          pageCount: ceData.pages.length,
+          analyzedAt: new Date().toISOString(),
+          source: 'batch_process'
+        }
+      }
+    }
+
     await fs.writeFile(destPath + '.json', JSON.stringify(metadata, null, 2))
-    logS(`PDF registered for page viewer: documents/${destFileName} (id: ${docId})`)
+    logS(`PDF registered for page viewer: documents/${destFileName} (id: ${docId})${ceData ? ' [+chat data]' : ''}`)
     return docId
   } catch (err) {
     logE(`Failed to register PDF for page viewer: ${err.message}`)

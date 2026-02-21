@@ -36,7 +36,10 @@ router.post('/', async (req, res) => {
     console.log('📋 Context available:', {
       hasApplication: !!context?.application,
       hasChecklist: !!context?.checklist,
-      hasSingleDoc: !!context?.singleDocument
+      hasSingleDoc: !!context?.singleDocument,
+      hasAnalysisResults: !!context?.analysisResults,
+      standardQs: context?.analysisResults?.standardQuestions?.length || 0,
+      programSpecificQs: context?.analysisResults?.programSpecificQuestions?.length || 0
     })
     
     // Validate that actual document data exists
@@ -82,47 +85,72 @@ Your role is to provide intelligent, evidence-based answers by:
 ✓ Application Document: ${context.application.name}
 ✓ Checklist/Guide Document: ${context.checklist.name}
 
-IMPORTANT: Both documents include structured table data in JSON format. When answering questions about forms, service sites, or any tabular information:
-- The application document contains 94 tables - you must search through ALL tables to find the specific form requested
-- Use the "tables" array with "structuredData" field
-- Each table has a "tableTitle" field to help identify it (e.g., tables with "Site Name" key are likely Form 5B)
-- Each table has structured JSON with column headers as keys
-- For example, Form 5B service sites have fields like "Site Name", "Physical Site Address", "Site Type", etc.
-- SEARCH ALL TABLES: Look through the entire tables array to find tables with relevant column names matching the user's question
+THE APPLICATION DATA CONTAINS TWO KEY SECTIONS:
 
+1. "tables" — ALL structured form data from the application (Form 1A, 2B, 5B, 5C, 6A, 6B, budgets, SF-424, etc.)
+   - Each table has "structuredData" with column headers as keys and row data as values
+   - Each table has "pageNumber" showing where it appears in the PDF
+   - When user asks about any form (e.g., "show Form 5B", "what's in Form 1A"), search ALL tables by their column headers and page numbers
+   - Forms may span multiple tables — combine data from tables on consecutive pages
+
+2. "pageTexts" — Full text content of EVERY page in the application
+   - Contains project narratives, attachment text, cover pages, abstracts, and all unstructured content
+   - Each entry has "page" (page number) and "text" (full page content)
+   - When user asks about narratives, attachments, or any text content, search pageTexts
+   - Provide exact quotes with page numbers
+
+SEARCH STRATEGY: For any user question, search BOTH tables AND pageTexts to find all relevant data.
+
+${context.analysisResults ? `
+COMPLETED ANALYSIS AVAILABLE:
+A full checklist compliance analysis has ALREADY been completed for this application. The results are provided in [COMPLETED ANALYSIS RESULTS] below.
+This includes:
+- Standard Q&A questions with AI answers, evidence, reasoning, and page references
+- Program-specific checklist questions (Q1-Q${context.analysisResults.programSpecificQuestions?.length || '?'}) with answers, evidence, and reasoning
+- Applicant profile information (applicant type, service area ID, organization name)
+- SAAT (Service Area Analysis Tool) data: service area details, funding, zip codes, patient targets, service types
+- Overall compliance summary
+
+HOW TO USE THE CONTEXT — READ CAREFULLY:
+
+TYPE 1: CHECKLIST QUESTION REFERENCES (user mentions Q2, Q5, "question 10", etc.)
+→ Look up that exact question number in [COMPLETED ANALYSIS RESULTS] programSpecificQuestions or standardQuestions
+→ Show the answer, evidence, reasoning, and page references from the analysis
+→ Supplement with raw document data if the user wants more depth
+
+TYPE 2: FACT-FINDING / DATA QUERIES (user asks "show SAAT data", "what is the service area", "list attachments", "what is the budget", "service area id", etc.)
+→ Do NOT default to a checklist question answer
+→ Pull the actual data directly from [COMPLETED ANALYSIS RESULTS] (applicantProfile, saatInfo) and/or [APPLICATION DOCUMENT DATA] (pageTexts, tables, sections, keyValuePairs)
+→ Show the raw data as-is so the user can verify facts independently
+→ For SAAT queries: show service area ID, city/state, patient target, funding, zip codes, service types from the saatInfo and applicantProfile fields
+
+TYPE 3: VERIFICATION QUERIES (user asks "is Q2 correct?", "verify Q5", "why is Q10 yes?")
+→ Show the completed analysis answer AND independently search the raw document data to confirm or challenge it
+→ Present both the analysis result and the raw evidence side by side
+
+TYPE 4: GENERAL QUESTIONS (user asks about topics not tied to a specific Q#)
+→ Search the raw application document data (pageTexts, tables, sections) for relevant information
+→ Also check if any completed analysis questions are relevant and mention them
+→ Provide exact quotes with page numbers
+` : ''}
 INTELLIGENT Q&A APPROACH:
 When the user asks a question:
-1. Identify which checklist section(s) are relevant
-2. Extract the specific requirements from the checklist
-3. Search BOTH text sections AND structured table data in the application
-4. For questions about forms (e.g., Form 5B, Form 6A), look in the tables array
-5. Provide:
-   - Checklist requirement reference (section number and title)
-   - Evidence from application (exact quotes with page numbers OR table data)
-   - Compliance status (met/partial/not met)
-   - Clear explanation of your findings
-   - Recommendations if needed
+1. Determine the question TYPE (1-4 above) based on what the user is actually asking
+2. For data/fact queries: extract and present the actual data from the context
+3. For checklist questions: reference the completed analysis
+4. For verification: show both analysis results AND raw document evidence
+5. Always provide:
+   - Exact data from the context (quotes, numbers, table rows)
+   - Page references where the data was found
+   - Clear, factual presentation — let the user draw their own conclusions
 
-EXAMPLE RESPONSE FORMAT FOR TABLE DATA:
-"Based on your question about Form 5B Service Sites:
+RESPONSE FORMAT:
+- For checklist questions: "**From Completed Analysis (Q[number]):** [answer] ..."
+- For data queries: Present the actual data in a clear, structured format (tables, lists, key-value pairs)
+- For SAAT data: Show service area ID, location, patient target, funding breakdown, service types, zip codes
+- Always include page references when citing application data
 
-**Checklist Requirement:**
-Section 3.3.2 requires completion of Form 5B with service site details
-
-**Evidence Found:**
-The application includes Form 5B data on page X with the following service sites:
-
-| Site Name | Physical Address | Site Type | Phone Number |
-|-----------|------------------|-----------|--------------|
-| [data from structuredData] | ... | ... | ... |
-
-**Compliance Status:** Met/Partial/Not Met
-
-**Explanation:** [reasoning based on table data]
-
-**Recommendation:** [if needed]"
-
-Be thorough, specific, and always reference both text sections and structured table data.`
+Be thorough, specific, and present actual data from the documents.`
     } else if (context?.singleDocument) {
       systemPrompt += `Current Document Context:
 Document: ${context.singleDocument.name}
@@ -156,87 +184,43 @@ Provide clear, accurate analysis of this document.`
     // Add current user message with comprehensive context
     let userMessageContent = message
 
-    // Append document context intelligently with structured table data
+    // Append document context with ALL tables and full page text
     if (context?.application && context?.checklist) {
-      // Intelligent table filtering: prioritize tables relevant to user's question
-      const userQuestion = message.toLowerCase()
       const allTables = context.application.data?.tables || []
-      
-      // Identify relevant keywords from user's question
-      const keywords = {
-        form5b: userQuestion.includes('form 5b') || userQuestion.includes('form5b') || userQuestion.includes('service site'),
-        form6a: userQuestion.includes('form 6a') || userQuestion.includes('form6a') || userQuestion.includes('board member'),
-        site: userQuestion.includes('site') || userQuestion.includes('location') || userQuestion.includes('address'),
-        board: userQuestion.includes('board') || userQuestion.includes('governance'),
-        budget: userQuestion.includes('budget') || userQuestion.includes('funding') || userQuestion.includes('financial')
-      }
-      
-      // Filter and prioritize tables based on relevance
-      let relevantTables = []
-      let otherTables = []
-      
-      allTables.forEach(table => {
-        const firstRow = table.structuredData?.[0]
-        if (!firstRow) {
-          otherTables.push(table)
-          return
-        }
-        
-        const tableKeys = Object.keys(firstRow).map(k => k.toLowerCase())
-        const tableValues = Object.values(firstRow).map(v => String(v).toLowerCase())
-        const tableContent = [...tableKeys, ...tableValues].join(' ')
-        
-        // Score table relevance
-        let relevanceScore = 0
-        if (keywords.form5b && (tableKeys.includes('site name') || tableKeys.includes('physical site address'))) relevanceScore += 10
-        if (keywords.form6a && (tableKeys.includes('board member') || tableContent.includes('board'))) relevanceScore += 10
-        if (keywords.site && tableKeys.some(k => k.includes('site'))) relevanceScore += 5
-        if (keywords.board && tableKeys.some(k => k.includes('board'))) relevanceScore += 5
-        if (keywords.budget && tableKeys.some(k => k.includes('budget') || k.includes('funding'))) relevanceScore += 5
-        
-        // Extract table title
-        const possibleTitle = tableKeys.find(key => 
-          key.includes('form') || key.includes('table') || key.includes('site') || key.includes('board')
-        )
-        
-        const tableWithMetadata = {
-          id: table.id,
-          pageNumber: table.pageNumber,
-          rowCount: table.rowCount,
-          columnCount: table.columnCount,
-          tableTitle: possibleTitle || `Table on page ${table.pageNumber}`,
-          structuredData: table.structuredData,
-          relevanceScore: relevanceScore
-        }
-        
-        if (relevanceScore > 0) {
-          relevantTables.push(tableWithMetadata)
-        } else {
-          otherTables.push(tableWithMetadata)
-        }
-      })
-      
-      // Sort relevant tables by score
-      relevantTables.sort((a, b) => b.relevanceScore - a.relevanceScore)
-      
-      // Include top relevant tables + sample of others
-      const tablesToInclude = [
-        ...relevantTables.slice(0, 20), // Top 20 relevant tables
-        ...otherTables.slice(0, 10)      // First 10 other tables for context
-      ]
-      
-      const applicationSummary = JSON.stringify({
-        sections: context.application.data?.sections?.slice(0, 50) || [],
+
+      // Include ALL tables — they contain form data (1A, 2B, 5B, 6A, budgets, etc.)
+      const tablesToInclude = allTables.map(table => ({
+        id: table.id,
+        pageNumber: table.pageNumber,
+        rowCount: table.rowCount,
+        columnCount: table.columnCount,
+        structuredData: table.structuredData
+      }))
+
+      // Build condensed page text — contains narratives, attachments, unstructured content
+      const pageTexts = (context.application.data?.pages || []).map(p => ({
+        page: p.pageNumber,
+        text: (p.lines || []).map(l => l.content).join('\n')
+      }))
+
+      // Build application context in priority order:
+      // 1. Tables (structured form data) — most important for form queries
+      // 2. Page text (narratives, attachments, unstructured) — important for fact-finding
+      // 3. Sections, TOC, key-value pairs — supplementary
+      const tablesJson = JSON.stringify(tablesToInclude, null, 1)
+      const pageTextsJson = JSON.stringify(pageTexts, null, 1)
+      const supplementary = JSON.stringify({
         tableOfContents: context.application.data?.tableOfContents || [],
-        tables: tablesToInclude,
-        figures: context.application.data?.figures?.map(fig => ({
-          id: fig.id,
-          pageNumber: fig.pageNumber,
-          caption: fig.caption
-        })) || [],
         keyValuePairs: context.application.data?.keyValuePairs || [],
-        pages: context.application.data?.pages?.length || 0
-      }, null, 2).substring(0, 150000) // Increased to 150K for relevant tables
+        pageCount: context.application.data?.pages?.length || 0
+      }, null, 1)
+
+      // Budget: tables first (up to 400K), then page text (up to 200K), then supplementary
+      const tablesBudget = tablesJson.substring(0, 400000)
+      const pageTextBudget = pageTextsJson.substring(0, 200000)
+      const suppBudget = supplementary.substring(0, 20000)
+
+      const applicationSummary = `{"tables":${tablesBudget},"pageTexts":${pageTextBudget},"supplementary":${suppBudget}}`
 
       const checklistSummary = JSON.stringify({
         sections: context.checklist.data?.sections?.slice(0, 100) || [],
@@ -251,50 +235,31 @@ Provide clear, accurate analysis of this document.`
         pages: context.checklist.data?.pages?.length || 0
       }, null, 2).substring(0, 20000)
 
-      userMessageContent += `\n\n[APPLICATION DOCUMENT DATA]:\n${applicationSummary}\n\n[CHECKLIST/GUIDE DOCUMENT DATA]:\n${checklistSummary}`
-      
-      // Log what table data is being sent to AI for verification
-      console.log('📊 Sending table data to AI:')
-      console.log(`   Total application tables: ${allTables.length}`)
-      console.log(`   Relevant tables found: ${relevantTables.length}`)
-      console.log(`   Tables being sent to AI: ${tablesToInclude.length}`)
-      console.log(`   Context size: ${applicationSummary.length} chars`)
-      
-      // Log top relevant tables
-      if (relevantTables.length > 0) {
-        console.log(`   Top relevant tables:`)
-        relevantTables.slice(0, 5).forEach(t => {
-          const firstRow = t.structuredData?.[0]
-          const keys = firstRow ? Object.keys(firstRow).slice(0, 3).join(', ') : 'no data'
-          console.log(`     - ${t.id} (page ${t.pageNumber}, score: ${t.relevanceScore}): ${keys}`)
-        })
-      }
-      
-      // Check if Form 5B is in the context
-      const hasForm5B = applicationSummary.toLowerCase().includes('abbotsford') || 
-                        applicationSummary.toLowerCase().includes('abbottsford')
-      console.log(`   ⚠️  Form 5B data (Abbotsford) included in context: ${hasForm5B ? 'YES ✓' : 'NO ✗'}`)
-      
-      // Find and log the specific Form 5B service sites table
-      const form5BTable = tablesToInclude.find(t => 
-        t.structuredData?.some(row => {
-          const rowStr = JSON.stringify(row).toLowerCase()
-          return (rowStr.includes('abbotsford') || rowStr.includes('abbottsford')) &&
-                 (rowStr.includes('site name') || rowStr.includes('physical'))
-        })
-      )
-      
-      if (form5BTable) {
-        console.log(`   ✓ Form 5B service sites table: ${form5BTable.id} on page ${form5BTable.pageNumber}`)
-        const sampleRow = form5BTable.structuredData?.find(row => 
-          JSON.stringify(row).toLowerCase().includes('abbotsford')
-        )
-        if (sampleRow) {
-          console.log(`   Form 5B sample:`, JSON.stringify(sampleRow, null, 2).substring(0, 400))
+      // Append completed analysis results if available
+      let analysisSection = ''
+      if (context.analysisResults) {
+        const ar = context.analysisResults
+        const analysisData = {
+          applicantProfile: ar.applicantProfile,
+          saatInfo: ar.saatInfo,
+          overallCompliance: ar.overallCompliance,
+          summary: ar.summary,
+          standardQuestions: ar.standardQuestions,
+          programSpecificQuestions: ar.programSpecificQuestions,
+          complianceSections: ar.complianceSections
         }
-      } else {
-        console.log(`   ✗ Form 5B service sites table NOT found in selected tables`)
+        analysisSection = `\n\n[COMPLETED ANALYSIS RESULTS]:\n${JSON.stringify(analysisData, null, 2).substring(0, 80000)}`
+        console.log(`📊 Analysis results included: ${ar.standardQuestions?.length || 0} standard + ${ar.programSpecificQuestions?.length || 0} program-specific questions`)
       }
+
+      userMessageContent += `\n\n[APPLICATION DOCUMENT DATA]:\n${applicationSummary}\n\n[CHECKLIST/GUIDE DOCUMENT DATA]:\n${checklistSummary}${analysisSection}`
+      
+      // Log what data is being sent to AI
+      console.log('📊 Sending to AI:')
+      console.log(`   Tables: ${allTables.length} (${(tablesBudget.length/1024).toFixed(0)}KB)`)
+      console.log(`   Page text: ${pageTexts.length} pages (${(pageTextBudget.length/1024).toFixed(0)}KB)`)
+      console.log(`   Analysis results: ${context.analysisResults ? 'YES' : 'NO'}`)
+      console.log(`   Total context size: ${applicationSummary.length + checklistSummary.length + analysisSection.length} chars`)
     } else if (context?.singleDocument) {
       // Legacy single document support
       const docSummary = JSON.stringify(context.singleDocument.data, null, 2).substring(0, 10000)

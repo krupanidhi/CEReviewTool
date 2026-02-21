@@ -4,7 +4,7 @@ import { chatWithModel } from '../services/api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-export default function ChatInterface({ document, applicationDoc, checklistDoc }) {
+export default function ChatInterface({ document, applicationDoc, checklistDoc, comparisonResult }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -33,6 +33,47 @@ export default function ChatInterface({ document, applicationDoc, checklistDoc }
 
     try {
       // Build comprehensive context with both application and checklist
+      // Extract completed analysis results from comparisonResult if available
+      let analysisResults = null
+      if (comparisonResult?.results?.[0]) {
+        const r = comparisonResult.results[0]
+        const stdResults = r.checklistComparison?.standard?.results || []
+        const psResults = r.checklistComparison?.programSpecific?.results || []
+        const compSections = r.comparison?.sections || []
+        analysisResults = {
+          standardQuestions: stdResults.map(q => ({
+            questionNumber: q.questionNumber,
+            question: q.question,
+            aiAnswer: q.aiAnswer,
+            confidence: q.confidence,
+            evidence: q.evidence,
+            reasoning: q.reasoning,
+            pageReferences: q.pageReferences,
+            suggestedResources: q.suggestedResources
+          })),
+          programSpecificQuestions: psResults.map(q => ({
+            questionNumber: q.questionNumber,
+            question: q.question,
+            aiAnswer: q.aiAnswer,
+            confidence: q.confidence,
+            evidence: q.evidence,
+            reasoning: q.reasoning,
+            pageReferences: q.pageReferences,
+            suggestedResources: q.suggestedResources
+          })),
+          complianceSections: compSections.map(s => ({
+            checklistSection: s.checklistSection,
+            complianceStatus: s.complianceStatus,
+            findings: s.findings,
+            evidence: s.evidence
+          })),
+          applicantProfile: r.checklistComparison?.programSpecific?.applicantProfile || null,
+          saatInfo: r.checklistComparison?.programSpecific?.saatInfo || null,
+          overallCompliance: r.comparison?.overallCompliance || null,
+          summary: r.comparison?.summary || r.checklistComparison?.programSpecific?.summary || null
+        }
+      }
+
       const context = {
         application: applicationDoc ? {
           name: applicationDoc.originalName || applicationDoc.name,
@@ -46,7 +87,9 @@ export default function ChatInterface({ document, applicationDoc, checklistDoc }
         singleDocument: document ? {
           name: document.originalName,
           data: document.analysis?.data || document.data
-        } : null
+        } : null,
+        // Completed analysis results (Q&A answers, evidence, reasoning, compliance)
+        analysisResults
       }
 
       const response = await chatWithModel(input, messages, context)
@@ -99,9 +142,20 @@ export default function ChatInterface({ document, applicationDoc, checklistDoc }
           <span style={{ fontSize: '1.3rem' }}>🤖</span>
           <div>
             <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#0B4778', margin: 0 }}>Intelligent Document Q&A</h3>
-            <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0 }}>
+            <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0, maxWidth: '280px', lineHeight: '1.4' }}>
               {applicationDoc && checklistDoc ? (
-                <span>✅ Application • ✅ Checklist</span>
+                <span>
+                  <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={applicationDoc.originalName || applicationDoc.name}>
+                    ✅ {applicationDoc.originalName || applicationDoc.name || 'Application'}
+                  </span>
+                  <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={checklistDoc.originalName || checklistDoc.name}>
+                    ✅ {checklistDoc.originalName || checklistDoc.name || 'Checklist'}
+                  </span>
+                </span>
+              ) : applicationDoc ? (
+                <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={applicationDoc.originalName || applicationDoc.name}>
+                  ✅ {applicationDoc.originalName || applicationDoc.name || 'Application'} • ⚠️ No checklist
+                </span>
               ) : document ? (
                 `Context: ${document.originalName}`
               ) : (

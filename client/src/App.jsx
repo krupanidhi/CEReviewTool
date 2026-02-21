@@ -7,7 +7,7 @@ import ChecklistComparison from './components/ChecklistComparison'
 import Settings from './components/Settings'
 import ApplicationPageViewer from './components/ApplicationPageViewer'
 import LogViewer from './components/LogViewer'
-import { getConfig } from './services/api'
+import { getConfig, getDocumentById, getStoredChecklists, loadStoredChecklist } from './services/api'
 import { MessageSquare } from 'lucide-react'
 
 function App() {
@@ -97,7 +97,7 @@ function App() {
       if (!selectedSections || selectedSections.length === 0) {
         const comparisonSections = data.comparison?.sections || []
         const sectionTitles = [...new Set(comparisonSections.map(s => {
-          const match = (s.checklistSection || '').match(/^(\d+)\./)
+          const match = (s.checklistSection || '').match(/^(\d+)\./) 
           return match ? `${match[1]}.` : null
         }).filter(Boolean))]
         selectedSections = sectionTitles.map(title => ({
@@ -120,6 +120,71 @@ function App() {
       }
       setComparisonResult(result)
       setActiveTab('report')
+
+      // Load application extraction data + matching checklist into chat context (async, non-blocking)
+      // This does NOT affect the comparison result or any rules/prompts — only populates the chat panel
+      ;(async () => {
+        try {
+          let appDoc = null
+          let clDoc = null
+
+          // 1. Load raw application extraction data by applicationId
+          if (applicationId) {
+            try {
+              const docResult = await getDocumentById(applicationId)
+              if (docResult?.document?.analysis?.data) {
+                appDoc = {
+                  name: appName,
+                  originalName: docResult.document.originalName || appName,
+                  data: docResult.document.analysis.data,
+                  analysis: docResult.document.analysis
+                }
+              }
+            } catch (e) {
+              console.warn('⚠️ Could not load application extraction for chat:', e.message)
+            }
+          }
+
+          // 2. Find and load the matching stored checklist by name
+          if (checklistName) {
+            try {
+              const storedResult = await getStoredChecklists()
+              const checklists = storedResult?.checklists || []
+              const match = checklists.find(c =>
+                (c.originalName || '').toLowerCase() === checklistName.toLowerCase() ||
+                (c.displayName || '').toLowerCase() === checklistName.toLowerCase()
+              )
+              if (match) {
+                const clResult = await loadStoredChecklist(match.id)
+                if (clResult?.data) {
+                  clDoc = {
+                    name: checklistName,
+                    originalName: clResult.originalName || checklistName,
+                    data: clResult.data,
+                    analysis: { data: clResult.data }
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('⚠️ Could not load checklist for chat:', e.message)
+            }
+          }
+
+          // Only update chat context if we found at least the application
+          if (appDoc || clDoc) {
+            setChatDocuments({
+              application: appDoc,
+              checklist: clDoc
+            })
+            console.log('💬 Chat context loaded from dashboard:', {
+              application: appDoc ? appDoc.originalName : '(not available)',
+              checklist: clDoc ? clDoc.originalName : '(not available)'
+            })
+          }
+        } catch (e) {
+          console.warn('⚠️ Failed to load chat context from dashboard:', e.message)
+        }
+      })()
     }
   }
 
@@ -349,6 +414,7 @@ function App() {
               document={selectedDocument}
               applicationDoc={chatDocuments.application}
               checklistDoc={chatDocuments.checklist}
+              comparisonResult={comparisonResult}
             />
           </div>
         </div>
