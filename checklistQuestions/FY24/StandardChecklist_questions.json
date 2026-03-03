@@ -3,34 +3,25 @@
     {
       "number": 1,
       "question": "Does the application contain all required attachments listed in the guidance?",
-      "section": "Unknown",
+      "section": "Completeness Checklist",
       "originalNumber": 1,
-      "source": "document_intelligence",
       "suggestedResources": "",
       "requiresSAAT": false,
-      "pageReference": 1
+      "source": "openai_extraction",
+      "pageReference": null
     },
     {
       "number": 2,
       "question": "Is the applicant an eligible entity as mentioned in the guidance (e.g. non-profit, governmental unit)?",
-      "section": "Unknown",
+      "section": "Eligibility Checklist",
       "originalNumber": 2,
-      "source": "document_intelligence",
       "suggestedResources": "",
       "requiresSAAT": false,
-      "pageReference": 1
+      "source": "openai_extraction",
+      "pageReference": null
     }
   ],
-  "metadata": {
-    "Announcement Name": "Service Area Competition",
-    "Grant (#)": "H80CS00415",
-    "Announcement (#)": "HRSA-24-067",
-    "Funding Cycle Code": "9194",
-    "Completion Status": "Complete",
-    "Program Specific Recommendation": "Eligible",
-    "Name": "Christina James Justification:",
-    "Date": "8/30/2023 12:39:53 PM",
-    "Recommendation": "Eligible"
-  },
-  "parsedAt": "2026-02-17T01:19:25.087Z"
+  "metadata": {},
+  "parsedAt": "2026-02-20T18:14:34.791Z",
+  "source": "openai_extraction"
 }

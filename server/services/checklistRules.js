@@ -154,6 +154,7 @@ const LEGACY_PROGRAM_SPECIFIC_RULES = [
     lookFor: ['SF-424A'],
     saatCheck: 'funding_distribution',
     dependsOn: { question: 10, requiredAnswer: 'Yes' },
+    complianceGuidance: 'This question checks whether the applicant maintains the same PROPORTIONAL funding distribution across population types (CHC, MSAW, HP, RPH) as the SAAT — NOT whether the dollar amounts match exactly. Compare which categories have non-zero funding in the SAAT vs. the application. For example, if the SAAT shows 100% CHC and $0 for MSAW/HP/RPH, and the applicant also requests only CHC funding (regardless of the exact dollar amount), the distribution is maintained. Answer Yes if the same categories are funded (non-zero) in both SAAT and the application. The total dollar amount comparison is handled by Q13, not Q14.',
     contentPattern: /(?:current\s*funding\s*distribution|maintain.*funding.*(?:CHC|MSAW|HP|RPH))/i,
     description: 'Maintains current funding distribution (CHC, MSAW, HP, RPH) from SAAT'
   },
@@ -748,6 +749,8 @@ function analyzeApplicantType(applicantProfile, applicationData, appIndex) {
     isCompetingContinuation: false, // explicit flag — when true, isNew and isCompetingSupplement MUST be false
     isPublicAgency: false,
     isNonprofit: false,
+    isTribal: false,        // Tribal organization — eligible entity but NOT a "public agency" for Co-Applicant Agreement purposes
+    isUrbanIndian: false,   // Urban Indian organization — eligible entity but NOT a "public agency" for Co-Applicant Agreement purposes
     requestsRPH: false,
     requestsHP: false,
     requestsMSAW: false,
@@ -761,9 +764,13 @@ function analyzeApplicantType(applicantProfile, applicationData, appIndex) {
     flags.isPublicAgency = true
     flags._sources.isPublicAgency = `applicantProfile.organizationType: "${applicantProfile.organizationType}"`
   }
-  if (/\btribal\b/i.test(orgType) || /\bindian\b/i.test(orgType)) {
-    flags.isPublicAgency = true // Tribal orgs are treated as public agencies
-    flags._sources.isPublicAgency = `applicantProfile.organizationType: "${applicantProfile.organizationType}" (Tribal)`
+  if (/\btribal\b/i.test(orgType)) {
+    flags.isTribal = true
+    flags._sources.isTribal = `applicantProfile.organizationType: "${applicantProfile.organizationType}"`
+  }
+  if (/urban\s*indian/i.test(orgType) || (/\bindian\b/i.test(orgType) && !/\btribal\b/i.test(orgType))) {
+    flags.isUrbanIndian = true
+    flags._sources.isUrbanIndian = `applicantProfile.organizationType: "${applicantProfile.organizationType}"`
   }
   if (/non-?profit/i.test(orgType) || /501\s*c/i.test(orgType)) {
     flags.isNonprofit = true
@@ -773,7 +780,8 @@ function analyzeApplicantType(applicantProfile, applicationData, appIndex) {
   // Use profile flags if already set
   if (applicantProfile?.isPublicAgency) flags.isPublicAgency = true
   if (applicantProfile?.isNonprofit) flags.isNonprofit = true
-  if (applicantProfile?.isTribal) { flags.isPublicAgency = true }
+  if (applicantProfile?.isTribal) { flags.isTribal = true }
+  if (applicantProfile?.isUrbanIndian) { flags.isUrbanIndian = true }
   if (applicantProfile?.isNewApplicant) {
     flags.isNew = true
     flags._sources.isNew = `applicantProfile.isNewApplicant`
@@ -842,14 +850,16 @@ function analyzeApplicantType(applicantProfile, applicationData, appIndex) {
             flags.isPublicAgency = true
             flags._sources.isPublicAgency = `Form 1A (page ${form1aPage}): Business Entity = "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`
             console.log(`   📋 Form 1A Business Entity: "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`)
-          } else if (/\btribal\b/i.test(val)) {
-            flags.isPublicAgency = true
-            flags._sources.isPublicAgency = `Form 1A (page ${form1aPage}): Business Entity = "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`
-            console.log(`   📋 Form 1A Business Entity: "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`)
+          } else if (/\btribal\b/i.test(val) && !/urban/i.test(val)) {
+            flags.isTribal = true
+            flags.isPublicAgency = false
+            flags._sources.isTribal = `Form 1A (page ${form1aPage}): Business Entity = "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`
+            console.log(`   📋 Form 1A Business Entity: "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}" (Tribal — not public agency)`)
           } else if (/urban\s*indian/i.test(val)) {
-            flags.isPublicAgency = true
-            flags._sources.isPublicAgency = `Form 1A (page ${form1aPage}): Business Entity = "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`
-            console.log(`   📋 Form 1A Business Entity: "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`)
+            flags.isUrbanIndian = true
+            flags.isPublicAgency = false
+            flags._sources.isUrbanIndian = `Form 1A (page ${form1aPage}): Business Entity = "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}"`
+            console.log(`   📋 Form 1A Business Entity: "${match.replace(/\[\s*X\s*\]\s*/i, '').trim()}" (Urban Indian — not public agency)`)
           }
         }
       }
@@ -861,20 +871,29 @@ function analyzeApplicantType(applicantProfile, applicationData, appIndex) {
       console.log(`   📄 SF-424 found on page(s) ${sf424.pageNums.join(', ')} — reading for applicant/submission type`)
 
       // Type of Applicant from SF-424 — secondary to Form 1A Business Entity
+      // IMPORTANT: Tribal and Urban Indian organizations are NOT public agencies.
+      // Only government/county/city/state/municipal entities are public agencies.
+      // The SF-424 "Type of Applicant" field may say "Urban Indian Organization",
+      // "Indian/Native American Tribal Government", etc. — these are eligible
+      // entities but NOT public agencies for Co-Applicant Agreement (Q2) purposes.
       const typeMatch = sf424.text.match(/Type\s+of\s+Applicant[^:]*:\s*([^\n]+)/i)
       if (typeMatch) {
         const typeVal = typeMatch[1].trim()
-        if (/government|county|city|state|municipal|public/i.test(typeVal)) {
+        // Check for Tribal/Urban Indian FIRST (before public/government check)
+        // to avoid false-positive on "Indian/Native American Tribal Government"
+        if (/urban\s*indian/i.test(typeVal)) {
+          flags.isUrbanIndian = true
+          if (!flags._sources.isUrbanIndian) flags._sources.isUrbanIndian = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}"`
+        } else if (/\btribal\b|indian/i.test(typeVal)) {
+          flags.isTribal = true
+          if (!flags._sources.isTribal) flags._sources.isTribal = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}"`
+        } else if (/government|county|city|state|municipal|public/i.test(typeVal)) {
           flags.isPublicAgency = true
           if (!flags._sources.isPublicAgency) flags._sources.isPublicAgency = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}"`
         }
         if (/non-?profit|501c/i.test(typeVal)) {
           flags.isNonprofit = true
           if (!flags._sources.isNonprofit) flags._sources.isNonprofit = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}"`
-        }
-        if (/tribal|indian/i.test(typeVal)) {
-          flags.isPublicAgency = true
-          if (!flags._sources.isPublicAgency) flags._sources.isPublicAgency = `SF-424 (page ${sf424.pageNums[0]}): Type of Applicant = "${typeVal}" (Tribal)`
         }
       }
 
@@ -1013,7 +1032,7 @@ function analyzeApplicantType(applicantProfile, applicationData, appIndex) {
     flags.isCompetingSupplement = false
   }
 
-  console.log(`👤 Applicant flags: new=${flags.isNew}, competingSupplement=${flags.isCompetingSupplement}, competingContinuation=${flags.isCompetingContinuation}, publicAgency=${flags.isPublicAgency}, nonprofit=${flags.isNonprofit}, RPH=${flags.requestsRPH}, HP=${flags.requestsHP}, MSAW=${flags.requestsMSAW}`)
+  console.log(`👤 Applicant flags: new=${flags.isNew}, competingSupplement=${flags.isCompetingSupplement}, competingContinuation=${flags.isCompetingContinuation}, publicAgency=${flags.isPublicAgency}, nonprofit=${flags.isNonprofit}, tribal=${flags.isTribal}, urbanIndian=${flags.isUrbanIndian}, RPH=${flags.requestsRPH}, HP=${flags.requestsHP}, MSAW=${flags.requestsMSAW}`)
   if (Object.keys(flags._sources).length > 0) {
     console.log(`   Sources: ${JSON.stringify(flags._sources)}`)
   }
@@ -1030,54 +1049,59 @@ function analyzeApplicantType(applicantProfile, applicationData, appIndex) {
 function evaluateCondition(rule, applicantFlags) {
   if (!rule.condition) return { applicable: true }
 
-  const { type, value, naIfNot } = rule.condition
+  // Support compound conditions: if condition is an array, ALL must be met (AND logic)
+  const conditions = Array.isArray(rule.condition) ? rule.condition : [rule.condition]
 
-  let conditionMet = false
+  const sources = applicantFlags._sources || {}
+  const sourceDetail = sources.applicationType || sources.isNew || sources.isCompetingSupplement || ''
 
-  switch (type) {
-    case 'applicant_type':
-      if (value === 'public_agency') conditionMet = applicantFlags.isPublicAgency
-      break
-    case 'applicant_status':
-      if (value === 'new') conditionMet = applicantFlags.isNew
-      if (value === 'new_or_supplemental') conditionMet = applicantFlags.isNew || applicantFlags.isCompetingSupplement
-      if (value === 'new_or_competing') conditionMet = applicantFlags.isNew || applicantFlags.isCompetingSupplement
-      break
-    case 'funding_type':
-      if (value === 'rph') conditionMet = applicantFlags.requestsRPH
-      if (value === 'ph' || value === 'phpc') conditionMet = applicantFlags.requestsPHPC || applicantFlags.requestsRPH
-      if (value === 'hp_or_rph') conditionMet = applicantFlags.requestsHP || applicantFlags.requestsRPH
-      break
-    default:
-      conditionMet = true
+  // Reason lookup for each condition type:value pair
+  const reasonLookup = {
+    'applicant_type:public_agency': `This question applies only to public agency applicants.${sources.isPublicAgency ? ' ' + sources.isPublicAgency + '.' : applicantFlags.isTribal ? ` The applicant is a Tribal organization (${sources.isTribal || 'per Form 1A/SF-424'}), which is an eligible entity but not a public agency for Co-Applicant Agreement purposes.` : applicantFlags.isUrbanIndian ? ` The applicant is an Urban Indian organization (${sources.isUrbanIndian || 'per Form 1A/SF-424'}), which is an eligible entity but not a public agency for Co-Applicant Agreement purposes.` : ' The applicant is not identified as a public agency.'}`,
+    'applicant_status:new': `This question applies only to new applicants.${sourceDetail ? ' ' + sourceDetail + '.' : ' The applicant is not a new applicant.'}`,
+    'applicant_status:new_or_supplemental': `This question applies only to new (Type 1) or supplemental (Type 3) applicants; not required for competing continuation (Type 2).${sourceDetail ? ' ' + sourceDetail + '.' : ''}`,
+    'applicant_status:new_or_competing': `This question applies only to new or competing supplement applicants.${sourceDetail ? ' ' + sourceDetail + '.' : ''}`,
+    'funding_type:rph': `This question applies only to applicants requesting RPH (Residents of Public Housing) funding.${sources.requestsRPH ? ' ' + sources.requestsRPH + '.' : ' The Summary Page does not indicate RPH funding is requested.'}`,
+    'funding_type:rph_or_ph': `This question applies only to applicants requesting RPH or PH funding.${sources.requestsRPH || sources.requestsHP ? '' : ' The Summary Page does not indicate RPH or PH funding is requested.'}`,
+    'funding_type:ph': `This question applies only to applicants requesting PHPC/RPH (Public Housing Primary Care) funding.${sources.requestsPHPC || sources.requestsRPH ? ' ' + (sources.requestsPHPC || sources.requestsRPH) + '.' : ' The Summary Page does not indicate PHPC/RPH funding is requested.'}`,
+    'funding_type:phpc': `This question applies only to applicants requesting PHPC (Public Housing Primary Care) funding.${sources.requestsPHPC || sources.requestsRPH ? ' ' + (sources.requestsPHPC || sources.requestsRPH) + '.' : ' The Summary Page does not indicate PHPC funding is requested.'}`,
+    'funding_type:hp_or_rph': `This question applies only to applicants requesting HP (Homeless Population) and/or RPH funding.${sources.requestsHP || sources.requestsRPH ? '' : ' The Summary Page does not indicate HP or RPH funding is requested.'}`,
   }
 
-  if (!conditionMet && naIfNot) {
-    // Human-friendly reason with source evidence from the specific form pages
-    const sources = applicantFlags._sources || {}
-    const sourceDetail = sources.applicationType || sources.isNew || sources.isCompetingSupplement || ''
+  for (const cond of conditions) {
+    const { type, value, naIfNot } = cond
+    let conditionMet = false
 
-    const reasons = {
-      'applicant_type:public_agency': `This question applies only to public agency applicants.${sources.isPublicAgency ? ' ' + sources.isPublicAgency + '.' : ' The applicant is not identified as a public agency.'}`,
-      'applicant_status:new': `This question applies only to new applicants.${sourceDetail ? ' ' + sourceDetail + '.' : ' The applicant is not a new applicant.'}`,
-      'applicant_status:new_or_supplemental': `This question applies only to new (Type 1) or supplemental (Type 3) applicants; not required for competing continuation (Type 2).${sourceDetail ? ' ' + sourceDetail + '.' : ''}`,
-      'applicant_status:new_or_competing': `This question applies only to new or competing supplement applicants.${sourceDetail ? ' ' + sourceDetail + '.' : ''}`,
-      'funding_type:rph': `This question applies only to applicants requesting RPH (Residents of Public Housing) funding.${sources.requestsRPH ? ' ' + sources.requestsRPH + '.' : ' The Summary Page does not indicate RPH funding is requested.'}`,
-      'funding_type:rph_or_ph': `This question applies only to applicants requesting RPH or PH funding.${sources.requestsRPH || sources.requestsHP ? '' : ' The Summary Page does not indicate RPH or PH funding is requested.'}`,
-      'funding_type:ph': `This question applies only to applicants requesting PHPC/RPH (Public Housing Primary Care) funding.${sources.requestsPHPC || sources.requestsRPH ? ' ' + (sources.requestsPHPC || sources.requestsRPH) + '.' : ' The Summary Page does not indicate PHPC/RPH funding is requested.'}`,
-      'funding_type:phpc': `This question applies only to applicants requesting PHPC (Public Housing Primary Care) funding.${sources.requestsPHPC || sources.requestsRPH ? ' ' + (sources.requestsPHPC || sources.requestsRPH) + '.' : ' The Summary Page does not indicate PHPC funding is requested.'}`,
-      'funding_type:hp_or_rph': `This question applies only to applicants requesting HP (Homeless Population) and/or RPH funding.${sources.requestsHP || sources.requestsRPH ? '' : ' The Summary Page does not indicate HP or RPH funding is requested.'}`,
-    }
-    const reason = reasons[`${type}:${value}`] || `This question does not apply to this applicant (${type}: ${value}).`
-
-    // Extract page numbers from source strings for UI page links
-    const pageRefs = []
-    for (const src of Object.values(sources)) {
-      const pageMatch = (src || '').match(/page\s+(\d+)/i)
-      if (pageMatch) pageRefs.push(parseInt(pageMatch[1]))
+    switch (type) {
+      case 'applicant_type':
+        if (value === 'public_agency') conditionMet = applicantFlags.isPublicAgency
+        break
+      case 'applicant_status':
+        if (value === 'new') conditionMet = applicantFlags.isNew
+        if (value === 'new_or_supplemental') conditionMet = applicantFlags.isNew || applicantFlags.isCompetingSupplement
+        if (value === 'new_or_competing') conditionMet = applicantFlags.isNew || applicantFlags.isCompetingSupplement
+        break
+      case 'funding_type':
+        if (value === 'rph') conditionMet = applicantFlags.requestsRPH
+        if (value === 'ph' || value === 'phpc') conditionMet = applicantFlags.requestsPHPC || applicantFlags.requestsRPH
+        if (value === 'hp_or_rph') conditionMet = applicantFlags.requestsHP || applicantFlags.requestsRPH
+        break
+      default:
+        conditionMet = true
     }
 
-    return { applicable: false, reason, pageReferences: [...new Set(pageRefs)] }
+    if (!conditionMet && naIfNot) {
+      const reason = reasonLookup[`${type}:${value}`] || `This question does not apply to this applicant (${type}: ${value}).`
+
+      // Extract page numbers from source strings for UI page links
+      const pageRefs = []
+      for (const src of Object.values(sources)) {
+        const pageMatch = (src || '').match(/page\s+(\d+)/i)
+        if (pageMatch) pageRefs.push(parseInt(pageMatch[1]))
+      }
+
+      return { applicable: false, reason, pageReferences: [...new Set(pageRefs)] }
+    }
   }
 
   return { applicable: true }

@@ -1,0 +1,102 @@
+[
+  {
+    "questionNumber": 1,
+    "question": "Does the application contain all required attachments listed in the guidance?",
+    "section": "Standard Review Checklist",
+    "answerStrategy": "completeness_check",
+    "suggestedResources": "",
+    "lookFor": [
+      "Attachment 1: Service Area Map and Table",
+      "Attachment 2: Bylaws",
+      "Attachment 3: Project Organizational Chart",
+      "Attachment 4: Position Descriptions for Key Management Staff",
+      "Attachment 5: Biographical Sketches for Key Management Staff",
+      "Attachment 9: Collaboration Documentation",
+      "Attachment 10: Sliding Fee Discount Schedule(s)"
+    ],
+    "conditionalAttachments": [
+      {
+        "name": "Attachment 6: Co-Applicant Agreement",
+        "lookFor": [
+          "Attachment 6: Co-Applicant Agreement"
+        ],
+        "condition": {
+          "type": "applicant_type",
+          "value": "public_agency"
+        },
+        "description": "Required for public center applicants that have a co-applicant board"
+      },
+      {
+        "name": "Attachment 7: Summary of Contracts and Agreements",
+        "lookFor": [
+          "Attachment 7: Summary of Contracts and Agreements"
+        ],
+        "condition": {
+          "type": "applicant_status",
+          "value": "new"
+        },
+        "description": "Required for new applicants if applicable"
+      },
+      {
+        "name": "Attachment 8: Articles of Incorporation",
+        "lookFor": [
+          "Attachment 8: Articles of Incorporation"
+        ],
+        "condition": {
+          "type": "applicant_status",
+          "value": "new"
+        },
+        "description": "Required for new applicants if applicable"
+      },
+      {
+        "name": "Attachment 11: Evidence of Nonprofit or Public Center Status",
+        "lookFor": [
+          "Attachment 11: Evidence of Nonprofit or Public Center Status"
+        ],
+        "condition": {
+          "type": "applicant_status",
+          "value": "new"
+        },
+        "description": "Required for new applicants if applicable"
+      },
+      {
+        "name": "Attachment 12: Operational Plan",
+        "lookFor": [
+          "Attachment 12: Operational Plan"
+        ],
+        "condition": {
+          "type": "applicant_status",
+          "value": "new"
+        },
+        "description": "Required for new applicants if applicable"
+      },
+      {
+        "name": "Attachment 13: Other Relevant Documents",
+        "lookFor": [
+          "Attachment 13: Other Relevant Documents"
+        ],
+        "condition": {
+          "type": "applicant_status",
+          "value": "new"
+        },
+        "description": "Required for new applicants if applicable"
+      }
+    ],
+    "complianceGuidance": "Per User Guide section 2.3.2, the following attachments are required for ALL application types: Attachment 1 (Service Area Map and Table), Attachment 2 (Bylaws), Attachment 3 (Project Organizational Chart), Attachment 4 (Position Descriptions for Key Management Staff), Attachment 5 (Biographical Sketches for Key Management Staff), Attachment 9 (Collaboration Documentation), and Attachment 10 (Sliding Fee Discount Schedule(s)). Attachment 6 (Co-Applicant Agreement) is required for public center applicants with a co-applicant board. Attachments 7, 8, 11, 12, and 13 are required for new applicants (Type 1) if applicable. All required attachments must be uploaded in the Appendices section for the application to be considered complete.",
+    "condition": null,
+    "dependsOn": null,
+    "description": "Checks that all required attachments are present according to application type and applicant status."
+  },
+  {
+    "questionNumber": 2,
+    "question": "Is the applicant an eligible entity as mentioned in the guidance (e.g. non-profit, governmental unit)?",
+    "section": "Standard Review Checklist",
+    "answerStrategy": "eligibility_check",
+    "suggestedResources": "",
+    "lookFor": [],
+    "complianceGuidance": "The applicant must be an eligible entity as defined in the User Guide: a public or private nonprofit entity, including tribal, faith-based, or community-based organizations, or a governmental unit. The applicant's business entity type must align with the type entered in SAM.gov and selected in Form 1A - General Information Worksheet. If 'Other' is selected, the applicant must specify the organization type. Tribal or Urban Indian entities that meet the definition for a public or private entity should select the Tribal or Urban Indian category. Only eligible entities may apply for Health Center Program funding.",
+    "condition": null,
+    "dependsOn": null,
+    "description": "Checks that the applicant is an eligible entity type as defined in the guidance."
+  }
+]

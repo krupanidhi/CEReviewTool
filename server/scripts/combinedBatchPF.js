@@ -73,7 +73,7 @@ export async function prefundingValidate(pfText, appName, baseName, yearCode, ap
  * Matches the prompt structure and response format from batch-processor-optimized.js.
  */
 async function runValidation(applicationText, rules, ctx) {
-  const { CONFIG, log, logS } = ctx
+  const { CONFIG, log, logS, logW } = ctx
 
   const PF_SECTIONS = ctx.PF_SECTIONS
   log(`🚀 Prefunding: ALL ${PF_SECTIONS.length} sections in ONE call...`)
@@ -181,15 +181,40 @@ CRITICAL: Return exactly ${totalReqs} validation objects.`
   log(`  🌐 OpenAI Endpoint: ${endpoint}`)
   const start = Date.now()
 
-  const response = await axios.post(endpoint, {
-    messages: [{ role: 'user', content: promptText }],
-    response_format: { type: 'json_object' },
-    temperature: 0.1,
-    max_tokens: 16000
-  }, {
-    headers: { 'Content-Type': 'application/json', 'api-key': CONFIG.AZURE_OPENAI_KEY },
-    timeout: 5 * 60 * 1000
-  })
+  const MAX_RETRIES = 6
+  const RETRYABLE = new Set([429, 500, 502, 503, 504])
+  let response = null
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      log(`  📤 PF API attempt ${attempt}/${MAX_RETRIES} — sending request (prompt: ${(promptText.length / 1024).toFixed(0)}KB)...`)
+      response = await axios.post(endpoint, {
+        messages: [{ role: 'user', content: promptText }],
+        response_format: { type: 'json_object' },
+        temperature: 0.1,
+        max_tokens: 16000
+      }, {
+        headers: { 'Content-Type': 'application/json', 'api-key': CONFIG.AZURE_OPENAI_KEY },
+        timeout: 5 * 60 * 1000
+      })
+      log(`  ✅ PF API attempt ${attempt} succeeded — status ${response.status}`)
+      break // success
+    } catch (err) {
+      const status = err.response?.status
+      const retryAfterRaw = err.response?.headers?.['retry-after']
+      const errorBody = err.response?.data?.error?.message || err.response?.data?.message || ''
+      log(`  ❌ PF API attempt ${attempt}/${MAX_RETRIES} — HTTP ${status || 'N/A'}, Retry-After: ${retryAfterRaw || 'none'}, error: ${errorBody || err.message}`)
+      if (status && RETRYABLE.has(status) && attempt < MAX_RETRIES) {
+        const retryAfter = parseInt(retryAfterRaw, 10)
+        const backoffSec = Math.min(15 * Math.pow(2, attempt - 1), 120)
+        const waitSec = retryAfter > 0 ? Math.max(retryAfter, 10) : backoffSec
+        logW(`  ⏳ Waiting ${waitSec}s before retry ${attempt + 1}/${MAX_RETRIES}...`)
+        await new Promise(r => setTimeout(r, waitSec * 1000))
+      } else {
+        throw err // non-retryable or last attempt — propagate original error
+      }
+    }
+  }
 
   let content = response.data.choices[0].message.content
   const result = JSON.parse(content)
@@ -307,7 +332,11 @@ async function writeAppResultJSON(appName, sectionResults, PF_RESULTS_DIR, appRe
       return
     }
 
-    await fs.mkdir(PF_RESULTS_DIR, { recursive: true })
+    // Derive FY/NOFO subdir from application name (e.g., "HRSA-26-006_..." → "FY26/HRSA-26-006")
+    const nofoMatch = appName.match(/HRSA[-_\s](\d{2})[-_\s](\d{3})/i)
+    const subdir = nofoMatch ? `FY${nofoMatch[1]}/HRSA-${nofoMatch[1]}-${nofoMatch[2]}` : null
+    const destDir = subdir ? path.join(PF_RESULTS_DIR, subdir) : PF_RESULTS_DIR
+    await fs.mkdir(destDir, { recursive: true })
 
     // Extract application number from filename (e.g., "Application-242744" → "242744")
     const appNumMatch = appName.match(/Application[- _]?(\d+)/i)
@@ -322,7 +351,7 @@ async function writeAppResultJSON(appName, sectionResults, PF_RESULTS_DIR, appRe
 
     const safeBaseName = appName.replace(/\.pdf$/i, '').replace(/[^a-zA-Z0-9_\-]/g, '_')
     const pfFileName = `${safeBaseName}.json`
-    const outputPath = path.join(PF_RESULTS_DIR, pfFileName)
+    const outputPath = path.join(destDir, pfFileName)
     await fs.writeFile(outputPath, JSON.stringify(resultData, null, 2))
     logS(`PF result JSON → ${outputPath}`)
     appResult.pfOutputFile = pfFileName

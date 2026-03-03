@@ -6,6 +6,20 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 /**
+ * Derive a FY/NOFO subdirectory from an application name or filename.
+ * e.g. "HRSA-26-006_SomeName_Application-243164.pdf" → "FY26/HRSA-26-006"
+ *      "Application-242656.pdf"                      → null (no NOFO detected)
+ */
+function deriveSubdir(name) {
+  if (!name) return null
+  const m = String(name).match(/HRSA[-_\s](\d{2})[-_\s](\d{3})/i)
+  if (!m) return null
+  const yearCode = m[1]  // e.g. "26"
+  const nofo = `HRSA-${yearCode}-${m[2]}`  // e.g. "HRSA-26-006"
+  return `FY${yearCode}/${nofo}`  // e.g. "FY26/HRSA-26-006"
+}
+
+/**
  * ApplicationProcessingService
  * Manages background processing of multiple applications against checklists.
  * Stores processed results per-application for dashboard display and cache management.
@@ -47,21 +61,47 @@ class ApplicationProcessingService {
     await fs.writeFile(this.indexFile, JSON.stringify(entries, null, 2))
   }
 
+  /**
+   * Resolve the full file path for an application's data JSON.
+   * Uses the subdir field from index metadata if present, otherwise falls back to root.
+   */
+  _resolveDataPath(id) {
+    const meta = this.applications.get(id)
+    const subdir = meta?.subdir
+    if (subdir) {
+      return join(this.storageDir, subdir, `${id}.json`)
+    }
+    return join(this.storageDir, `${id}.json`)
+  }
+
   async saveApplicationData(id, data) {
-    const filePath = join(this.storageDir, `${id}.json`)
+    const filePath = this._resolveDataPath(id)
+    await fs.mkdir(join(filePath, '..'), { recursive: true })
     await fs.writeFile(filePath, JSON.stringify(data, null, 2))
   }
 
   async loadApplicationData(id) {
-    const filePath = join(this.storageDir, `${id}.json`)
-    const data = await fs.readFile(filePath, 'utf-8')
-    return JSON.parse(data)
+    const filePath = this._resolveDataPath(id)
+    try {
+      const data = await fs.readFile(filePath, 'utf-8')
+      return JSON.parse(data)
+    } catch {
+      // Backward compat: try root if subdir path fails
+      const rootPath = join(this.storageDir, `${id}.json`)
+      const data = await fs.readFile(rootPath, 'utf-8')
+      return JSON.parse(data)
+    }
   }
 
   async deleteApplicationData(id) {
-    const filePath = join(this.storageDir, `${id}.json`)
+    const filePath = this._resolveDataPath(id)
     try {
       await fs.unlink(filePath)
+    } catch { /* file may not exist */ }
+    // Also try root (backward compat for old flat files)
+    const rootPath = join(this.storageDir, `${id}.json`)
+    try {
+      await fs.unlink(rootPath)
     } catch { /* file may not exist */ }
   }
 
@@ -111,10 +151,13 @@ class ApplicationProcessingService {
   async queueApplication({ applicationName, applicationData, checklistData, selectedSections, checklistName }) {
     const id = this.generateId(applicationName)
 
+    const subdir = deriveSubdir(applicationName)
+
     const meta = {
       id,
       name: applicationName,
       checklistName: checklistName || 'Unknown Checklist',
+      subdir: subdir || null,
       status: 'queued', // queued | processing | completed | error
       createdAt: new Date().toISOString(),
       processedAt: null,
@@ -216,11 +259,14 @@ class ApplicationProcessingService {
       dataToSave.metadata.applicationId = applicationId
     }
 
+    const subdir = deriveSubdir(applicationName)
+
     const meta = {
       id,
       name: applicationName,
       checklistName: checklistName || 'Unknown Checklist',
       applicationId: applicationId || null,
+      subdir: subdir || null,
       status: 'completed',
       createdAt: new Date().toISOString(),
       processedAt: new Date().toISOString(),
@@ -260,6 +306,83 @@ class ApplicationProcessingService {
     await this.saveIndex()
     console.log(`🗑️ Deleted all ${count} processed applications`)
     return count
+  }
+
+  /**
+   * Delete processed applications matching a FY and/or NOFO filter.
+   * Also removes companion _checklist_comparison.json files from the same subdir.
+   * CE-only — does NOT touch pf-results/.
+   * @param {{ fy?: string, nofo?: string }} filter
+   * @returns {{ deleted: number, companionFiles: number }}
+   */
+  async deleteByFilter({ fy, nofo } = {}) {
+    if (!fy && !nofo) throw new Error('At least one of fy or nofo must be provided')
+
+    // Normalize FY: accept "FY26", "fy26", "26" → "FY26"
+    const normalizedFY = fy ? `FY${String(fy).replace(/^fy/i, '').trim()}` : null
+
+    // Build subdir prefix to match: "FY26" or "FY26/HRSA-26-006"
+    let subdirPrefix = normalizedFY || ''
+    if (nofo) {
+      subdirPrefix = subdirPrefix ? `${subdirPrefix}/${nofo}` : nofo
+    }
+
+    // Find matching entries in index by subdir or name
+    const toDelete = []
+    for (const [id, meta] of this.applications) {
+      let matches = false
+      if (meta.subdir) {
+        // Match by subdir prefix (e.g. "FY26" matches "FY26/HRSA-26-006")
+        matches = meta.subdir.startsWith(subdirPrefix)
+      } else if (meta.name) {
+        // For apps without subdir, try matching FY/NOFO from the name
+        if (nofo && meta.name.includes(nofo)) matches = true
+        if (normalizedFY && !nofo) {
+          const yearCode = normalizedFY.replace('FY', '')
+          if (meta.name.includes(`HRSA-${yearCode}-`) || meta.name.includes(`HRSA_${yearCode}_`)) matches = true
+        }
+      }
+      if (matches) toDelete.push(id)
+    }
+
+    // Delete matching app_*.json data files
+    for (const id of toDelete) {
+      await this.deleteApplicationData(id)
+      this.applications.delete(id)
+    }
+
+    // Also clean up companion _checklist_comparison.json files in the target subdir
+    let companionCount = 0
+    const targetDir = subdirPrefix ? join(this.storageDir, subdirPrefix) : null
+    if (targetDir) {
+      try {
+        const scanDirs = [targetDir]
+        // If only FY specified (no NOFO), scan all NOFO subdirs under that FY
+        if (normalizedFY && !nofo) {
+          try {
+            const fyEntries = await fs.readdir(join(this.storageDir, normalizedFY), { withFileTypes: true })
+            for (const e of fyEntries) {
+              if (e.isDirectory()) scanDirs.push(join(this.storageDir, normalizedFY, e.name))
+            }
+          } catch { /* FY dir may not exist */ }
+        }
+        for (const dir of scanDirs) {
+          try {
+            const entries = await fs.readdir(dir)
+            for (const entry of entries) {
+              if (entry.endsWith('_checklist_comparison.json')) {
+                await fs.unlink(join(dir, entry)).catch(() => {})
+                companionCount++
+              }
+            }
+          } catch { /* dir may not exist */ }
+        }
+      } catch { /* ignore */ }
+    }
+
+    await this.saveIndex()
+    console.log(`🗑️ Deleted ${toDelete.length} processed apps + ${companionCount} checklist comparison files (filter: ${subdirPrefix})`)
+    return { deleted: toDelete.length, companionFiles: companionCount }
   }
 
   /**

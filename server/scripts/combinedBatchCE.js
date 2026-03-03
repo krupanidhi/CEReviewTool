@@ -349,13 +349,28 @@ async function cacheCEResults(appName, checklistName, compResult, selectedSectio
   } catch (err) { logE(`CE cache failed: ${err.message}`) }
 
   if (qaResults) {
-    await fs.mkdir(PROCESSED_APPS_DIR, { recursive: true })
+    // Derive FY/NOFO subdir from application name (e.g. "FY26/HRSA-26-006")
+    const subdir = deriveProcessedSubdir(appName)
+    const targetDir = subdir ? path.join(PROCESSED_APPS_DIR, subdir) : PROCESSED_APPS_DIR
+    await fs.mkdir(targetDir, { recursive: true })
     const sanitized = appName.replace(/[^a-zA-Z0-9.-]/g, '_')
     const ceChecklistFile = `${sanitized}_checklist_comparison.json`
-    await fs.writeFile(path.join(PROCESSED_APPS_DIR, ceChecklistFile),
+    const relPath = subdir ? path.join(subdir, ceChecklistFile) : ceChecklistFile
+    await fs.writeFile(path.join(targetDir, ceChecklistFile),
       JSON.stringify({ applicationName: appName, generatedAt: new Date().toISOString(), ...qaResults }, null, 2)).catch(() => {})
-    appResult.ceOutputFile = ceChecklistFile
+    appResult.ceOutputFile = relPath
   }
+}
+
+/**
+ * Derive FY/NOFO subdirectory from an application name.
+ * e.g. "HRSA-26-006_SomeName_Application-243164.pdf" → "FY26/HRSA-26-006"
+ */
+function deriveProcessedSubdir(name) {
+  if (!name) return null
+  const m = String(name).match(/HRSA[-_\s](\d{2})[-_\s](\d{3})/i)
+  if (!m) return null
+  return `FY${m[1]}/HRSA-${m[1]}-${m[2]}`
 }
 
 export { cacheCEResults as cacheCE }

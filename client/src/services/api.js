@@ -659,3 +659,127 @@ export async function extractApplicationFromFolder(relPath) {
     throw new Error(error.response?.data?.message || error.message || 'Failed to extract application')
   }
 }
+
+// ============================================================
+// Pre-Funding Review Results API
+// ============================================================
+
+/**
+ * List all cached PF results (metadata only) from pf-results/ FY/NOFO subdirs
+ * @returns {Promise<Object>} { success, results: [...], count }
+ */
+export async function listPfResults() {
+  try {
+    const response = await apiClient.get('/pf-results/list')
+    return response.data
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to list PF results')
+  }
+}
+
+/**
+ * Get pre-funding review results for an application by its application number
+ * @param {string} applicationNumber - The numeric application number (e.g., "243284")
+ * @returns {Promise<Object>} PF review results with sections, compliant/non-compliant items
+ */
+export async function getPfResults(applicationNumber) {
+  try {
+    const response = await apiClient.get(`/pf-results/${applicationNumber}`)
+    return response.data
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to fetch pre-funding review results')
+  }
+}
+
+// ============================================================
+// Pre-Funding Review Management API
+// ============================================================
+
+/**
+ * List available PF rule years
+ * @returns {Promise<Object>} Array of { year, fullYear, chaptersCount }
+ */
+export async function getPfRuleYears() {
+  try {
+    const response = await apiClient.get('/pf-review/rule-years')
+    return response.data
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to list PF rule years')
+  }
+}
+
+/**
+ * Load PF compliance rules for a specific year
+ * @param {string} year - Two-digit year (e.g., "26")
+ * @returns {Promise<Object>} { success, rules, year }
+ */
+export async function loadPfRules(year) {
+  try {
+    const response = await apiClient.get(`/pf-review/load-rules/${year}`)
+    return response.data
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to load PF rules')
+  }
+}
+
+/**
+ * Save PF compliance rules for a specific year
+ * @param {string} year - Two-digit year (e.g., "26")
+ * @param {Array} rules - Array of chapter objects
+ * @returns {Promise<Object>} Save result
+ */
+export async function savePfRules(year, rules) {
+  try {
+    const response = await apiClient.post(`/pf-review/save-rules/${year}`, { rules })
+    return response.data
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to save PF rules')
+  }
+}
+
+/**
+ * Extract compliance rules from manual PDF text using AI
+ * @param {string} content - Extracted text from the manual PDF
+ * @param {string} year - Optional year to auto-save rules
+ * @returns {Promise<Object>} { success, rules, usage }
+ */
+export async function extractPfRules(content, year = null) {
+  try {
+    const response = await apiClient.post('/pf-review/extract-rules', { content, year }, { timeout: 180000 })
+    return response.data
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to extract PF rules')
+  }
+}
+
+/**
+ * Run PF compliance analysis on an application
+ * @param {string} applicationContent - Extracted application text
+ * @param {Array} rules - Compliance rules array
+ * @param {string} applicationName - Application name for caching
+ * @returns {Promise<Object>} { success, results, usage }
+ */
+export async function runPfAnalysis(applicationContent, rules, applicationName) {
+  try {
+    const response = await apiClient.post('/pf-review/analyze', {
+      applicationContent, rules, applicationName
+    }, { timeout: 300000 })
+    return response.data
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to run PF analysis')
+  }
+}
+
+/**
+ * Parse a manual review Excel/text for PO comparison
+ * @param {string} content - Text content from the manual review file
+ * @returns {Promise<Object>} { success, elements, usage }
+ */
+export async function parsePfManualReview(content) {
+  try {
+    const response = await apiClient.post('/pf-review/parse-manual-review', { content }, { timeout: 120000 })
+    return response.data
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to parse manual review')
+  }
+}

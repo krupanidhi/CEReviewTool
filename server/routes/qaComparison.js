@@ -1160,11 +1160,18 @@ router.post('/analyze', async (req, res) => {
     const summary = calculateSummary(comparisonResults)
 
     // Log results
-    console.log('\n� Final Results:')
+    console.log('\n📋 Final Results:')
     comparisonResults.forEach(r => {
       console.log(`   Q${r.questionNumber}: ${r.aiAnswer} (${r.method || 'ai'}) → pages [${(r.pageReferences || []).join(', ')}]`)
     })
     console.log(`\n📊 Summary: ${summary.totalQuestions} questions — Yes: ${summary.yesCount}, No: ${summary.noCount}, N/A: ${summary.naCount}`)
+
+    // Log data conflicts if any
+    if (applicantProfile.dataConflicts && applicantProfile.dataConflicts.length > 0) {
+      console.log(`\n⚠️ DATA CONFLICTS DETECTED (${applicantProfile.dataConflicts.length}):`)
+      applicantProfile.dataConflicts.forEach(c => console.log(`   ${c.field}: ${c.message}`))
+    }
+
     console.log('🔍 ===== RULES-BASED QA COMPARISON COMPLETE =====\n')
 
     res.json({
@@ -1172,10 +1179,23 @@ router.post('/analyze', async (req, res) => {
       summary,
       results: comparisonResults,
       pageOffset: appIndex.pageOffset || 0,
+      dataConflicts: applicantProfile.dataConflicts || [],
+      applicantProfile: {
+        organizationName: applicantProfile.organizationName,
+        serviceAreaId: applicantProfile.serviceAreaId,
+        allServiceAreaIds: applicantProfile.allServiceAreaIds,
+        patientProjection: applicantProfile.patientProjection,
+        allPatientProjections: applicantProfile.allPatientProjections,
+        fundingRequested: applicantProfile.fundingRequested,
+        allFundingRequested: applicantProfile.allFundingRequested,
+      },
       saatInfo: saatData?.found ? {
         available: true,
         fundingOppNumber,
         fiscalYear,
+        matchedAreaId: saatData.matchedArea?.id || null,
+        matchMethod: saatData.matchMethod || null,
+        saIdConflict: saatData.saIdConflict || null,
         patientTarget: saatData.patientTarget,
         totalFunding: saatData.totalFunding,
         serviceTypes: saatData.serviceTypes,
@@ -1654,7 +1674,7 @@ ${answerSummaryLines.join('\n\n')}`
     const response = await client.getChatCompletions(deployment, [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
-    ], { temperature: 0.1, maxTokens: 1500 })
+    ], { temperature: 0, maxTokens: 1500 })
 
     const aiText = response.choices[0]?.message?.content || ''
     console.log(`   Prior answers AI response: ${aiText.length} chars, finishReason: ${response.choices[0]?.finishReason}`)
@@ -1696,6 +1716,52 @@ ${answerSummaryLines.join('\n\n')}`
 }
 
 // ─── Rules-Based AI Helpers ──────────────────────────────────────────────────
+
+/**
+ * Build descriptive "Unable to determine" evidence with an alert explaining
+ * WHY the AI couldn't answer and WHAT the reviewer should manually check.
+ * @param {object} q - The question object (number, question, rule, suggestedResources)
+ * @param {string} failReason - Why the AI failed ('no_response'|'ai_error'|'parse_error')
+ * @param {string} [errorDetail] - Optional error message detail
+ * @returns {{ evidence: string, reasoning: string }}
+ */
+function buildUnableToDetermineAlert(q, failReason, errorDetail) {
+  const qNum = q.number || q.questionNumber || '?'
+  const resources = q.suggestedResources || q.rule?.suggestedResources || ''
+  const guidance = q.rule?.complianceGuidance || ''
+  const lookFor = q.rule?.lookFor || []
+
+  const reasonMap = {
+    no_response: 'The AI analysis did not return a result for this question. This may be due to response truncation or the question being skipped in batch processing.',
+    ai_error: `The AI service encountered an error while analyzing this question${errorDetail ? ': ' + errorDetail : '.'}`,
+    parse_error: 'The AI returned a response that could not be parsed into a valid answer for this question.',
+  }
+
+  const alertReason = reasonMap[failReason] || reasonMap.no_response
+
+  // Build the "what to check" section from rule metadata
+  const checkItems = []
+  if (lookFor.length > 0) {
+    checkItems.push(`Review the following documents: ${lookFor.join(', ')}`)
+  }
+  if (resources) {
+    checkItems.push(`Suggested resources: ${resources}`)
+  }
+  if (guidance) {
+    // Truncate long guidance to first sentence for the alert
+    const firstSentence = guidance.split(/\.\s/)[0] + '.'
+    checkItems.push(`Compliance criteria: ${firstSentence}`)
+  }
+
+  const manualCheckSection = checkItems.length > 0
+    ? `\n\n🔍 MANUAL REVIEW NEEDED: ${checkItems.join(' | ')}`
+    : '\n\n🔍 MANUAL REVIEW NEEDED: Please review the application documents relevant to this question.'
+
+  const evidence = `⚠️ UNABLE TO DETERMINE — Q${qNum}: ${alertReason}${manualCheckSection}`
+  const reasoning = `Automated analysis could not produce a definitive answer. A manual review is required to evaluate this compliance criterion.`
+
+  return { evidence, reasoning }
+}
 
 /**
  * Answer SAAT-related questions (Q10-Q16) as a focused batch.
@@ -1750,27 +1816,51 @@ CRITICAL INSTRUCTIONS:
 - Each question includes COMPLIANCE CRITERIA from the User Guide that describe exactly what to evaluate.
 - Cross-reference the SAAT data with the application forms to verify compliance.
 - For patient target questions: compare actual numbers and show the calculation.
-- For funding questions: compare actual dollar amounts and show the comparison.
+- For funding amount questions (Q13): compare the applicant's total federal request against the SAAT Total Funding to check if it exceeds the limit.
+- For funding DISTRIBUTION questions (Q14): compare which population type CATEGORIES (CHC, MSAW, HP, RPH) have non-zero funding in the SAAT vs. the application. Q14 is about proportional distribution, NOT dollar amounts. If the SAAT funds only CHC ($X) and $0 for MSAW/HP/RPH, and the applicant also requests only CHC funding (any amount) and $0 for MSAW/HP/RPH, the distribution is maintained → answer Yes. Do NOT let a total amount mismatch (Q13) affect the distribution answer (Q14).
 - For service/population type questions: list what the SAAT requires and what the application proposes.
 - If a question depends on another (e.g., "If Q10 is No, Q11-Q15 are N/A"), handle dependencies.
+
+CROSS-DOCUMENT DATA CONFLICT HANDLING:
+- Applications may contain CONFLICTING data across different forms/pages (e.g., Project Abstract says SA ID 445 but Summary Page says SA ID 253).
+- If the SAAT REFERENCE DATA section includes a "CROSS-DOCUMENT SA ID CONFLICT" or the DATA CONFLICTS section lists discrepancies, you MUST:
+  1. Acknowledge the conflict explicitly in your evidence.
+  2. Note which value was found on which page/form.
+  3. If a SAAT match was found using an alternate value, answer based on the matched value but flag the inconsistency.
+  4. Add a "⚠️ DATA CONFLICT" warning in your evidence describing the discrepancy.
+- This applies to ALL data points: Service Area ID, patient projections, funding amounts, etc.
+- The goal is to help reviewers understand WHY the AI answer may differ from a manual review and identify application quality issues.
 
 WRITING STYLE:
 - Write "evidence" as a clear, descriptive paragraph a reviewer can read. Reference the specific page, form name, and values found.
 - Write "reasoning" as a brief explanation of how the compliance criteria are or are not met.
 - Always mention the page number where you found the data (e.g., "Form 1A on page 135 shows 5,200 projected patients").
 - Show specific numbers, percentages, and comparisons.
+- If data conflicts exist, include a "⚠️ DATA CONFLICT" note in the evidence.
 
 Return ONLY a JSON array:
-[{"questionNumber":10,"aiAnswer":"Yes","confidence":"high","evidence":"The applicant proposes to serve Service Area 154 in Philadelphia, PA, which is listed under NOFO HRSA-26-004 in the SAAT. The Project Abstract on page 5 confirms the applicant is applying for this service area.","pageReferences":[5],"reasoning":"The NOFO number matches and the proposed service area is listed in the SAAT, confirming the applicant is proposing a valid announced service area."}]`
+[{"questionNumber":10,"aiAnswer":"Yes","confidence":"high","evidence":"The applicant proposes to serve Service Area 253 (matched via Summary Page on page 5), which is listed under NOFO HRSA-26-006 in the SAAT. ⚠️ DATA CONFLICT: The Project Abstract on page 6 states SA ID 445, but the Summary Page on page 5 states SA ID 253. SA ID 253 matches the SAAT; SA ID 445 does not. This inconsistency should be flagged for reviewer attention.","pageReferences":[5,6],"reasoning":"The applicant's service area IS announced under this NOFO (SA ID 253 from Summary Page matches SAAT), but there is a cross-document conflict with the Project Abstract showing a different SA ID."}]`
 
-  const userPrompt = `SAAT QUESTIONS:\n${questionsText}\n\nSAAT REFERENCE DATA:\n${saatSummary || 'SAAT data not available — answer based on application evidence alone.'}\n\nAPPLICATION FORM DATA (relevant pages only):\n${relevantPages.slice(0, 12).join('\n\n')}\n\nAPPLICANT PROFILE:\nOrganization: ${applicantProfile.organizationName || 'Unknown'}\nType: ${applicantProfile.organizationType || 'Unknown'}\nCity/State: ${applicantProfile.city || ''}, ${applicantProfile.state || ''}`
+  // Build data conflicts section for the AI prompt
+  const conflictsSection = (applicantProfile.dataConflicts && applicantProfile.dataConflicts.length > 0)
+    ? `\n\nDATA CONFLICTS DETECTED IN THIS APPLICATION (${applicantProfile.dataConflicts.length}):\n` +
+      applicantProfile.dataConflicts.map((c, i) => `${i + 1}. ${c.message}`).join('\n') +
+      `\n\nIMPORTANT: Flag these conflicts in your evidence for any affected questions. The reviewer needs to know about these discrepancies.`
+    : ''
+
+  // Build all SA IDs section so AI sees every SA ID found
+  const allSaIdsSection = (applicantProfile.allServiceAreaIds && applicantProfile.allServiceAreaIds.length > 1)
+    ? `\nAll SA IDs found in application: ${applicantProfile.allServiceAreaIds.map(e => `${e.id} (page ${e.page}, ${e.source})`).join('; ')}`
+    : ''
+
+  const userPrompt = `SAAT QUESTIONS:\n${questionsText}\n\nSAAT REFERENCE DATA:\n${saatSummary || 'SAAT data not available — answer based on application evidence alone.'}\n\nAPPLICATION FORM DATA (relevant pages only):\n${relevantPages.slice(0, 12).join('\n\n')}\n\nAPPLICANT PROFILE:\nOrganization: ${applicantProfile.organizationName || 'Unknown'}\nType: ${applicantProfile.organizationType || 'Unknown'}\nService Area ID (primary): ${applicantProfile.serviceAreaId || 'Not extracted'}${allSaIdsSection}\nPatient Projection: ${applicantProfile.patientProjection || 'Not extracted'}\nFunding Requested: ${applicantProfile.fundingRequested ? '$' + parseInt(applicantProfile.fundingRequested).toLocaleString() : 'Not extracted'}${conflictsSection}`
 
   try {
     console.log(`   SAAT batch: ${saatQuestions.length} questions, ${relevantPages.length} pages, ${userPrompt.length} chars`)
     const response = await client.getChatCompletions(deployment, [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
-    ], { temperature: 0.1, maxTokens: 6000 })
+    ], { temperature: 0, maxTokens: 6000 })
 
     const aiText = response.choices[0]?.message?.content || ''
     console.log(`   SAAT AI response: ${aiText.length} chars, finishReason: ${response.choices[0]?.finishReason}`)
@@ -1794,14 +1884,15 @@ Return ONLY a JSON array:
           method: 'rules_saat_ai'
         })
       } else {
+        const alert = buildUnableToDetermineAlert(q, 'no_response')
         results.push({
           questionNumber: q.number,
           question: q.question,
           aiAnswer: 'Unable to determine',
           confidence: 'low',
-          evidence: 'AI did not return an answer for this SAAT question.',
+          evidence: alert.evidence,
           pageReferences: [],
-          reasoning: 'No analysis available',
+          reasoning: alert.reasoning,
           suggestedResources: q.suggestedResources || '',
           requiresSAAT: true,
           method: 'rules_saat_ai'
@@ -1811,14 +1902,15 @@ Return ONLY a JSON array:
   } catch (err) {
     console.error(`❌ SAAT batch AI error: ${err.message}`)
     for (const q of saatQuestions) {
+      const alert = buildUnableToDetermineAlert(q, 'ai_error', err.message)
       results.push({
         questionNumber: q.number,
         question: q.question,
         aiAnswer: 'Unable to determine',
         confidence: 'low',
-        evidence: `AI error: ${err.message}`,
+        evidence: alert.evidence,
         pageReferences: [],
-        reasoning: 'AI call failed',
+        reasoning: alert.reasoning,
         suggestedResources: q.suggestedResources || '',
         requiresSAAT: true,
         method: 'rules_saat_ai'
@@ -1907,14 +1999,19 @@ WRITING STYLE:
 Return ONLY a JSON array:
 [{"questionNumber":6,"aiAnswer":"Yes","confidence":"high","evidence":"The Budget Narrative on page 55 describes the applicant's direct involvement in staffing and operations. Form 5A on page 143 shows services the applicant will provide directly.","pageReferences":[55,143],"reasoning":"The compliance criteria require the applicant to demonstrate a substantive role. The Budget Narrative and Form 5A confirm direct service delivery and budget management, not merely applying on behalf of another organization."}]`
 
-    const userPrompt = `QUESTIONS WITH COMPLIANCE CRITERIA:\n${questionsText}\n\nAPPLICATION PAGES:\n${allPageTexts.join('\n\n')}\n\nAPPLICANT: ${applicantProfile.organizationName || 'Unknown'} (${applicantProfile.organizationType || 'Unknown'})`
+    // Include data conflicts if any exist
+    const focusedConflicts = (applicantProfile.dataConflicts && applicantProfile.dataConflicts.length > 0)
+      ? `\n\nDATA CONFLICTS DETECTED:\n` + applicantProfile.dataConflicts.map((c, i) => `${i + 1}. ${c.message}`).join('\n') + `\nFlag any relevant conflicts in your evidence with a "⚠️ DATA CONFLICT" note.`
+      : ''
+
+    const userPrompt = `QUESTIONS WITH COMPLIANCE CRITERIA:\n${questionsText}\n\nAPPLICATION PAGES:\n${allPageTexts.join('\n\n')}\n\nAPPLICANT: ${applicantProfile.organizationName || 'Unknown'} (${applicantProfile.organizationType || 'Unknown'})${focusedConflicts}`
 
     try {
       console.log(`   Focused batch: ${group.questions.length} questions, ${allPageTexts.length} pages, ${userPrompt.length} chars`)
       const response = await client.getChatCompletions(deployment, [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
-      ], { temperature: 0.1, maxTokens: 4000 })
+      ], { temperature: 0, maxTokens: 4000 })
 
       const aiText = response.choices[0]?.message?.content || ''
       console.log(`   Focused AI response: ${aiText.length} chars, finishReason: ${response.choices[0]?.finishReason}`)
@@ -1937,14 +2034,15 @@ Return ONLY a JSON array:
             method: 'rules_focused_ai'
           })
         } else {
+          const alert = buildUnableToDetermineAlert(q, 'no_response')
           results.push({
             questionNumber: q.number,
             question: q.question,
             aiAnswer: 'Unable to determine',
             confidence: 'low',
-            evidence: 'AI did not return an answer for this question.',
+            evidence: alert.evidence,
             pageReferences: q.pageNumbers || [],
-            reasoning: 'No analysis available',
+            reasoning: alert.reasoning,
             suggestedResources: q.suggestedResources || '',
             requiresSAAT: q.requiresSAAT || false,
             method: 'rules_focused_ai'
@@ -1954,14 +2052,15 @@ Return ONLY a JSON array:
     } catch (err) {
       console.error(`❌ Focused batch AI error: ${err.message}`)
       for (const q of group.questions) {
+        const alert = buildUnableToDetermineAlert(q, 'ai_error', err.message)
         results.push({
           questionNumber: q.number,
           question: q.question,
           aiAnswer: 'Unable to determine',
           confidence: 'low',
-          evidence: `AI error: ${err.message}`,
+          evidence: alert.evidence,
           pageReferences: [],
-          reasoning: 'AI call failed',
+          reasoning: alert.reasoning,
           suggestedResources: q.suggestedResources || '',
           requiresSAAT: q.requiresSAAT || false,
           method: 'rules_focused_ai'
@@ -2523,6 +2622,10 @@ function extractApplicantProfile(applicationData) {
     patientProjection: null,      // total unduplicated patients from Form 1A
     fundingRequested: null,       // total funding requested from SF-424A
     sourcePages: {},              // tracks which page each fact was found on
+    dataConflicts: [],            // cross-document data discrepancies (e.g., SA ID differs across pages)
+    allServiceAreaIds: [],        // all SA IDs found across different pages/forms: [{id, source, page}]
+    allPatientProjections: [],    // all patient projections found: [{value, source, page}]
+    allFundingRequested: [],      // all funding amounts found: [{value, source, page}]
   }
 
   // Collect text per page (with page numbers) for source tracking
@@ -2530,7 +2633,9 @@ function extractApplicantProfile(applicationData) {
   const allText = []
 
   if (applicationData.pages) {
-    applicationData.pages.slice(0, 50).forEach(p => {
+    // Scan ALL pages — the Summary Page is often at the very end (e.g., page 150 of 151)
+    // and contains the most authoritative SA ID, patient projection, and funding data.
+    applicationData.pages.forEach(p => {
       const pageNum = p.pageNumber || p.page || 0
       const lineText = p.lines?.map(l => l.content).join('\n') || ''
       if (lineText) {
@@ -2626,21 +2731,93 @@ function extractApplicantProfile(applicationData) {
   // NOT used for condition evaluation.
   if (/\bCHC\b/.test(fullText)) profile.fundingTypesRequested.push('CHC')
 
-  // ─── Service Area ID extraction (from Summary Page, Form 1A — authoritative forms) ───
-  // Priority: Summary Page > Form 1A > key-value pairs > Project Abstract
-  // Pattern: "Service Area ID" or "Proposed Service Area" followed by a number
-  const saIdPatterns = [
-    /Summary\s*Page[\s\S]{0,500}?Service\s*Area\s*(?:ID|#|Number)?[:\s]*(\d{1,4})/i,
-    /Service\s*Area\s*(?:ID|#|Number)\s*[:\s]*(\d{1,4})/i,
-    /Proposed\s*Service\s*Area\s*(?:ID|#|Number)?[:\s]*(\d{1,4})/i,
-    /Service\s*Area[:\s]*(\d{1,4})\s*(?:City|,)/i,
-  ]
-  for (const pat of saIdPatterns) {
-    const saMatch = fullText.match(pat)
-    if (saMatch) {
-      profile.serviceAreaId = saMatch[1]
-      profile.sourcePages.serviceAreaId = findPageForPattern(pat)
-      break
+  // ─── Service Area ID extraction — MULTI-SOURCE with conflict detection ───
+  // Scan EACH page independently to find SA IDs, track which form/page they came from,
+  // detect conflicts across sources, and pick the best value.
+  // Priority: Summary Page > Form 1A > key-value pairs > Project Abstract > generic
+  // Regexes handle OCR line breaks: Summary Page often has "Service\nArea ID #:\n253"
+  // [#:\s]* after the label consumes any mix of '#', ':', spaces, and newlines before the number
+  const saIdRegex = /Service\s*Area\s*(?:Identification\s*Number\s*\(ID\)|ID\s*#?|#|Number)\s*[#:\s]*(\d{1,4})/i
+  const saIdRegex2 = /Proposed\s*Service\s*Area\s*(?:ID\s*#?|#|Number)\s*[#:\s]*(\d{1,4})/i
+  const saIdRegex3 = /Service\s*Area\s*[#:\s]*(\d{1,4})\s*(?:City|,)/i
+
+  // Identify which form each page belongs to (using TOC/formPageMap if available)
+  function identifyFormForPage(pageNum) {
+    if (applicationData.tocLinks) {
+      // Find the TOC entry whose destination page is closest to (and <= ) this page
+      let bestEntry = null
+      for (const link of applicationData.tocLinks) {
+        const destPage = link.destinationPage || link.page
+        if (destPage && destPage <= pageNum) {
+          if (!bestEntry || destPage > (bestEntry.destinationPage || bestEntry.page)) {
+            bestEntry = link
+          }
+        }
+      }
+      if (bestEntry) return (bestEntry.title || bestEntry.text || '').trim()
+    }
+    return null
+  }
+
+  // Detect TOC/index pages: pages with 5+ distinct form/attachment mentions are TOC pages
+  // (defined here so it's available for SA ID, patient projection, and funding extraction)
+  function isTocPage(text) {
+    const formMentions = new Set()
+    const tocPatterns = [
+      /\bAttachment\s*\d+/gi, /\bForm\s*\d+[A-Z]?\b/gi, /\bSF[-\s]?424/gi,
+      /\bProject\s*Narrative\b/gi, /\bProject\s*Abstract\b/gi, /\bBudget\s*Narrative\b/gi,
+      /\bSummary\s*Page\b/gi, /\bOrganizational\s*Chart\b/gi
+    ]
+    for (const rx of tocPatterns) {
+      const matches = text.match(rx)
+      if (matches) matches.forEach(m => formMentions.add(m.toLowerCase()))
+    }
+    return formMentions.size >= 5
+  }
+
+  for (const pt of pageTexts) {
+    if (isTocPage(pt.text)) continue // skip TOC/index pages
+    const regexes = [saIdRegex, saIdRegex2, saIdRegex3]
+    for (const rx of regexes) {
+      const m = pt.text.match(rx)
+      if (m) {
+        const foundId = m[1]
+        const formName = identifyFormForPage(pt.pageNum) || 'Unknown form'
+        // Avoid duplicates from same page
+        if (!profile.allServiceAreaIds.find(e => e.id === foundId && e.page === pt.pageNum)) {
+          profile.allServiceAreaIds.push({ id: foundId, source: formName, page: pt.pageNum })
+        }
+        break // one match per page is enough
+      }
+    }
+  }
+
+  // Pick the best SA ID using source priority
+  const SA_SOURCE_PRIORITY = ['summary page', 'form 1a', 'sf-424', 'project abstract', 'project narrative']
+  if (profile.allServiceAreaIds.length > 0) {
+    // Sort by priority (lower index = higher priority)
+    const sorted = [...profile.allServiceAreaIds].sort((a, b) => {
+      const aIdx = SA_SOURCE_PRIORITY.findIndex(s => (a.source || '').toLowerCase().includes(s))
+      const bIdx = SA_SOURCE_PRIORITY.findIndex(s => (b.source || '').toLowerCase().includes(s))
+      return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx)
+    })
+    profile.serviceAreaId = sorted[0].id
+    profile.sourcePages.serviceAreaId = sorted[0].page
+
+    // Detect conflicts: are there different SA IDs across pages?
+    const uniqueIds = [...new Set(profile.allServiceAreaIds.map(e => e.id))]
+    if (uniqueIds.length > 1) {
+      const conflictDetail = profile.allServiceAreaIds
+        .map(e => `SA ID ${e.id} on page ${e.page} (${e.source})`)
+        .join('; ')
+      profile.dataConflicts.push({
+        field: 'Service Area ID',
+        values: profile.allServiceAreaIds.map(e => ({ value: e.id, source: e.source, page: e.page })),
+        selectedValue: profile.serviceAreaId,
+        selectedSource: sorted[0].source,
+        message: `CONFLICT: Different Service Area IDs found across the application: ${conflictDetail}. Using SA ID ${profile.serviceAreaId} from ${sorted[0].source} (page ${sorted[0].page}) as the authoritative value.`
+      })
+      console.log(`⚠️ SA ID CONFLICT: ${conflictDetail} → using ${profile.serviceAreaId} from ${sorted[0].source}`)
     }
   }
 
@@ -2661,46 +2838,158 @@ function extractApplicantProfile(applicationData) {
   })
   profile.zipCodesFromApp = uniqueZips.slice(0, 200)
 
-  // Patient projection from Form 1A — look for specific Form 1A patterns first
-  // Priority: Form 1A "unduplicated patients" > Summary Page "patient projection" > generic
-  const patientPatterns = [
-    /Form\s*1A[\s\S]{0,1000}?(?:total\s*)?unduplicated\s*patients?[^:]*:\s*([\d,]+)/i,
-    /unduplicated\s*patients?\s*(?:projected|to\s*be\s*served)[^:]*:\s*([\d,]+)/i,
-    /patient\s*(?:projection|target)[^:]*:\s*([\d,]+)/i,
-    /(?:total\s*(?:unduplicated\s*)?patients?|patient\s*(?:projection|target|count))[^:]*:\s*([\d,]+)/i,
+  // ─── Patient projection — MULTI-SOURCE with conflict detection ───
+  // Scan each page for patient projection values, track source form, detect conflicts
+  // IMPORTANT: Regexes use [^:\n]{0,60} instead of [^:]*  to prevent matching across
+  // dozens of TOC lines (e.g., "Unduplicated Patients.\n17\n...\nServices:\n31" → false "31")
+  const patientRegexes = [
+    /(?:total\s*)?unduplicated\s*patient(?:s|s?\s*projection)[^:\n]{0,60}:\s*([\d,]+)/i,
+    /patient\s*(?:projection|target)[^:\n]{0,60}:\s*([\d,]+)/i,
+    /unduplicated\s*patient\s*projection[^:\n]{0,40}(?:assessment\s*period)?[^:\n]{0,20}[\s\n]+([\d,]+)/i,
   ]
-  for (const pat of patientPatterns) {
-    const patientMatch = fullText.match(pat)
-    if (patientMatch) {
-      profile.patientProjection = patientMatch[1].replace(/,/g, '')
-      profile.sourcePages.patientProjection = findPageForPattern(pat)
-      break
-    }
-  }
+  const PATIENT_SOURCE_PRIORITY = ['summary page', 'form 1a', 'project abstract', 'project narrative']
 
-  // Also check tables for patient projection (Form 1A is often a table)
-  if (!profile.patientProjection && applicationData.tables) {
-    for (const table of applicationData.tables) {
-      for (const row of (table.structuredData || [])) {
-        const vals = Object.entries(row)
-        for (const [key, val] of vals) {
-          if (/unduplicated\s*patients?|patient\s*(?:target|projection)/i.test(key) && /^\d[\d,]*$/.test((val || '').trim())) {
-            profile.patientProjection = val.trim().replace(/,/g, '')
-            profile.sourcePages.patientProjection = table.pageNumber || null
-            break
+  for (const pt of pageTexts) {
+    // Skip TOC/index pages — they contain section titles with page numbers that look like data
+    if (isTocPage(pt.text)) continue
+
+    for (const rx of patientRegexes) {
+      const m = pt.text.match(rx)
+      if (m) {
+        const val = m[1].replace(/,/g, '')
+        const num = parseInt(val, 10)
+        // Minimum 50 to filter out TOC page numbers (17, 31, etc.)
+        if (num >= 50 && num < 10000000) {
+          const formName = identifyFormForPage(pt.pageNum) || 'Unknown form'
+          if (!profile.allPatientProjections.find(e => e.value === val && e.page === pt.pageNum)) {
+            profile.allPatientProjections.push({ value: val, source: formName, page: pt.pageNum })
           }
         }
-        if (profile.patientProjection) break
+        break
       }
-      if (profile.patientProjection) break
     }
   }
 
-  // Funding requested from SF-424A
-  const fundingMatch = fullText.match(/(?:total\s*(?:federal\s*)?(?:funding|funds?)\s*requested|federal\s*(?:funds?\s*)?requested)[^:]*:\s*\$?([\d,]+)/i)
-  if (fundingMatch) {
-    profile.fundingRequested = fundingMatch[1].replace(/,/g, '')
-    profile.sourcePages.fundingRequested = findPageForPattern(/(?:total\s*(?:federal\s*)?(?:funding|funds?)\s*requested|federal\s*(?:funds?\s*)?requested)/i)
+  // Also check tables for patient projection (Form 1A and Summary Page use tables)
+  // Look for cells with "unduplicated patients" or "patient projection" labels,
+  // then grab the numeric value from adjacent cells in the same row.
+  if (applicationData.tables) {
+    for (const table of applicationData.tables) {
+      const cells = table.cells || []
+      const tPage = table.pageNumber || table.boundingRegions?.[0]?.pageNumber || 0
+
+      // Find label cells that indicate patient projection
+      for (const cell of cells) {
+        const content = (cell.content || '').trim()
+        if (/(?:total\s*)?unduplicated\s*patient\s*projection|what\s*is\s*the\s*total\s*unduplicated\s*patient\s*projection/i.test(content)) {
+          // Look for numeric value in the same row or the next cell
+          const valueCells = cells.filter(c =>
+            c.rowIndex === cell.rowIndex && c.columnIndex > cell.columnIndex && /^\d[\d,]*$/.test((c.content || '').trim())
+          )
+          for (const vc of valueCells) {
+            const cleanVal = vc.content.trim().replace(/,/g, '')
+            const num = parseInt(cleanVal, 10)
+            if (num >= 50 && num < 10000000) {
+              const formName = identifyFormForPage(tPage) || 'Table'
+              if (!profile.allPatientProjections.find(e => e.value === cleanVal && e.page === tPage)) {
+                profile.allPatientProjections.push({ value: cleanVal, source: formName, page: tPage })
+              }
+            }
+          }
+        }
+      }
+
+      // Also check structuredData if present
+      for (const row of (table.structuredData || [])) {
+        for (const [key, val] of Object.entries(row)) {
+          if (/unduplicated\s*patients?|patient\s*(?:target|projection)/i.test(key) && /^\d[\d,]*$/.test((val || '').trim())) {
+            const cleanVal = val.trim().replace(/,/g, '')
+            const num = parseInt(cleanVal, 10)
+            if (num >= 50 && num < 10000000) {
+              const formName = identifyFormForPage(tPage) || 'Table'
+              if (!profile.allPatientProjections.find(e => e.value === cleanVal && e.page === tPage)) {
+                profile.allPatientProjections.push({ value: cleanVal, source: formName, page: tPage })
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (profile.allPatientProjections.length > 0) {
+    const sorted = [...profile.allPatientProjections].sort((a, b) => {
+      const aIdx = PATIENT_SOURCE_PRIORITY.findIndex(s => (a.source || '').toLowerCase().includes(s))
+      const bIdx = PATIENT_SOURCE_PRIORITY.findIndex(s => (b.source || '').toLowerCase().includes(s))
+      return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx)
+    })
+    profile.patientProjection = sorted[0].value
+    profile.sourcePages.patientProjection = sorted[0].page
+
+    const uniqueVals = [...new Set(profile.allPatientProjections.map(e => e.value))]
+    if (uniqueVals.length > 1) {
+      const conflictDetail = profile.allPatientProjections
+        .map(e => `${parseInt(e.value).toLocaleString()} patients on page ${e.page} (${e.source})`)
+        .join('; ')
+      profile.dataConflicts.push({
+        field: 'Patient Projection',
+        values: profile.allPatientProjections.map(e => ({ value: e.value, source: e.source, page: e.page })),
+        selectedValue: profile.patientProjection,
+        selectedSource: sorted[0].source,
+        message: `CONFLICT: Different patient projection values found across the application: ${conflictDetail}. Using ${parseInt(profile.patientProjection).toLocaleString()} from ${sorted[0].source} (page ${sorted[0].page}) as the authoritative value.`
+      })
+      console.log(`⚠️ PATIENT PROJECTION CONFLICT: ${conflictDetail} → using ${profile.patientProjection} from ${sorted[0].source}`)
+    }
+  }
+
+  // ─── Funding requested — MULTI-SOURCE with conflict detection ───
+  const fundingRegexes = [
+    /(?:total\s*(?:federal\s*)?(?:funding|funds?)\s*requested|federal\s*(?:funds?\s*)?requested)[^:]*:\s*\$?([\d,]+)/i,
+    /(?:total\s*(?:new|estimated)\s*(?:federal\s*)?funds?\s*requested)[^:]*:\s*\$?([\d,]+)/i,
+  ]
+  const FUNDING_SOURCE_PRIORITY = ['sf-424a', 'sf-424', 'budget narrative', 'summary page', 'project abstract']
+
+  for (const pt of pageTexts) {
+    if (isTocPage(pt.text)) continue // skip TOC/index pages
+    for (const rx of fundingRegexes) {
+      const m = pt.text.match(rx)
+      if (m) {
+        const val = m[1].replace(/,/g, '')
+        const num = parseInt(val, 10)
+        if (num > 0 && num < 100000000) { // sanity check
+          const formName = identifyFormForPage(pt.pageNum) || 'Unknown form'
+          if (!profile.allFundingRequested.find(e => e.value === val && e.page === pt.pageNum)) {
+            profile.allFundingRequested.push({ value: val, source: formName, page: pt.pageNum })
+          }
+        }
+        break
+      }
+    }
+  }
+
+  if (profile.allFundingRequested.length > 0) {
+    const sorted = [...profile.allFundingRequested].sort((a, b) => {
+      const aIdx = FUNDING_SOURCE_PRIORITY.findIndex(s => (a.source || '').toLowerCase().includes(s))
+      const bIdx = FUNDING_SOURCE_PRIORITY.findIndex(s => (b.source || '').toLowerCase().includes(s))
+      return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx)
+    })
+    profile.fundingRequested = sorted[0].value
+    profile.sourcePages.fundingRequested = sorted[0].page
+
+    const uniqueVals = [...new Set(profile.allFundingRequested.map(e => e.value))]
+    if (uniqueVals.length > 1) {
+      const conflictDetail = profile.allFundingRequested
+        .map(e => `$${parseInt(e.value).toLocaleString()} on page ${e.page} (${e.source})`)
+        .join('; ')
+      profile.dataConflicts.push({
+        field: 'Funding Requested',
+        values: profile.allFundingRequested.map(e => ({ value: e.value, source: e.source, page: e.page })),
+        selectedValue: profile.fundingRequested,
+        selectedSource: sorted[0].source,
+        message: `CONFLICT: Different funding amounts found across the application: ${conflictDetail}. Using $${parseInt(profile.fundingRequested).toLocaleString()} from ${sorted[0].source} (page ${sorted[0].page}) as the authoritative value.`
+      })
+      console.log(`⚠️ FUNDING CONFLICT: ${conflictDetail} → using $${profile.fundingRequested} from ${sorted[0].source}`)
+    }
   }
 
   return profile

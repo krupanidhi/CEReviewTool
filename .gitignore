@@ -13,6 +13,10 @@ client/dist/
 *.pdf
 *.zip
 *.rar
+*.xlsx
+
+# Runtime checklist cache (huge JSON files)
+stored-checklists/
 
 # Uploaded documents and extractions (runtime data, not source code)
 documents/
@@ -22,6 +26,28 @@ logs/
 
 # Processed application results (regenerated at runtime)
 processed-applications/
+
+# Build output (deployed separately)
+dist/
+
+# Prefunding review runtime data
+pf-results/
+pf-data/
+
+# Runtime cache and IIS
+cache/
+iisnode/
+
+# Temp / debug files
+temp_*.json
+temp_*.txt
+server_restart.txt
+
+# One-time helper scripts (not part of the app)
+_create_data_zip.js
+_create_deploy_zip.js
+_create_docs_deploy.js
+_rename_revalidate_pdfs.js
 
 # OS files
 .DS_Store

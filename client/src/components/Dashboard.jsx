@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Loader2 } from 'lucide-react'
 import { getProcessedApplications, getProcessedApplication, deleteProcessedApplication, deleteAllProcessedApplications } from '../services/api'
-import { bulkExportComplianceReport, bulkExportChecklistComparison } from '../utils/bulkExport'
 
 export default function Dashboard({ onViewResults }) {
   const [applications, setApplications] = useState([])
@@ -10,8 +9,6 @@ export default function Dashboard({ onViewResults }) {
   const [processingStatus, setProcessingStatus] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(12)
-  const [exporting, setExporting] = useState(null) // 'compliance' | 'checklist' | null
-  const [exportProgress, setExportProgress] = useState('')
   const pollRef = useRef(null)
 
   useEffect(() => {
@@ -120,64 +117,17 @@ export default function Dashboard({ onViewResults }) {
         <h2 style={{ color: '#0B4778', fontSize: '1.5rem', fontWeight: '700', margin: 0 }}>
           Dashboard - Analyzed Applications
         </h2>
-        {applications.filter(a => a.status === 'completed').length > 0 && (
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button
-              onClick={async () => {
-                setExporting('compliance')
-                setExportProgress('Loading...')
-                try {
-                  const count = await bulkExportComplianceReport((i, total, name) => setExportProgress(`${i}/${total}: ${name}`))
-                  setExportProgress(`Exported ${count} rows`)
-                  setTimeout(() => { setExporting(null); setExportProgress('') }, 2000)
-                } catch (err) {
-                  setExportProgress(`Error: ${err.message}`)
-                  setTimeout(() => { setExporting(null); setExportProgress('') }, 3000)
-                }
-              }}
-              disabled={!!exporting}
-              style={{ padding: '8px 16px', background: exporting === 'compliance' ? '#D9E8F6' : '#0B4778', color: exporting === 'compliance' ? '#0B4778' : 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: '600', cursor: exporting ? 'not-allowed' : 'pointer', transition: 'all 0.3s', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              {exporting === 'compliance' ? <Loader2 style={{ width: 14, height: 14 }} className="animate-spin" /> : '📊'}
-              Bulk Export Compliance Report
-            </button>
-            <button
-              onClick={async () => {
-                setExporting('checklist')
-                setExportProgress('Loading...')
-                try {
-                  const count = await bulkExportChecklistComparison((i, total, name) => setExportProgress(`${i}/${total}: ${name}`))
-                  setExportProgress(`Exported ${count} rows`)
-                  setTimeout(() => { setExporting(null); setExportProgress('') }, 2000)
-                } catch (err) {
-                  setExportProgress(`Error: ${err.message}`)
-                  setTimeout(() => { setExporting(null); setExportProgress('') }, 3000)
-                }
-              }}
-              disabled={!!exporting}
-              style={{ padding: '8px 16px', background: exporting === 'checklist' ? '#D9E8F6' : '#0B4778', color: exporting === 'checklist' ? '#0B4778' : 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: '600', cursor: exporting ? 'not-allowed' : 'pointer', transition: 'all 0.3s', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              {exporting === 'checklist' ? <Loader2 style={{ width: 14, height: 14 }} className="animate-spin" /> : '📋'}
-              Bulk Export Checklist Comparison
-            </button>
-            <button
-              onClick={handleDeleteAll}
-              disabled={!!exporting}
-              style={{ padding: '8px 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: '600', cursor: exporting ? 'not-allowed' : 'pointer', transition: 'all 0.3s', display: 'flex', alignItems: 'center', gap: '6px', opacity: exporting ? 0.5 : 1 }}
-              onMouseEnter={(e) => { if (!exporting) e.currentTarget.style.background = '#b91c1c' }}
-              onMouseLeave={(e) => { if (!exporting) e.currentTarget.style.background = '#dc2626' }}
-            >
-              🗑️ Clear All
-            </button>
-          </div>
+        {applications.length > 0 && (
+          <button
+            onClick={handleDeleteAll}
+            style={{ padding: '8px 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s', display: 'flex', alignItems: 'center', gap: '6px' }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#b91c1c'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#dc2626'}
+          >
+            🗑️ Clear All
+          </button>
         )}
       </div>
-      {exporting && exportProgress && (
-        <div style={{ background: '#DBEAFE', border: '2px solid #93C5FD', borderRadius: '8px', padding: '10px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: '#0B4778', fontSize: '0.85rem', fontWeight: '500' }}>
-          <Loader2 style={{ width: 14, height: 14, color: '#3b82f6', flexShrink: 0 }} className="animate-spin" />
-          {exportProgress}
-        </div>
-      )}
 
       {processingStatus && (processingStatus.processing > 0 || processingStatus.queued > 0) && (
         <div style={{ background: '#DBEAFE', border: '2px solid #93C5FD', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', color: '#0B4778', fontSize: '0.9rem', fontWeight: '500' }}>

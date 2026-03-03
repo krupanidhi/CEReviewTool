@@ -249,29 +249,54 @@ export function matchApplicantToServiceArea(saatData, applicantProfile, applicat
 
   const areas = saatData.serviceAreas
 
-  // Strategy 1 (HIGHEST PRIORITY): Match by Service Area ID from actual forms (Summary Page, Form 1A)
+  // Strategy 1 (HIGHEST PRIORITY): Match by Service Area ID from actual forms
+  // Try the primary SA ID first, then try ALL alternate SA IDs found across the application.
+  // This handles cross-document conflicts (e.g., Project Abstract says 445, Summary Page says 253).
   const appSaId = applicantProfile?.serviceAreaId
-  if (appSaId) {
-    // Clean the ID for comparison (remove asterisks, whitespace)
-    // Compare as integers to handle zero-padding: SAAT CSV has '001' but app may have '1'
-    const cleanAppId = appSaId.replace(/[*\s]/g, '')
-    const appIdNum = parseInt(cleanAppId, 10)
-    for (const area of areas) {
-      const cleanAreaId = (area.id || '').replace(/[*\s]/g, '')
-      const areaIdNum = parseInt(cleanAreaId, 10)
-      if (!isNaN(appIdNum) && !isNaN(areaIdNum) && appIdNum === areaIdNum) {
-        saatData.matchedArea = area
-        saatData.matchMethod = `Matched by Service Area ID: ${appSaId} (from application forms)`
-        console.log(`📊 SAAT Match: SA ${area.id} (${area.city}, ${area.state}) — SA ID match`)
-        return saatData
+  const allSaIds = applicantProfile?.allServiceAreaIds || []
+
+  // Build ordered list: primary first, then alternates (deduplicated)
+  const saIdsToTry = []
+  if (appSaId) saIdsToTry.push({ id: appSaId, source: 'primary (highest-priority form)', page: applicantProfile?.sourcePages?.serviceAreaId })
+  for (const entry of allSaIds) {
+    if (!saIdsToTry.find(e => e.id === entry.id)) {
+      saIdsToTry.push(entry)
+    }
+  }
+
+  if (saIdsToTry.length > 0) {
+    for (const candidate of saIdsToTry) {
+      const cleanAppId = candidate.id.replace(/[*\s]/g, '')
+      const appIdNum = parseInt(cleanAppId, 10)
+      for (const area of areas) {
+        const cleanAreaId = (area.id || '').replace(/[*\s]/g, '')
+        const areaIdNum = parseInt(cleanAreaId, 10)
+        if (!isNaN(appIdNum) && !isNaN(areaIdNum) && appIdNum === areaIdNum) {
+          saatData.matchedArea = area
+          // If matched on an alternate (not the primary), flag the conflict
+          if (candidate.id !== appSaId) {
+            saatData.matchMethod = `Matched by ALTERNATE Service Area ID: ${candidate.id} from ${candidate.source} (page ${candidate.page}). NOTE: Primary SA ID was ${appSaId} which is NOT in SAAT — cross-document conflict detected.`
+            saatData.saIdConflict = {
+              primaryId: appSaId,
+              matchedId: candidate.id,
+              matchedSource: candidate.source,
+              matchedPage: candidate.page,
+              allIds: allSaIds
+            }
+            console.log(`📊 SAAT Match: SA ${area.id} (${area.city}, ${area.state}) — ALTERNATE SA ID match (primary ${appSaId} not in SAAT)`)
+          } else {
+            saatData.matchMethod = `Matched by Service Area ID: ${appSaId} (from application forms)`
+            console.log(`📊 SAAT Match: SA ${area.id} (${area.city}, ${area.state}) — SA ID match`)
+          }
+          return saatData
+        }
       }
     }
-    // SA ID was extracted from the application but NOT found in SAAT for this NOFO.
-    // This is a strong signal: the applicant is applying for a service area not announced
-    // under this NOFO. Do NOT fall through to loose matching strategies.
+    // None of the SA IDs found in the application matched any SAAT service area.
+    const triedIds = saIdsToTry.map(e => `${e.id} (${e.source})`).join(', ')
     saatData.matchedArea = null
-    saatData.matchMethod = `Applicant SA ID ${appSaId} not found in SAAT for ${saatData.announcementNumber} (${areas.length} areas: ${areas.slice(0, 10).map(a => a.id).join(', ')}${areas.length > 10 ? '...' : ''})`
-    console.log(`📊 SAAT: Applicant SA ID ${appSaId} NOT in SAAT CSV — NOT falling through to loose matching`)
+    saatData.matchMethod = `No SA ID match — tried: ${triedIds}. SAAT has ${areas.length} areas: ${areas.slice(0, 10).map(a => a.id).join(', ')}${areas.length > 10 ? '...' : ''}`
+    console.log(`📊 SAAT: None of [${saIdsToTry.map(e => e.id).join(', ')}] found in SAAT CSV — NOT falling through to loose matching`)
     return saatData
   }
 
@@ -391,6 +416,13 @@ export function buildSAATSummary(saatData) {
   if (matched) {
     parts.push(`\n═══ MATCHED SERVICE AREA FOR THIS APPLICANT ═══`)
     parts.push(`Match Method: ${saatData.matchMethod}`)
+    if (saatData.saIdConflict) {
+      parts.push(`\n⚠️ CROSS-DOCUMENT SA ID CONFLICT DETECTED:`)
+      parts.push(`  The primary SA ID extracted from the application was ${saatData.saIdConflict.primaryId}, but this ID is NOT in the SAAT.`)
+      parts.push(`  An alternate SA ID ${saatData.saIdConflict.matchedId} was found on page ${saatData.saIdConflict.matchedPage} (${saatData.saIdConflict.matchedSource}) and DOES match SAAT.`)
+      parts.push(`  All SA IDs found in the application: ${saatData.saIdConflict.allIds.map(e => `${e.id} (page ${e.page}, ${e.source})`).join('; ')}`)
+      parts.push(`  IMPORTANT: The applicant's service area IS announced under this NOFO (SA ID ${saatData.saIdConflict.matchedId}), but there is an inconsistency in the application documents. Flag this as a data conflict warning in your evidence.`)
+    }
     parts.push(`Service Area ID: ${matched.id}`)
     parts.push(`Location: ${matched.city}, ${matched.state} (${matched.type})`)
     parts.push(`Current Award Recipient: ${matched.currentRecipient}`)

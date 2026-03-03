@@ -116,21 +116,34 @@ router.get('/:id/file', async (req, res) => {
     const content = await fs.readFile(join(documentsDir, metadataFile), 'utf-8')
     const metadata = JSON.parse(content)
     
-    if (!metadata.filePath) {
-      return res.status(404).json({ error: 'Original file not found' })
+    // Resolve the PDF file path:
+    // 1. Try fileName in documents/ dir (works on any host, including Azure)
+    // 2. Fall back to absolute filePath (only works on the original machine)
+    let resolvedPath = null
+
+    if (metadata.fileName) {
+      const localPath = join(documentsDir, metadata.fileName)
+      try {
+        await fs.access(localPath)
+        resolvedPath = localPath
+      } catch { /* not found locally */ }
     }
-    
-    // Check file exists
-    try {
-      await fs.access(metadata.filePath)
-    } catch {
-      return res.status(404).json({ error: 'Original file has been removed' })
+
+    if (!resolvedPath && metadata.filePath) {
+      try {
+        await fs.access(metadata.filePath)
+        resolvedPath = metadata.filePath
+      } catch { /* absolute path not found either */ }
+    }
+
+    if (!resolvedPath) {
+      return res.status(404).json({ error: 'Original file not found. The PDF may not be deployed to this server.' })
     }
     
     res.setHeader('Content-Type', metadata.mimeType || 'application/pdf')
     res.setHeader('Content-Disposition', `inline; filename="${metadata.originalName}"`)
     
-    const fileBuffer = await fs.readFile(metadata.filePath)
+    const fileBuffer = await fs.readFile(resolvedPath)
     res.send(fileBuffer)
   } catch (error) {
     console.error('❌ Error serving document file:', error)

@@ -8,6 +8,7 @@
  * This gives us 100% accurate page mappings without any string matching guesswork.
  */
 
+import './domPolyfills.js'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 
 /**

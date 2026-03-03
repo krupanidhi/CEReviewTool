@@ -51,8 +51,8 @@ Return your analysis in structured JSON format.`
 
     const result = await client.getChatCompletions(deployment, messages, {
       maxTokens: 4000,
-      temperature: 0.3,
-      topP: 0.95
+      temperature: 0,
+      topP: 1
     })
 
     const response = result.choices[0]?.message?.content

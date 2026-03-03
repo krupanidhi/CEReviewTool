@@ -375,9 +375,12 @@ async function cacheResults(applicationName, checklistName, comparisonResult, se
   // Save checklist comparison results alongside the compliance report
   if (checklistComparisonResults) {
     const cacheDir = join(__dirname, '../../processed-applications')
-    await fs.mkdir(cacheDir, { recursive: true })
+    // Derive FY/NOFO subdir from application name (e.g. "FY26/HRSA-26-006")
+    const subdir = deriveProcessedSubdir(applicationName)
+    const targetDir = subdir ? join(cacheDir, subdir) : cacheDir
+    await fs.mkdir(targetDir, { recursive: true })
     const sanitizedName = applicationName.replace(/[^a-zA-Z0-9.-]/g, '_')
-    const checklistCachePath = join(cacheDir, `${sanitizedName}_checklist_comparison.json`)
+    const checklistCachePath = join(targetDir, `${sanitizedName}_checklist_comparison.json`)
     try {
       await fs.writeFile(checklistCachePath, JSON.stringify({
         applicationName,
@@ -389,6 +392,17 @@ async function cacheResults(applicationName, checklistName, comparisonResult, se
       logError(`Failed to cache checklist comparison: ${err.message}`)
     }
   }
+}
+
+/**
+ * Derive FY/NOFO subdirectory from an application name.
+ * e.g. "HRSA-26-006_SomeName_Application-243164.pdf" → "FY26/HRSA-26-006"
+ */
+function deriveProcessedSubdir(name) {
+  if (!name) return null
+  const m = String(name).match(/HRSA[-_\s](\d{2})[-_\s](\d{3})/i)
+  if (!m) return null
+  return `FY${m[1]}/HRSA-${m[1]}-${m[2]}`
 }
 
 // ---- Main Batch Processing ----
@@ -528,11 +542,20 @@ async function main() {
     log(`APPLICATION ${appIdx + 1}/${totalApps}: ${appName}`)
     log('═'.repeat(70))
 
-    // Check if already processed — skip if cached result exists
+    // Check if already processed — skip if cached result exists (check subdir first, then root)
     try {
       const sanitizedName = appName.replace(/[^a-zA-Z0-9.-]/g, '_')
-      const cachedFiles = await fs.readdir(processedAppsDir).catch(() => [])
-      const alreadyProcessed = cachedFiles.some(f => f.includes(sanitizedName) && f.endsWith('.json'))
+      const subdir = deriveProcessedSubdir(appName)
+      let alreadyProcessed = false
+      if (subdir) {
+        const subdirPath = join(processedAppsDir, subdir)
+        const subdirFiles = await fs.readdir(subdirPath).catch(() => [])
+        alreadyProcessed = subdirFiles.some(f => f.includes(sanitizedName) && f.endsWith('.json'))
+      }
+      if (!alreadyProcessed) {
+        const rootFiles = await fs.readdir(processedAppsDir).catch(() => [])
+        alreadyProcessed = rootFiles.some(f => f.includes(sanitizedName) && f.endsWith('.json'))
+      }
       if (alreadyProcessed) {
         logSuccess(`${appName} — ALREADY PROCESSED (skipping). Delete cached file to re-process.`)
         batchResults.push({ application: appName, status: 'skipped', reason: 'Already processed' })

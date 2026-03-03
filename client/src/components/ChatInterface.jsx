@@ -4,8 +4,8 @@ import { chatWithModel } from '../services/api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-export default function ChatInterface({ document, applicationDoc, checklistDoc, comparisonResult }) {
-  const [messages, setMessages] = useState([])
+export default function ChatInterface({ document, applicationDoc, checklistDoc, comparisonResult, activeTab, reviewMode, pfData, messages, setMessages }) {
+  const isPfMode = reviewMode === 'pf' && !!pfData
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef(null)
@@ -89,7 +89,13 @@ export default function ChatInterface({ document, applicationDoc, checklistDoc, 
           data: document.analysis?.data || document.data
         } : null,
         // Completed analysis results (Q&A answers, evidence, reasoning, compliance)
-        analysisResults
+        analysisResults,
+        // Pre-funding review context — sent when user is on PF tab
+        pfContext: isPfMode ? {
+          applicationNumber: pfData.applicationNumber,
+          filename: pfData.filename,
+          results: pfData.results
+        } : null
       }
 
       const response = await chatWithModel(input, messages, context)
@@ -139,11 +145,22 @@ export default function ChatInterface({ document, applicationDoc, checklistDoc, 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #D9E8F6' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '1.3rem' }}>🤖</span>
+          <span style={{ fontSize: '1.3rem' }}>{isPfMode ? '📋' : '🤖'}</span>
           <div>
-            <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#0B4778', margin: 0 }}>Intelligent Document Q&A</h3>
+            <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#0B4778', margin: 0 }}>
+              {isPfMode ? 'Pre-Funding Review Q&A' : 'Intelligent Document Q&A'}
+            </h3>
+            {isPfMode && (
+              <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', background: '#dbeafe', color: '#2563eb', fontSize: '0.65rem', fontWeight: '700', marginTop: '3px' }}>
+                PF CONTEXT
+              </span>
+            )}
             <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0, maxWidth: '280px', lineHeight: '1.4' }}>
-              {applicationDoc && checklistDoc ? (
+              {isPfMode ? (
+                <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pfData.filename}>
+                  📋 {pfData.filename || `Application-${pfData.applicationNumber}`}
+                </span>
+              ) : applicationDoc && checklistDoc ? (
                 <span>
                   <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={applicationDoc.originalName || applicationDoc.name}>
                     ✅ {applicationDoc.originalName || applicationDoc.name || 'Application'}
@@ -174,9 +191,11 @@ export default function ChatInterface({ document, applicationDoc, checklistDoc, 
             <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🤖</div>
             <h4 style={{ fontSize: '1.1rem', fontWeight: '600', color: '#0B4778', marginBottom: '8px' }}>Start a conversation</h4>
             <p style={{ fontSize: '0.85rem', color: '#94a3b8', maxWidth: '320px' }}>
-              {applicationDoc && checklistDoc
-                ? "Ask questions about the application. I'll reference the checklist requirements and provide evidence-based answers."
-                : 'Upload application and checklist documents to enable intelligent Q&A.'}
+              {isPfMode
+                ? "Ask questions about the pre-funding review. I'll reference compliance findings, evidence, and reasoning from the PF analysis."
+                : applicationDoc && checklistDoc
+                  ? "Ask questions about the application. I'll reference the checklist requirements and provide evidence-based answers."
+                  : 'Upload application and checklist documents to enable intelligent Q&A.'}
             </p>
           </div>
         ) : (
@@ -255,12 +274,12 @@ export default function ChatInterface({ document, applicationDoc, checklistDoc, 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={applicationDoc && checklistDoc ? "Ask about compliance, requirements, evidence..." : "Upload documents first to enable chat..."}
+            placeholder={isPfMode ? "Ask about pre-funding compliance, sections, evidence..." : applicationDoc && checklistDoc ? "Ask about compliance, requirements, evidence..." : "Upload documents first to enable chat..."}
             style={{ flex: 1, background: '#EFF6FB', color: '#0B4778', borderRadius: '8px', padding: '10px 14px', border: '2px solid #D9E8F6', outline: 'none', resize: 'vertical', minHeight: '50px', maxHeight: '200px', fontSize: '0.9rem', fontFamily: 'inherit' }}
             onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
             onBlur={(e) => e.target.style.borderColor = '#D9E8F6'}
             rows="2"
-            disabled={loading || (!applicationDoc && !checklistDoc && !document)}
+            disabled={loading || (!isPfMode && !applicationDoc && !checklistDoc && !document)}
           />
           <button
             onClick={handleSend}

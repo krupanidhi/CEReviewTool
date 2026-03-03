@@ -151,24 +151,32 @@ function loadManualExcel() {
 }
 
 // ============================================================
-// Find all AI result JSON files
+// Recursively find all AI result JSON files in dir tree
 // ============================================================
-function findAIResultFiles() {
-  const files = fs.readdirSync(CONFIG.AI_RESULTS_DIR)
-  const jsonFiles = files.filter(file =>
-    file.endsWith('.json') && !file.includes('batch_summary')
-  )
+function findAIResultFiles(dir) {
+  dir = dir || CONFIG.AI_RESULTS_DIR
+  let results = []
+  const entries = fs.readdirSync(dir, { withFileTypes: true })
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name)
+    if (entry.isFile() && entry.name.endsWith('.json') && !entry.name.includes('batch_summary')) {
+      results.push(fullPath)
+    } else if (entry.isDirectory()) {
+      results.push(...findAIResultFiles(fullPath))
+    }
+  }
 
-  logger.log(`Found ${jsonFiles.length} AI result files`)
-  return jsonFiles
+  if (dir === CONFIG.AI_RESULTS_DIR) {
+    logger.log(`Found ${results.length} AI result files`)
+  }
+  return results
 }
 
 // ============================================================
-// Load AI results from JSON file
+// Load AI results from JSON file (accepts full path)
 // ============================================================
-function loadAIResults(filename) {
-  const jsonPath = path.join(CONFIG.AI_RESULTS_DIR, filename)
-  const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'))
+function loadAIResults(filePath) {
+  const data = JSON.parse(fs.readFileSync(filePath, 'utf8'))
   return data
 }
 
@@ -470,10 +478,11 @@ async function main() {
     const allStats = {}
 
     // Process each AI result file
-    for (const filename of aiFiles) {
-      logger.log(`Processing ${filename}...`)
+    for (const filePath of aiFiles) {
+      const filename = path.basename(filePath)
+      logger.log(`Processing ${path.relative(CONFIG.AI_RESULTS_DIR, filePath)}...`)
 
-      const aiResults = loadAIResults(filename)
+      const aiResults = loadAIResults(filePath)
       const appNumber = aiResults.applicationNumber
 
       if (!appNumber) {

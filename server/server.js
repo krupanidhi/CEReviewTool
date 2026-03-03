@@ -16,6 +16,8 @@ import processedApplicationsRoutes from './routes/processedApplications.js'
 import adminRoutes from './routes/admin.js'
 import saatRoutes from './routes/saat.js'
 import applicationsRoutes from './routes/applications.js'
+import pfResultsRoutes from './routes/pfResults.js'
+import pfReviewRoutes from './routes/pfReview.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -43,6 +45,8 @@ app.use('/api/processed-applications', processedApplicationsRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/saat', saatRoutes)
 app.use('/api/applications', applicationsRoutes)
+app.use('/api/pf-results', pfResultsRoutes)
+app.use('/api/pf-review', pfReviewRoutes)
 
 // Logs endpoint — save and retrieve processing logs as text files
 const logsDir = join(__dirname, '../logs')
@@ -109,6 +113,17 @@ app.get('/api/health', (req, res) => {
       openAI: !!process.env.VITE_AZURE_OPENAI_ENDPOINT
     }
   })
+})
+
+// Serve static files from React build (for production / Azure deployment)
+const distDir = join(__dirname, '../dist')
+app.use(express.static(distDir))
+
+// Handle React SPA routing — send all non-API requests to index.html
+app.get('*', (req, res, next) => {
+  // Skip API routes — let them fall through to 404/error handler
+  if (req.path.startsWith('/api')) return next()
+  res.sendFile(join(distDir, 'index.html'))
 })
 
 // Error handling middleware

@@ -38,6 +38,7 @@ router.post('/', async (req, res) => {
       hasChecklist: !!context?.checklist,
       hasSingleDoc: !!context?.singleDocument,
       hasAnalysisResults: !!context?.analysisResults,
+      hasPfContext: !!context?.pfContext,
       standardQs: context?.analysisResults?.standardQuestions?.length || 0,
       programSpecificQs: context?.analysisResults?.programSpecificQuestions?.length || 0
     })
@@ -61,7 +62,52 @@ router.post('/', async (req, res) => {
     }
 
     // Build intelligent system prompt based on available context
-    let systemPrompt = `You are an expert compliance validation assistant specialized in CE (Continuing Education) review and grant application analysis.
+    const isPfMode = !!context?.pfContext
+    let systemPrompt
+
+    if (isPfMode) {
+      // Pre-Funding Review mode — system prompt tailored for PF compliance results
+      systemPrompt = `You are an expert pre-funding compliance review assistant specialized in HRSA Health Center program requirements.
+
+CRITICAL RULES - YOU MUST FOLLOW THESE STRICTLY:
+1. ONLY use data from the pre-funding review results provided in [PRE-FUNDING REVIEW RESULTS] below
+2. NEVER use examples, assumptions, or generic data
+3. If you don't find specific data in the provided results, say "I cannot find this information in the pre-funding review results"
+4. Every answer must be traceable to the actual compliance findings provided
+
+You have access to a completed pre-funding review analysis for application: ${context.pfContext.filename || context.pfContext.applicationNumber}
+
+The review covers 8 compliance sections:
+- Sliding Fee Discount Program
+- Key Management Staff
+- Contracts and Subawards
+- Collaborative Relationships
+- Billing and Collections
+- Budget
+- Board Authority
+- Board Composition
+
+Each section contains items categorized as COMPLIANT, NON-COMPLIANT, or NOT APPLICABLE.
+Each item includes: element name, requirement, status, evidence, evidence location, evidence section, and reasoning.
+
+Your role is to:
+1. Answer questions about specific compliance sections, elements, or findings
+2. Summarize compliance status across sections or for specific areas
+3. Explain evidence and reasoning behind compliance determinations
+4. Identify non-compliant items and explain what is missing or deficient
+5. Compare findings across sections when asked
+6. Provide page references from the evidence location data
+
+RESPONSE FORMAT:
+- When discussing specific items, include the element name, status, and evidence
+- Always cite page numbers from evidenceLocation when available
+- Use clear formatting with headers, bullet points, and tables as appropriate
+- For summary questions, provide counts and percentages
+
+`
+    } else {
+      // CE Review mode — original system prompt
+      systemPrompt = `You are an expert compliance validation assistant specialized in CE (Continuing Education) review and grant application analysis.
 
 CRITICAL RULES - YOU MUST FOLLOW THESE STRICTLY:
 1. ONLY use data from the actual documents provided in the context below
@@ -78,9 +124,12 @@ Your role is to provide intelligent, evidence-based answers by:
 5. Offering actionable recommendations when requirements are not met
 
 `
+    }
 
-    // Add context-specific instructions
-    if (context?.application && context?.checklist) {
+    // Add context-specific instructions (PF mode checked FIRST — it takes priority)
+    if (isPfMode) {
+      // PF mode system prompt already fully built above — no additional context instructions needed
+    } else if (context?.application && context?.checklist) {
       systemPrompt += `AVAILABLE DOCUMENTS:
 ✓ Application Document: ${context.application.name}
 ✓ Checklist/Guide Document: ${context.checklist.name}
@@ -184,8 +233,13 @@ Provide clear, accurate analysis of this document.`
     // Add current user message with comprehensive context
     let userMessageContent = message
 
-    // Append document context with ALL tables and full page text
-    if (context?.application && context?.checklist) {
+    // Append document context (PF mode checked FIRST — it takes priority)
+    if (isPfMode) {
+      // Pre-funding review mode — append PF results as context
+      const pfJson = JSON.stringify(context.pfContext.results, null, 2).substring(0, 200000)
+      userMessageContent += `\n\n[PRE-FUNDING REVIEW RESULTS]:\n${pfJson}`
+      console.log(`📊 PF context: ${Object.keys(context.pfContext.results || {}).length} sections (${(pfJson.length/1024).toFixed(0)}KB)`)
+    } else if (context?.application && context?.checklist) {
       const allTables = context.application.data?.tables || []
 
       // Include ALL tables — they contain form data (1A, 2B, 5B, 6A, budgets, etc.)

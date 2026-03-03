@@ -12,6 +12,13 @@
  *   node server/scripts/combinedBatchProcess.js
  *   node server/scripts/combinedBatchProcess.js --mode both|ce-only|prefunding-only
  *   node server/scripts/combinedBatchProcess.js --ce-scope compliance-only|checklist-only|both
+ *   node server/scripts/combinedBatchProcess.js --apps-dir reprocessapplications
+ *   node server/scripts/combinedBatchProcess.js --cleanup --folder FY24
+ *
+ * Flags:
+ *   --apps-dir <path>  Override applications root (default: applications/). Relative to CE_ROOT.
+ *   --folder <sub>     Target a subfolder within the apps dir (e.g. FY26/HRSA-26-002).
+ *   --cleanup          Auto-delete existing CE results for matching FY/NOFO before reprocessing.
  */
 
 import fs from 'fs/promises'
@@ -179,11 +186,42 @@ async function main() {
   log(`🔄 Mode: ${mode} (CE: ${runCE ? 'YES' : 'NO'}, Prefunding: ${runPF ? 'YES' : 'NO'})`)
   if (runCE) log(`📋 CE Scope: ${ceScope} (Compliance: ${ceScope !== 'checklist-only' ? 'YES' : 'NO'}, Checklist: ${ceScope !== 'compliance-only' ? 'YES' : 'NO'})`)
 
-  // Verify applications folder — support --folder arg for targeting a subfolder
-  // e.g., --folder FY26/HRSA-26-002  or  --folder HRSA-26-002
+  // Verify applications folder — support --apps-dir and --folder args
+  // --apps-dir overrides the root (e.g., reprocessapplications), relative to CE_ROOT
+  // --folder targets a subfolder within the apps dir (e.g., FY26/HRSA-26-002)
+  const appsDirArg = getArg('apps-dir')
+  const appsRoot = appsDirArg ? path.resolve(CE_ROOT, appsDirArg) : APPLICATIONS_DIR
   const folderArg = getArg('folder')
-  const targetDir = folderArg ? path.join(APPLICATIONS_DIR, folderArg) : APPLICATIONS_DIR
+  const targetDir = folderArg ? path.join(appsRoot, folderArg) : appsRoot
   if (!(await exists(targetDir))) { logE(`Applications folder not found: ${targetDir}`); process.exit(1) }
+
+  // --cleanup: auto-delete existing CE results before reprocessing
+  const doCleanup = args.includes('--cleanup')
+  if (doCleanup && runCE) {
+    // Derive FY/NOFO from --folder arg or --apps-dir subfolder structure
+    const cleanupFilter = {}
+    if (folderArg) {
+      const fyMatch = folderArg.match(/FY(\d{2})/i)
+      if (fyMatch) cleanupFilter.fy = fyMatch[1]
+      const nofoMatch = folderArg.match(/HRSA[-_](\d{2})[-_](\d{3})/i)
+      if (nofoMatch) cleanupFilter.nofo = `HRSA-${nofoMatch[1]}-${nofoMatch[2]}`
+    }
+    if (cleanupFilter.fy || cleanupFilter.nofo) {
+      log(`🧹 Cleanup: deleting existing CE results for ${JSON.stringify(cleanupFilter)}...`)
+      try {
+        const resp = await fetchT(
+          `${CONFIG.CE_SERVER_URL}/api/processed-applications/by-filter?${cleanupFilter.fy ? 'fy=' + cleanupFilter.fy : ''}${cleanupFilter.nofo ? '&nofo=' + cleanupFilter.nofo : ''}`,
+          { method: 'DELETE' }, 30000
+        )
+        const result = await resp.json()
+        logS(`Cleanup: ${result.message || JSON.stringify(result)}`)
+      } catch (err) {
+        logW(`Cleanup failed (non-fatal): ${err.message}`)
+      }
+    } else {
+      logW('--cleanup specified but could not derive FY/NOFO from --folder. Skipping cleanup.')
+    }
+  }
 
   // Use recursive search to find PDFs in FY/NOFO subfolders
   const appPDFs = await findPDFsRecursive(targetDir)

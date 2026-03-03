@@ -289,7 +289,7 @@ export default function ChecklistComparison({ comparisonData }) {
             </button>
           </div>
         </div>
-        {!appData && <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2.5 text-yellow-400 text-sm mt-3"><AlertTriangle className="w-4 h-4 inline mr-1.5" />Run a document comparison first (Compare & Validate tab).</div>}
+        {!appData && !stdR && !psqR && <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2.5 text-yellow-400 text-sm mt-3"><AlertTriangle className="w-4 h-4 inline mr-1.5" />Run a document comparison first (Compare & Validate tab).</div>}
         {error && <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2.5 text-red-400 text-sm mt-3"><XCircle className="w-4 h-4 inline mr-1.5" />{error}</div>}
       </div>
 

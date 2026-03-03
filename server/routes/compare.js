@@ -599,8 +599,8 @@ APPLICABILITY STATUS RULES:
     const result = await Promise.race([
       client.getChatCompletions(deployment, messages, {
         maxTokens,
-        temperature: 0.1,
-        topP: 0.9,
+        temperature: 0,
+        topP: 1,
         responseFormat: { type: 'json_object' }
       }),
       timeoutPromise

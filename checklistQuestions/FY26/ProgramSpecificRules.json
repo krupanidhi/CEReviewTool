@@ -136,11 +136,13 @@
     "question": "Does the applicant propose to make services accessible to all? If a sub-population is targeted (e.g., a school-based site that targets school-aged children), will health center services be available and accessible to others seeking services at the proposed site(s)?",
     "section": "Completeness and Eligibility Checklist",
     "answerStrategy": "document_review",
-    "suggestedResources": "Project Narrative",
+    "suggestedResources": "Project Narrative | Form 5A: Services Provided | Project Abstract",
     "lookFor": [
-      "Project Narrative"
+      "Project Narrative",
+      "Form 5A: Services Provided",
+      "Project Abstract"
     ],
-    "complianceGuidance": "The Project Narrative must describe that health center services are available and accessible to all individuals seeking care at the proposed site(s), not limited to a sub-population. If a site targets a sub-population, the applicant must explicitly state that services are accessible to others as well.",
+    "complianceGuidance": "Evaluate whether the applicant's service model demonstrates accessibility to all individuals, not just a targeted sub-population. Consider the TOTALITY of evidence across multiple sources: (1) Project Narrative describing populations served and service delivery model (e.g., fixed sites, mobile units, outreach), (2) Form 5A showing full-scope required services provided, (3) Project Abstract describing target populations served. If a sub-population is targeted (e.g., school-based sites for school-aged children), answer 'Yes' if the evidence shows services extend beyond that sub-population — such as serving families, homeless individuals, public housing residents, community members, or providing mobile/outreach services to the broader community. Answer 'No' ONLY if the application restricts services exclusively to a single sub-population with no indication of broader access to others seeking care at the proposed site(s).",
     "condition": null,
     "dependsOn": null,
     "description": "Checks for accessibility of services to all, not just sub-populations."
@@ -311,11 +313,18 @@
       "Project Narrative"
     ],
     "complianceGuidance": "Applicants requesting RPH funding must demonstrate in the Project Narrative that consultation with residents of public housing occurred during preparation of the application and that ongoing consultation will be ensured for planning and administration. The reviewer should look for explicit statements and examples of consultation.",
-    "condition": {
-      "type": "funding_type",
-      "value": "rph",
-      "naIfNot": true
-    },
+    "condition": [
+      {
+        "type": "applicant_status",
+        "value": "new_or_supplemental",
+        "naIfNot": true
+      },
+      {
+        "type": "funding_type",
+        "value": "rph",
+        "naIfNot": true
+      }
+    ],
     "dependsOn": null,
     "description": "Checks for evidence of consultation with public housing residents for RPH funding."
   },
@@ -328,12 +337,19 @@
     "lookFor": [
       "Summary Page"
     ],
-    "complianceGuidance": "Applicants requesting HP and/or RPH funding must attest on the Summary Page that grant funds will supplement, not supplant, health center expenditures and in-kind contributions for services to these populations. The reviewer should confirm the attestation is checked and a description is provided.",
-    "condition": {
-      "type": "funding_type",
-      "value": "hp_or_rph",
-      "naIfNot": true
-    },
+    "complianceGuidance": "Applicants requesting HP and/or RPH funding must attest on the Summary Page that grant funds will supplement, not supplant, health center expenditures and in-kind contributions for services to these populations. The reviewer should confirm the attestation is checked and a description is provided. If the Summary Page 'Not Applicable' checkbox is checked (indicating the organization is submitting a competing continuation application, or is a new/competing supplement applicant NOT requesting HP and/or RPH funding), this question is N/A.",
+    "condition": [
+      {
+        "type": "applicant_status",
+        "value": "new_or_supplemental",
+        "naIfNot": true
+      },
+      {
+        "type": "funding_type",
+        "value": "hp_or_rph",
+        "naIfNot": true
+      }
+    ],
     "dependsOn": null,
     "description": "Checks for attestation of supplement/not supplant for HP/RPH funding."
   },

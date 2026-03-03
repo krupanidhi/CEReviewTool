@@ -2,8 +2,8 @@
  * generateComparisonExcel.js
  *
  * Generates a new Excel workbook that merges:
- *   - Manual answers from checklistQuestions/FY26/<manual-excel>.xlsx
- *   - AI answers from processed-applications/ JSON files
+ *   - Manual answers from checklistQuestions/<FY>/<manual-excel>.xlsx
+ *   - AI answers from processed-applications/<FY>/<NOFO>/ JSON files
  *
  * Output columns:
  *   announcementnumber | ApplicationTrackingNo | questionNumber | Questiontext | AI | Manual | Match Status | Reasoning | comments | Form | ...
@@ -15,7 +15,7 @@
  * Output is sorted by: announcementnumber, ApplicationTrackingNo, questionNumber, Form.
  *
  * Usage:
- *   node server/scripts/generateComparisonExcel.js
+ *   node server/scripts/generateComparisonExcel.js --fy FY26
  *   node server/scripts/generateComparisonExcel.js --source checklistQuestions/FY26/MyFile.xlsx
  *   node server/scripts/generateComparisonExcel.js --output path/to/output.xlsx
  *   node server/scripts/generateComparisonExcel.js --app 243164          # single application
@@ -33,8 +33,6 @@ const __dirname = path.dirname(__filename)
 const CE_ROOT = path.resolve(__dirname, '../..')
 const CHECKLIST_QUESTIONS_DIR = path.join(CE_ROOT, 'checklistQuestions')
 const PROCESSED_APPS_DIR = path.join(CE_ROOT, 'processed-applications')
-const DEFAULT_SOURCE = path.join(CHECKLIST_QUESTIONS_DIR, 'FY26', 'HRSA-26-006 Manual CE Review.xlsx')
-const DEFAULT_OUTPUT = path.join(CHECKLIST_QUESTIONS_DIR, 'ChecklistComparision.xlsx')
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
 function getArg(name) {
@@ -42,10 +40,33 @@ function getArg(name) {
   return idx !== -1 && process.argv[idx + 1] ? process.argv[idx + 1] : null
 }
 
-const sourceExcel = getArg('source') ? path.resolve(CE_ROOT, getArg('source')) : DEFAULT_SOURCE
-const outputPath = getArg('output') ? path.resolve(CE_ROOT, getArg('output')) : DEFAULT_OUTPUT
+const filterFY = getArg('fy')         // e.g. FY26 or 26
 const filterApp = getArg('app')       // e.g. 243164
 const filterNofo = getArg('nofo')     // e.g. HRSA-26-006
+
+/**
+ * Resolve the source Excel path.
+ * Priority: --source flag > auto-detect from --fy (first .xlsx in checklistQuestions/<FY>/) > error
+ */
+function resolveSourceExcel() {
+  const explicit = getArg('source')
+  if (explicit) return path.resolve(CE_ROOT, explicit)
+  // If --fy provided, look for first .xlsx in checklistQuestions/<FY>/
+  if (filterFY) {
+    const fyDir = path.join(CHECKLIST_QUESTIONS_DIR, normalizeFY(filterFY))
+    return fyDir // will be resolved to first .xlsx in main()
+  }
+  return null // no default — require --fy or --source
+}
+
+function normalizeFY(fy) {
+  // Accept "FY26", "fy26", "26" → "FY26"
+  const cleaned = String(fy).replace(/^fy/i, '').trim()
+  return `FY${cleaned}`
+}
+
+const sourceExcelArg = resolveSourceExcel()
+const outputPath = getArg('output') ? path.resolve(CE_ROOT, getArg('output')) : path.join(CHECKLIST_QUESTIONS_DIR, 'ChecklistComparision.xlsx')
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -57,7 +78,7 @@ function normalizeAnswer(ans) {
 
 /** Extract tracking number from a filename like "..._Application-242656.pdf..." */
 function extractTrackingNo(filename) {
-  const m = filename.match(/Application[_-](\d{5,7})/i)
+  const m = filename.match(/Application[_-](\d{6})(?!\d)/i)
   return m ? m[1] : null
 }
 
@@ -83,68 +104,98 @@ function compareAnswers(aiAnswer, manualAnswer) {
   return 'Mismatch'
 }
 
-// ── Load AI answers from processed-applications ──────────────────────────────
+// ── Recursively collect JSON files from a directory ──────────────────────────
+
+async function collectJSONFiles(dir, maxDepth = 3, currentDepth = 0) {
+  if (currentDepth > maxDepth) return []
+  const results = []
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name)
+      if (entry.isFile() && entry.name.endsWith('.json')) {
+        results.push(fullPath)
+      } else if (entry.isDirectory() && entry.name !== 'node_modules') {
+        results.push(...await collectJSONFiles(fullPath, maxDepth, currentDepth + 1))
+      }
+    }
+  } catch { /* ignore unreadable dirs */ }
+  return results
+}
+
+// ── Load AI answers from processed-applications (recursive) ──────────────────
 
 async function loadAIAnswers() {
   const aiMap = new Map() // key: trackingNo → { standard: [...], programSpecific: [...] }
 
-  let files
-  try {
-    files = await fs.readdir(PROCESSED_APPS_DIR)
-  } catch {
-    console.error(`❌ Cannot read processed-applications directory: ${PROCESSED_APPS_DIR}`)
-    return aiMap
-  }
-
-  // Prefer _checklist_comparison.json files (simpler structure)
-  const compFiles = files.filter(f => f.endsWith('_checklist_comparison.json'))
-  // Fallback: app_*.json files
-  const appFiles = files.filter(f => f.startsWith('app_') && f.endsWith('.json') && f !== 'index.json')
-
-  // Track which tracking numbers we've already loaded
-  const loaded = new Set()
-
-  // Load from _checklist_comparison.json first
-  for (const file of compFiles) {
-    const trackNo = extractTrackingNo(file)
-    if (!trackNo) continue
-    if (filterApp && trackNo !== filterApp) continue
-
+  // Determine search root: if --fy provided, scope to that FY subfolder
+  let searchRoot = PROCESSED_APPS_DIR
+  if (filterFY) {
+    const fySubdir = path.join(PROCESSED_APPS_DIR, normalizeFY(filterFY))
     try {
-      const data = JSON.parse(await fs.readFile(path.join(PROCESSED_APPS_DIR, file), 'utf8'))
-      const stdResults = data.standard?.results || []
-      const psResults = data.programSpecific?.results || []
-
-      aiMap.set(trackNo, {
-        standard: stdResults,
-        programSpecific: psResults,
-        source: file
-      })
-      loaded.add(trackNo)
-    } catch (err) {
-      console.warn(`⚠️  Could not parse ${file}: ${err.message}`)
+      await fs.access(fySubdir)
+      searchRoot = fySubdir
+      console.log(`📂 Scoping AI answers to: ${searchRoot}`)
+    } catch {
+      console.warn(`⚠️  FY subfolder not found: ${fySubdir} — scanning all of processed-applications/`)
     }
   }
 
-  // Load from app_*.json for any tracking numbers not yet loaded
-  for (const file of appFiles) {
+  const allFiles = await collectJSONFiles(searchRoot)
+  if (allFiles.length === 0) {
+    console.error(`❌ No JSON files found in: ${searchRoot}`)
+    return aiMap
+  }
+
+  // Collect all candidate files: _checklist_comparison.json AND app_*.json
+  const compFiles = allFiles.filter(f => path.basename(f).endsWith('_checklist_comparison.json'))
+  const appFiles = allFiles.filter(f => {
+    const base = path.basename(f)
+    return base.startsWith('app_') && base.endsWith('.json') && base !== 'index.json'
+  })
+
+  // Build a map: trackingNo → { filePath, mtime, type } for all candidates
+  // Then for each tracking number, pick the file with the newest mtime
+  const candidates = new Map() // trackNo → [{ filePath, mtime, type }]
+
+  for (const filePath of [...compFiles, ...appFiles]) {
+    const file = path.basename(filePath)
     const trackNo = extractTrackingNo(file)
-    if (!trackNo || loaded.has(trackNo)) continue
+    if (!trackNo) continue
     if (filterApp && trackNo !== filterApp) continue
+    try {
+      const stat = await fs.stat(filePath)
+      const type = file.endsWith('_checklist_comparison.json') ? 'comp' : 'app'
+      if (!candidates.has(trackNo)) candidates.set(trackNo, [])
+      candidates.get(trackNo).push({ filePath, mtime: stat.mtimeMs, type })
+    } catch { /* skip */ }
+  }
+
+  // For each tracking number, pick the newest file
+  for (const [trackNo, files] of candidates) {
+    files.sort((a, b) => b.mtime - a.mtime) // newest first
+    const best = files[0]
+    const file = path.basename(best.filePath)
 
     try {
-      const data = JSON.parse(await fs.readFile(path.join(PROCESSED_APPS_DIR, file), 'utf8'))
-      const cc = data.checklistComparison || {}
-      const stdResults = cc.standard?.results || []
-      const psResults = cc.programSpecific?.results || []
+      const data = JSON.parse(await fs.readFile(best.filePath, 'utf8'))
+      let stdResults, psResults
+
+      if (best.type === 'comp') {
+        stdResults = data.standard?.results || []
+        psResults = data.programSpecific?.results || []
+      } else {
+        const cc = data.checklistComparison || {}
+        stdResults = cc.standard?.results || []
+        psResults = cc.programSpecific?.results || []
+      }
 
       if (stdResults.length > 0 || psResults.length > 0) {
         aiMap.set(trackNo, {
           standard: stdResults,
           programSpecific: psResults,
-          source: file
+          source: path.relative(PROCESSED_APPS_DIR, best.filePath)
         })
-        loaded.add(trackNo)
       }
     } catch (err) {
       console.warn(`⚠️  Could not parse ${file}: ${err.message}`)
@@ -177,9 +228,36 @@ async function main() {
   console.log('═══════════════════════════════════════════════════════════')
   console.log('  CE Review — Checklist Comparison Excel Generator')
   console.log('═══════════════════════════════════════════════════════════')
+
+  // Resolve source Excel
+  let sourceExcel = sourceExcelArg
+  if (sourceExcel && !getArg('source')) {
+    // --fy was used, auto-detect first .xlsx in the FY folder
+    try {
+      const entries = await fs.readdir(sourceExcel)
+      const xlsxFile = entries.find(f => f.toLowerCase().endsWith('.xlsx'))
+      if (xlsxFile) {
+        sourceExcel = path.join(sourceExcel, xlsxFile)
+      } else {
+        console.error(`❌ No .xlsx file found in: ${sourceExcel}`)
+        console.error('   Use --source to specify the manual review Excel explicitly.')
+        process.exit(1)
+      }
+    } catch (err) {
+      console.error(`❌ Cannot read FY folder: ${sourceExcel} — ${err.message}`)
+      process.exit(1)
+    }
+  }
+
+  if (!sourceExcel) {
+    console.error('❌ No source Excel specified. Use --fy FY26 or --source path/to/file.xlsx')
+    process.exit(1)
+  }
+
   console.log(`📂 Source Excel:    ${sourceExcel}`)
   console.log(`📂 Processed Apps:  ${PROCESSED_APPS_DIR}`)
   console.log(`📄 Output:          ${outputPath}`)
+  if (filterFY) console.log(`🔍 Filter FY:       ${normalizeFY(filterFY)}`)
   if (filterApp) console.log(`🔍 Filter app:      ${filterApp}`)
   if (filterNofo) console.log(`🔍 Filter NOFO:     ${filterNofo}`)
   console.log('')
