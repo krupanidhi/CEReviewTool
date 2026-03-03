@@ -18,6 +18,7 @@ import saatRoutes from './routes/saat.js'
 import applicationsRoutes from './routes/applications.js'
 import pfResultsRoutes from './routes/pfResults.js'
 import pfReviewRoutes from './routes/pfReview.js'
+import storageService from './services/storageService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -108,6 +109,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'healthy',
     timestamp: new Date().toISOString(),
+    storageMode: storageService.getStorageMode(),
     services: {
       documentIntelligence: !!process.env.VITE_AZURE_DOC_ENDPOINT,
       openAI: !!process.env.VITE_AZURE_OPENAI_ENDPOINT
@@ -135,9 +137,14 @@ app.use((err, req, res, next) => {
   })
 })
 
-app.listen(PORT, () => {
-  console.log(`🚀 CE Review Tool API Server running on http://localhost:${PORT}`)
-  console.log(`📄 Document Intelligence: ${process.env.VITE_AZURE_DOC_ENDPOINT ? '✓' : '✗'}`)
-  console.log(`🤖 Azure OpenAI: ${process.env.VITE_AZURE_OPENAI_ENDPOINT ? '✓' : '✗'}`)
-})
+// Initialize storage and start server
+async function start() {
+  await storageService.initialize()
+  app.listen(PORT, () => {
+    console.log(`🚀 CE Review Tool API Server running on http://localhost:${PORT}`)
+    console.log(`📄 Document Intelligence: ${process.env.VITE_AZURE_DOC_ENDPOINT ? '✓' : '✗'}`)
+    console.log(`🤖 Azure OpenAI: ${process.env.VITE_AZURE_OPENAI_ENDPOINT ? '✓' : '✗'}`)
+  })
+}
+start().catch(err => { console.error('FATAL: Server startup failed:', err); process.exit(1) })
 

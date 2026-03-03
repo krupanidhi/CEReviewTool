@@ -15,6 +15,7 @@ import {
   parseSuggestedResources, lookupFormPages
 } from '../services/checklistRules.js'
 import { extractTocLinks } from '../services/pdfLinkExtractor.js'
+import storageService from '../services/storageService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -1530,11 +1531,11 @@ function detectConditionalQualifier(questionText) {
 }
 
 /**
- * Find the application PDF on disk by extracting the application number
- * from the applicationData content and searching documents directories.
+ * Find the application PDF by extracting the application number
+ * from the applicationData content and searching storage (blob or local).
  * 
  * @param {Object} applicationData - The parsed application data with pages
- * @returns {Promise<string|null>} Full path to the PDF, or null if not found
+ * @returns {Promise<string|null>} Full local path to the PDF, or null if not found
  */
 async function findApplicationPdf(applicationData) {
   // Extract application number from page content (e.g., "EHB Application Number: 242645")
@@ -1555,33 +1556,18 @@ async function findApplicationPdf(applicationData) {
 
   console.log(`🔗 findApplicationPdf: looking for Application-${appNumber}.pdf`)
 
-  // Search recursively: check root and all subdirectories
-  async function searchDir(dir) {
+  // Search via storageService in documents/ and applications/
+  for (const category of ['documents', 'applications']) {
     try {
-      const entries = await fs.readdir(dir, { withFileTypes: true })
-      for (const entry of entries) {
-        const fullPath = join(dir, entry.name)
-        if (entry.isFile() && entry.name.endsWith('.pdf') && entry.name.includes(appNumber)) {
-          return fullPath
-        }
-        if (entry.isDirectory()) {
-          const found = await searchDir(fullPath)
-          if (found) return found
-        }
+      const files = await storageService.listFiles(category, '', { extension: '.pdf' })
+      const match = files.find(f => f.name.includes(appNumber))
+      if (match) {
+        // Return local path (storageService always keeps a local copy)
+        const localPath = join(storageService.getLocalDir(category), match.relativePath)
+        console.log(`🔗 Found PDF in ${category}/: ${match.relativePath}`)
+        return localPath
       }
-    } catch { /* ignore unreadable dirs */ }
-    return null
-  }
-
-  // Search both documents/ and applications/ folders (FY/NOFO structure)
-  const searchRoots = [
-    join(__dirname, '../../documents'),
-    join(__dirname, '../../applications')
-  ]
-
-  for (const root of searchRoots) {
-    const found = await searchDir(root)
-    if (found) return found
+    } catch { /* category may not exist */ }
   }
 
   return null

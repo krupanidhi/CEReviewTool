@@ -26,6 +26,7 @@
   "dependencies": {
     "@azure/ai-form-recognizer": "^5.0.0",
     "@azure/openai": "^1.0.0-beta.12",
+    "@azure/storage-blob": "^12.31.0",
     "axios": "^1.13.5",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",

@@ -3,6 +3,7 @@ import { promises as fs } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { transformToStructured } from '../services/structuredDocumentTransformer.js'
+import storage from '../services/storageService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -15,21 +16,12 @@ const router = express.Router()
  */
 router.get('/', async (req, res) => {
   try {
-    const documentsDir = join(__dirname, '../../documents')
-    
-    // Ensure directory exists
-    await fs.mkdir(documentsDir, { recursive: true })
-    
-    const files = await fs.readdir(documentsDir)
-    
-    // Filter for metadata files
-    const metadataFiles = files.filter(f => f.endsWith('.json'))
+    const metadataFiles = await storage.listFiles('documents', '', { extension: '.json' })
     
     const documents = await Promise.all(
       metadataFiles.map(async (file) => {
         try {
-          const content = await fs.readFile(join(documentsDir, file), 'utf-8')
-          const metadata = JSON.parse(content)
+          const metadata = await storage.readJSON('documents', file.relativePath)
           return {
             id: metadata.id,
             originalName: metadata.originalName,
@@ -40,7 +32,7 @@ router.get('/', async (req, res) => {
             hasAnalysis: !!metadata.analysis
           }
         } catch (error) {
-          console.error(`Error reading metadata file ${file}:`, error)
+          console.error(`Error reading metadata file ${file.relativePath}:`, error)
           return null
         }
       })
@@ -72,17 +64,12 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params
-    const documentsDir = join(__dirname, '../../documents')
-    
-    const files = await fs.readdir(documentsDir)
-    const metadataFile = files.find(f => f.startsWith(id) && f.endsWith('.json'))
-    
-    if (!metadataFile) {
+    const metadataPath = await findMetadataPath(id)
+    if (!metadataPath) {
       return res.status(404).json({ error: 'Document not found' })
     }
     
-    const content = await fs.readFile(join(documentsDir, metadataFile), 'utf-8')
-    const metadata = JSON.parse(content)
+    const metadata = await storage.readJSON('documents', metadataPath)
     
     res.json({
       success: true,
@@ -104,47 +91,26 @@ router.get('/:id', async (req, res) => {
 router.get('/:id/file', async (req, res) => {
   try {
     const { id } = req.params
-    const documentsDir = join(__dirname, '../../documents')
-    
-    const files = await fs.readdir(documentsDir)
-    const metadataFile = files.find(f => f.startsWith(id) && f.endsWith('.json'))
-    
-    if (!metadataFile) {
+    const metadataPath = await findMetadataPath(id)
+    if (!metadataPath) {
       return res.status(404).json({ error: 'Document not found' })
     }
     
-    const content = await fs.readFile(join(documentsDir, metadataFile), 'utf-8')
-    const metadata = JSON.parse(content)
+    const metadata = await storage.readJSON('documents', metadataPath)
     
-    // Resolve the PDF file path:
-    // 1. Try fileName in documents/ dir (works on any host, including Azure)
-    // 2. Fall back to absolute filePath (only works on the original machine)
-    let resolvedPath = null
-
-    if (metadata.fileName) {
-      const localPath = join(documentsDir, metadata.fileName)
-      try {
-        await fs.access(localPath)
-        resolvedPath = localPath
-      } catch { /* not found locally */ }
+    if (!metadata.fileName) {
+      return res.status(404).json({ error: 'Original file not found' })
     }
 
-    if (!resolvedPath && metadata.filePath) {
-      try {
-        await fs.access(metadata.filePath)
-        resolvedPath = metadata.filePath
-      } catch { /* absolute path not found either */ }
-    }
+    // Stream from storage (blob or local, with automatic fallback)
+    const served = await storage.streamToResponse('documents', metadata.fileName, res, {
+      contentType: metadata.mimeType || 'application/pdf',
+      fileName: metadata.originalName
+    })
 
-    if (!resolvedPath) {
+    if (!served) {
       return res.status(404).json({ error: 'Original file not found. The PDF may not be deployed to this server.' })
     }
-    
-    res.setHeader('Content-Type', metadata.mimeType || 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="${metadata.originalName}"`)
-    
-    const fileBuffer = await fs.readFile(resolvedPath)
-    res.send(fileBuffer)
   } catch (error) {
     console.error('❌ Error serving document file:', error)
     res.status(500).json({
@@ -161,50 +127,53 @@ router.get('/:id/file', async (req, res) => {
 router.get('/:id/structured', async (req, res) => {
   try {
     const { id } = req.params
-    const documentsDir = join(__dirname, '../../documents')
-    
-    const files = await fs.readdir(documentsDir)
-    const metadataFile = files.find(f => f.startsWith(id) && f.endsWith('.json'))
-    
-    if (!metadataFile) {
+    const metadataPath = await findMetadataPath(id)
+    if (!metadataPath) {
       return res.status(404).json({ error: 'Document not found' })
     }
     
-    const content = await fs.readFile(join(documentsDir, metadataFile), 'utf-8')
-    const metadata = JSON.parse(content)
+    const metadata = await storage.readJSON('documents', metadataPath)
     
-    // Try to read pre-generated structured file
-    if (metadata.structuredFilePath) {
+    // Try to read pre-generated structured file from extractions
+    if (metadata.structuredRelPath) {
       try {
-        const structuredContent = await fs.readFile(metadata.structuredFilePath, 'utf-8')
-        const structuredData = JSON.parse(structuredContent)
-        
+        const structuredData = await storage.readJSON('extractions', metadata.structuredRelPath)
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Content-Disposition', `attachment; filename="${metadata.originalName.replace(/\.[^.]+$/, '')}_structured.json"`)
         return res.json(structuredData)
       } catch (fileErr) {
-        console.log('Structured file not found, generating on-the-fly...')
+        console.log('Structured file not found in storage, trying legacy path...')
+      }
+    }
+
+    // Legacy: try absolute structuredFilePath from old metadata
+    if (metadata.structuredFilePath) {
+      try {
+        const structuredContent = await fs.readFile(metadata.structuredFilePath, 'utf-8')
+        const structuredData = JSON.parse(structuredContent)
+        res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Content-Disposition', `attachment; filename="${metadata.originalName.replace(/\.[^.]+$/, '')}_structured.json"`)
+        return res.json(structuredData)
+      } catch (fileErr) {
+        console.log('Structured file not found at legacy path, generating on-the-fly...')
       }
     }
     
     // Fallback: generate on-the-fly from raw extraction
-    const extractionPath = metadata.extractionFilePath
-    if (extractionPath) {
+    if (metadata.extractionRelPath) {
       try {
-        const rawContent = await fs.readFile(extractionPath, 'utf-8')
-        const rawData = JSON.parse(rawContent)
+        const rawData = await storage.readJSON('extractions', metadata.extractionRelPath)
         const structuredData = transformToStructured(rawData)
         
         // Save for future use
-        const extractionsDir = join(__dirname, '../../extractions')
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
         const sanitizedName = metadata.originalName.replace(/[^a-zA-Z0-9.-]/g, '_')
-        const structuredPath = join(extractionsDir, `${timestamp}_${sanitizedName}_structured.json`)
-        await fs.writeFile(structuredPath, JSON.stringify(structuredData, null, 2))
+        const structuredRelPath = `${timestamp}_${sanitizedName}_structured.json`
+        await storage.saveJSON('extractions', structuredRelPath, structuredData)
         
-        // Update metadata with new path
-        metadata.structuredFilePath = structuredPath
-        await fs.writeFile(join(documentsDir, metadataFile), JSON.stringify(metadata, null, 2))
+        // Update metadata
+        metadata.structuredRelPath = structuredRelPath
+        await storage.saveJSON('documents', metadataPath, metadata)
         
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Content-Disposition', `attachment; filename="${metadata.originalName.replace(/\.[^.]+$/, '')}_structured.json"`)
@@ -212,6 +181,18 @@ router.get('/:id/structured', async (req, res) => {
       } catch (genErr) {
         console.error('Failed to generate structured data:', genErr)
       }
+    }
+
+    // Legacy: try absolute extractionFilePath
+    if (metadata.extractionFilePath) {
+      try {
+        const rawContent = await fs.readFile(metadata.extractionFilePath, 'utf-8')
+        const rawData = JSON.parse(rawContent)
+        const structuredData = transformToStructured(rawData)
+        res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Content-Disposition', `attachment; filename="${metadata.originalName.replace(/\.[^.]+$/, '')}_structured.json"`)
+        return res.json(structuredData)
+      } catch { /* ignore */ }
     }
     
     // Last fallback: transform from analysis data in metadata
@@ -239,10 +220,8 @@ router.get('/:id/structured', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params
-    const documentsDir = join(__dirname, '../../documents')
-    
-    const files = await fs.readdir(documentsDir)
-    const documentFiles = files.filter(f => f.startsWith(id))
+    const allFiles = await storage.listFiles('documents', '', {})
+    const documentFiles = allFiles.filter(f => f.name.startsWith(id))
     
     if (documentFiles.length === 0) {
       return res.status(404).json({ error: 'Document not found' })
@@ -250,7 +229,7 @@ router.delete('/:id', async (req, res) => {
     
     // Delete all related files
     await Promise.all(
-      documentFiles.map(file => fs.unlink(join(documentsDir, file)))
+      documentFiles.map(f => storage.deleteFile('documents', f.relativePath))
     )
     
     res.json({
@@ -266,5 +245,15 @@ router.delete('/:id', async (req, res) => {
     })
   }
 })
+
+/**
+ * Find the metadata JSON path for a given document ID.
+ * Searches storage for a file starting with the ID and ending with .json.
+ */
+async function findMetadataPath(id) {
+  const allFiles = await storage.listFiles('documents', '', { extension: '.json' })
+  const match = allFiles.find(f => f.name.startsWith(id) && f.name.endsWith('.json'))
+  return match ? match.relativePath : null
+}
 
 export default router

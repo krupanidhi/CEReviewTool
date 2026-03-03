@@ -2,12 +2,13 @@ import express from 'express'
 import fs from 'fs/promises'
 import { fileURLToPath } from 'url'
 import { dirname, join, basename } from 'path'
+import storageService from '../services/storageService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const router = express.Router()
-const APPLICATIONS_DIR = join(__dirname, '../../applications')
+const APPLICATIONS_DIR = storageService.getLocalDir('applications')
 
 /**
  * GET /api/applications/browse
@@ -280,15 +281,11 @@ router.post('/extract', async (req, res) => {
       console.warn(`⚠️ TOC link extraction skipped: ${linkErr.message}`)
     }
 
-    // Cache the extraction
-    await fs.mkdir(extractionsDir, { recursive: true })
+    // Cache the extraction via storage service
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
     const sanitizedName = appName.replace(/[^a-zA-Z0-9.-]/g, '_')
     const extractionFileName = `${timestamp}_${sanitizedName}_extraction.json`
-    await fs.writeFile(
-      join(extractionsDir, extractionFileName),
-      JSON.stringify(analysisResult.data, null, 2)
-    )
+    await storageService.saveJSON('extractions', extractionFileName, analysisResult.data)
     console.log(`💾 Extraction cached: ${extractionFileName}`)
 
     res.json({

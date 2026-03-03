@@ -9,16 +9,17 @@ import { analyzeDocumentEnhanced } from '../services/enhancedDocumentIntelligenc
 import { transformToStructured } from '../services/structuredDocumentTransformer.js'
 import cacheService from '../services/cacheService.js'
 import { extractTocLinks, buildMapFromTocLinks } from '../services/pdfLinkExtractor.js'
+import storageService from '../services/storageService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const router = express.Router()
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
+// Configure multer — always upload to local temp first, then persist to storage
+const multerStorage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    const uploadDir = join(__dirname, '../../documents')
+    const uploadDir = storageService.getLocalDir('documents')
     try {
       await fs.mkdir(uploadDir, { recursive: true })
       cb(null, uploadDir)
@@ -33,7 +34,7 @@ const storage = multer.diskStorage({
 })
 
 const upload = multer({
-  storage,
+  storage: multerStorage,
   limits: {
     fileSize: 50 * 1024 * 1024 // 50MB limit
   },
@@ -91,25 +92,27 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     const documentId = req.file.filename.split('-')[0]
     
-    // Save extracted JSON data to dedicated extractions directory for reference
-    const extractionsDir = join(__dirname, '../../extractions')
-    await fs.mkdir(extractionsDir, { recursive: true })
+    // Persist the uploaded PDF to storage (blob or local)
+    // Multer already wrote to local documents/ dir; now also push to blob if configured
+    if (storageService.isBlob()) {
+      await storageService.saveFile('documents', req.file.filename, fileBuffer, {
+        contentType: req.file.mimetype
+      })
+      console.log(`☁️ PDF uploaded to blob: documents/${req.file.filename}`)
+    }
     
+    // Save extracted JSON data to storage
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
     const sanitizedName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')
     const extractionFileName = `${timestamp}_${sanitizedName}_extraction.json`
-    const extractionPath = join(extractionsDir, extractionFileName)
-    
-    // Save complete extraction data
-    await fs.writeFile(extractionPath, JSON.stringify(analysisResult.data, null, 2))
-    console.log(`💾 Extraction saved to: ${extractionPath}`)
+    await storageService.saveJSON('extractions', extractionFileName, analysisResult.data)
+    console.log(`💾 Extraction saved: ${extractionFileName}`)
 
     // Generate and save structured JSON (clean key/value pair format)
     const structuredData = transformToStructured(analysisResult.data)
     const structuredFileName = `${timestamp}_${sanitizedName}_structured.json`
-    const structuredPath = join(extractionsDir, structuredFileName)
-    await fs.writeFile(structuredPath, JSON.stringify(structuredData, null, 2))
-    console.log(`📋 Structured JSON saved to: ${structuredPath}`)
+    await storageService.saveJSON('extractions', structuredFileName, structuredData)
+    console.log(`📋 Structured JSON saved: ${structuredFileName}`)
 
     // Cache user guide extraction in userGuides/ folder for batch reuse
     // Detect if this is a user guide by checking if a matching PDF exists in userGuides/
@@ -146,22 +149,24 @@ router.post('/', upload.single('file'), async (req, res) => {
       )
     }
 
-    // Save metadata
+    // Save metadata with relative paths (portable across local/blob)
     const metadata = {
       id: documentId,
       originalName: req.file.originalname,
       fileName: req.file.filename,
-      filePath: req.file.path,
+      filePath: req.file.path, // legacy absolute path (backward compat)
       mimeType: req.file.mimetype,
       size: req.file.size,
       uploadedAt: new Date().toISOString(),
-      extractionFilePath: extractionPath, // Reference to saved extraction JSON
-      structuredFilePath: structuredPath, // Reference to structured JSON
+      extractionRelPath: extractionFileName, // relative path in extractions/
+      structuredRelPath: structuredFileName, // relative path in extractions/
+      extractionFilePath: join(storageService.getLocalDir('extractions'), extractionFileName), // legacy
+      structuredFilePath: join(storageService.getLocalDir('extractions'), structuredFileName), // legacy
       analysis: analysisResult
     }
 
-    const metadataPath = req.file.path + '.json'
-    await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2))
+    const metadataFileName = req.file.filename + '.json'
+    await storageService.saveJSON('documents', metadataFileName, metadata)
 
     console.log(`✅ Document processed: ${req.file.originalname}`)
 

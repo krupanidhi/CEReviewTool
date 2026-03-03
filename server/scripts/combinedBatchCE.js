@@ -4,8 +4,11 @@
  */
 
 import fs from 'fs/promises'
+import fsSync from 'fs'
 import path from 'path'
+import axios from 'axios'
 import crypto from 'crypto'
+import storageService from '../services/storageService.js'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import { analyzeDocumentEnhanced } from '../services/enhancedDocumentIntelligence.js'
@@ -295,23 +298,20 @@ async function runCEChecklist(applicationData, ctx) {
 async function registerApplicationPDF(appPath, appName, ctx, ceData = null) {
   const { log, logS, logE } = ctx
   try {
-    const ceRoot = path.resolve(path.dirname(path.dirname(__dirname)))
-    const documentsDir = path.join(ceRoot, 'documents')
-    await fs.mkdir(documentsDir, { recursive: true })
-
     const docId = crypto.randomUUID().split('-')[0]
     const destFileName = `${docId}-${appName}`
-    const destPath = path.join(documentsDir, destFileName)
 
-    // Copy the PDF
-    await fs.copyFile(appPath, destPath)
+    // Copy the PDF into storage (blob + local, or local only)
+    await storageService.importLocalFile(appPath, 'documents', destFileName, {
+      contentType: 'application/pdf'
+    })
 
     // Write metadata JSON (same format the upload route creates)
     const metadata = {
       id: docId,
       originalName: appName,
       fileName: destFileName,
-      filePath: destPath,
+      filePath: path.join(storageService.getLocalDir('documents'), destFileName), // legacy
       mimeType: 'application/pdf',
       size: (await fs.stat(appPath)).size,
       uploadedAt: new Date().toISOString()
@@ -330,7 +330,7 @@ async function registerApplicationPDF(appPath, appName, ctx, ceData = null) {
       }
     }
 
-    await fs.writeFile(destPath + '.json', JSON.stringify(metadata, null, 2))
+    await storageService.saveJSON('documents', destFileName + '.json', metadata)
     logS(`PDF registered for page viewer: documents/${destFileName} (id: ${docId})${ceData ? ' [+chat data]' : ''}`)
     return docId
   } catch (err) {
