@@ -1807,6 +1807,12 @@ CRITICAL INSTRUCTIONS:
 - For service/population type questions: list what the SAAT requires and what the application proposes.
 - If a question depends on another (e.g., "If Q10 is No, Q11-Q15 are N/A"), handle dependencies.
 
+ANSWER MAPPING — READ CAREFULLY:
+- "Yes" means the applicant IS COMPLIANT with the requirement stated in the question.
+- "No" means the applicant IS NOT COMPLIANT.
+- Many questions contain negative phrasing like "does NOT exceed". If the question asks "Does the applicant request funding that does NOT exceed the SAAT Total Funding?" and the applicant's request is EQUAL TO or LESS THAN the SAAT amount, the answer is "Yes" (they are compliant — the funding does not exceed the limit).
+- RULE: If your evidence shows the applicant meets the compliance criteria, answer "Yes". If your evidence shows they fail it, answer "No". Do not let double negatives in the question wording confuse you.
+
 CROSS-DOCUMENT DATA CONFLICT HANDLING:
 - Applications may contain CONFLICTING data across different forms/pages (e.g., Project Abstract says SA ID 445 but Summary Page says SA ID 253).
 - If the SAAT REFERENCE DATA section includes a "CROSS-DOCUMENT SA ID CONFLICT" or the DATA CONFLICTS section lists discrepancies, you MUST:
@@ -2197,7 +2203,11 @@ For EACH question, follow this process:
    - Data priority: Forms (SF-424, Form 1A/5A/5B) > Attachments > Narrative > Abstract
    - Answer "Yes" only with clear evidence. Answer "No" only after thorough search.
 
-3. In your "evidence" field, always mention the specific form names and attachment numbers where you found proof (e.g., "Attachment 11", "SF-424", "Form 5A"). Page numbers will be resolved automatically.
+3. ANSWER MAPPING: "Yes" means the applicant IS COMPLIANT. "No" means NOT COMPLIANT.
+   - Questions may contain negative phrasing (e.g., "does NOT exceed"). If the applicant meets the requirement, answer "Yes" regardless of phrasing.
+   - RULE: If your evidence shows the applicant meets the compliance criteria, answer "Yes". If not, answer "No". Do not let double negatives confuse you.
+
+4. In your "evidence" field, always mention the specific form names and attachment numbers where you found proof (e.g., "Attachment 11", "SF-424", "Form 5A"). Page numbers will be resolved automatically.
 ${saatQuestionNums.length > 0 ? `
 SAAT DATA (Questions ${saatQuestionNums.join(', ')}):
 - Q10: "Yes" if applicant's NOFO matches AND proposes a valid service area. If Q10="No", Q11-Q15 are all "N/A".
