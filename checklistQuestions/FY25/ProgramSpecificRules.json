@@ -330,7 +330,7 @@
     "complianceGuidance": "If the Form 1A patient projection is between 75% and 94.9% of the SAAT Patient Target, the annual SAC funding request in SF-424A and Budget Narrative must be reduced proportionally, as described in the NOFO and User Guide. The requested funding should not exceed the percentage of the Patient Target projected. If the projection is 95% or more, no reduction is required.",
     "condition": null,
     "dependsOn": {
-      "question": 10,
+      "question": 9,
       "requiredAnswer": "Yes"
     },
     "saatCheck": "funding_not_exceed",

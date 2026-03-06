@@ -34,8 +34,35 @@ export function deriveFiscalYear(fundingOppNumber) {
 }
 
 /**
+ * Strip currency symbols, commas, percentage signs from a string and parse as number.
+ * Handles: "$6,629,484" → 6629484, "2,693" → 2693, "65.6%" → 65.6, "0" → 0
+ */
+function parseCurrencyNumber(val) {
+  if (val == null || val === '') return NaN
+  const cleaned = String(val).replace(/[$,%\s"]/g, '').replace(/,/g, '')
+  return Number(cleaned)
+}
+
+/**
+ * Normalize CSV column headers to canonical names.
+ * FY24/FY25 CSVs use mhc_funding/hch_funding/phpc_funding,
+ * FY26 CSVs use msaw_funding/hp_funding/rph_funding.
+ */
+const COLUMN_ALIASES = {
+  'mhc_funding': 'msaw_funding',
+  'hch_funding': 'hp_funding',
+  'phpc_funding': 'rph_funding',
+}
+
+function normalizeHeader(header) {
+  const trimmed = header.trim().toLowerCase()
+  return COLUMN_ALIASES[trimmed] || trimmed
+}
+
+/**
  * Parse a CSV string into an array of objects using the header row.
  * Handles quoted fields with commas and escaped quotes.
+ * Normalizes column names across FY variants.
  * @param {string} csvText - Raw CSV content
  * @returns {Array<Object>} Parsed rows
  */
@@ -43,8 +70,9 @@ function parseCSV(csvText) {
   const lines = csvText.split('\n').filter(line => line.trim())
   if (lines.length < 2) return []
 
-  // Parse header
-  const headers = parseCSVLine(lines[0])
+  // Parse header and normalize column names
+  const rawHeaders = parseCSVLine(lines[0])
+  const headers = rawHeaders.map(h => normalizeHeader(h))
   const rows = []
 
   for (let i = 1; i < lines.length; i++) {
@@ -52,7 +80,7 @@ function parseCSV(csvText) {
     if (values.length === 0) continue
     const row = {}
     headers.forEach((header, idx) => {
-      row[header.trim()] = (values[idx] || '').trim()
+      row[header] = (values[idx] || '').trim()
     })
     rows.push(row)
   }
@@ -183,12 +211,12 @@ export async function loadSAATData(fiscalYear, announcementNumber = null) {
 function buildServiceAreaSummary(saId, rows) {
   const firstRow = rows[0]
 
-  const patientTarget = parseInt(firstRow.patient_target) || 0
-  const totalFunding = parseInt(firstRow.total_funding) || 0
-  const chcFunding = parseInt(firstRow.chc_funding) || 0
-  const msawFunding = parseInt(firstRow.msaw_funding) || 0
-  const hpFunding = parseInt(firstRow.hp_funding) || 0
-  const rphFunding = parseInt(firstRow.rph_funding) || 0
+  const patientTarget = parseCurrencyNumber(firstRow.patient_target) || 0
+  const totalFunding = parseCurrencyNumber(firstRow.total_funding) || 0
+  const chcFunding = parseCurrencyNumber(firstRow.chc_funding) || 0
+  const msawFunding = parseCurrencyNumber(firstRow.msaw_funding) || 0
+  const hpFunding = parseCurrencyNumber(firstRow.hp_funding) || 0
+  const rphFunding = parseCurrencyNumber(firstRow.rph_funding) || 0
 
   // Collect unique service types
   const serviceTypesSet = new Set()
@@ -199,12 +227,16 @@ function buildServiceAreaSummary(saId, rows) {
   const serviceTypes = [...serviceTypesSet].sort()
 
   // Collect zip codes with their patient percentages
+  // Handle both formats: "65.6%" (already a percentage) and "0.961" (decimal)
   const zipEntries = rows
-    .map(row => ({
-      zip: (row.zip || '').trim(),
-      pctPatients: parseFloat(row.pct_patients) || 0,
-      highlight: (row.highlight || '').trim()
-    }))
+    .map(row => {
+      const zip = (row.zip || '').trim()
+      let pctPatients = parseCurrencyNumber(row.pct_patients) || 0
+      // If value is > 1, it's already a percentage (e.g. 65.6 from "65.6%")
+      // Convert to 0-1 decimal for consistency
+      if (pctPatients > 1) pctPatients = pctPatients / 100
+      return { zip, pctPatients, highlight: (row.highlight || '').trim() }
+    })
     .filter(z => z.zip)
     .sort((a, b) => b.pctPatients - a.pctPatients)
 

@@ -159,7 +159,7 @@
     ],
     "complianceGuidance": "The User Guide states that the unduplicated patient projection for calendar year 2025 on Form 1A must be at least 75 percent of the Patient Target listed in the SAAT for the proposed service area. The system should compare the total projected patients to the SAAT Patient Target and confirm the 75% threshold is met. If the projection is below 75%, the application is not eligible.",
     "condition": null,
-    "dependsOn": null,
+    "dependsOn": { "question": 9, "requiredAnswer": "Yes" },
     "description": "Check that projected patients on Form 1A are at least 75% of the SAAT Patient Target."
   },
   {
@@ -175,7 +175,7 @@
     ],
     "complianceGuidance": "The User Guide requires that the applicant must project patients for each Service Type listed for the service area in the SAAT. Form 1A must include projections for all required Service Types. Zeros are acceptable if not applicable, but all Service Types must be addressed. The application must not omit any Service Type listed in the SAAT.",
     "condition": null,
-    "dependsOn": null,
+    "dependsOn": { "question": 9, "requiredAnswer": "Yes" },
     "description": "Verify all SAAT Service Types are addressed in Form 1A patient projections."
   },
   {
@@ -192,7 +192,7 @@
     ],
     "complianceGuidance": "The User Guide specifies that the total annual SAC funding requested in the SF-424A must not exceed the Total Funding amount listed in the SAAT for the service area. The system should compare the total federal funding requested to the SAAT maximum. If the request exceeds the SAAT amount, the application is not eligible.",
     "condition": null,
-    "dependsOn": null,
+    "dependsOn": { "question": 9, "requiredAnswer": "Yes" },
     "description": "Check that total SAC funding requested does not exceed the SAAT maximum."
   },
   {
@@ -208,7 +208,7 @@
     ],
     "complianceGuidance": "The User Guide requires that the applicant must propose to serve all population types (CHC, MHC, HCH, PHPC) that have a funding amount greater than $0 in the SAAT for the service area. The SF-424A must include funding requests for each applicable population type. If any targeted population type is omitted, the application is not eligible.",
     "condition": null,
-    "dependsOn": null,
+    "dependsOn": { "question": 9, "requiredAnswer": "Yes" },
     "description": "Verify all population types with SAAT funding are included in the application."
   },
   {
@@ -224,7 +224,7 @@
     ],
     "complianceGuidance": "The User Guide states that the funding distribution across population types (CHC, MHC, HCH, PHPC) must be maintained as listed in the SAAT for the service area. The SF-424A must reflect the same proportional distribution of funding as the SAAT. If the distribution is not maintained, the application is not eligible.",
     "condition": null,
-    "dependsOn": null,
+    "dependsOn": { "question": 9, "requiredAnswer": "Yes" },
     "description": "Check that funding distribution by population type matches the SAAT."
   },
   {
@@ -263,7 +263,7 @@
       "value": "new_or_supplemental",
       "naIfNot": true
     },
-    "dependsOn": null,
+    "dependsOn": { "question": 9, "requiredAnswer": "Yes" },
     "description": "Check that Form 5B zip codes cover at least 75% of SAAT patient percentages or all zip codes if total is less than 75%."
   },
   {
@@ -331,7 +331,7 @@
     ],
     "complianceGuidance": "The User Guide and NOFO require that if the Form 1A patient projection is less than 95% of the SAAT Patient Target, the annual SAC funding request in the SF-424A and Budget Narrative must be reduced proportionally. The system should verify that the funding request is adjusted in accordance with the patient projection percentage. This check is for informational purposes and does not affect eligibility.",
     "condition": null,
-    "dependsOn": null,
+    "dependsOn": { "question": 9, "requiredAnswer": "Yes" },
     "description": "Check that funding request is reduced if patient projection is less than 95% of SAAT target."
   },
   {

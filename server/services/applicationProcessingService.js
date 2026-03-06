@@ -312,11 +312,11 @@ class ApplicationProcessingService {
    * Delete processed applications matching a FY and/or NOFO filter.
    * Also removes companion _checklist_comparison.json files from the same subdir.
    * CE-only — does NOT touch pf-results/.
-   * @param {{ fy?: string, nofo?: string }} filter
+   * @param {{ fy?: string, nofo?: string, checklistName?: string }} filter
    * @returns {{ deleted: number, companionFiles: number }}
    */
-  async deleteByFilter({ fy, nofo } = {}) {
-    if (!fy && !nofo) throw new Error('At least one of fy or nofo must be provided')
+  async deleteByFilter({ fy, nofo, checklistName } = {}) {
+    if (!fy && !nofo && !checklistName) throw new Error('At least one of fy, nofo, or checklistName must be provided')
 
     // Normalize FY: accept "FY26", "fy26", "26" → "FY26"
     const normalizedFY = fy ? `FY${String(fy).replace(/^fy/i, '').trim()}` : null
@@ -327,21 +327,30 @@ class ApplicationProcessingService {
       subdirPrefix = subdirPrefix ? `${subdirPrefix}/${nofo}` : nofo
     }
 
-    // Find matching entries in index by subdir or name
+    // Find matching entries in index by subdir, name, or checklistName
     const toDelete = []
     for (const [id, meta] of this.applications) {
       let matches = false
-      if (meta.subdir) {
-        // Match by subdir prefix (e.g. "FY26" matches "FY26/HRSA-26-006")
+
+      // Primary: match by checklistName (most reliable for FY identification)
+      if (checklistName && meta.checklistName) {
+        matches = meta.checklistName.toLowerCase().includes(checklistName.toLowerCase())
+      }
+
+      // Secondary: match by subdir prefix
+      if (!matches && subdirPrefix && meta.subdir) {
         matches = meta.subdir.startsWith(subdirPrefix)
-      } else if (meta.name) {
-        // For apps without subdir, try matching FY/NOFO from the name
+      }
+
+      // Tertiary: match by HRSA number in filename (for apps without subdir or checklistName)
+      if (!matches && !checklistName && meta.name) {
         if (nofo && meta.name.includes(nofo)) matches = true
         if (normalizedFY && !nofo) {
           const yearCode = normalizedFY.replace('FY', '')
           if (meta.name.includes(`HRSA-${yearCode}-`) || meta.name.includes(`HRSA_${yearCode}_`)) matches = true
         }
       }
+
       if (matches) toDelete.push(id)
     }
 

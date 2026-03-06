@@ -27,7 +27,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '../..')
 // ── Configuration ──────────────────────────────────────────────────────
 const STORAGE_MODE = (process.env.STORAGE_MODE || 'local').toLowerCase()  // 'local' | 'blob'
 const BLOB_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING || ''
-const BLOB_CONTAINER_NAME = process.env.AZURE_STORAGE_CONTAINER || 'cereviewtool'
+const BLOB_CONTAINER_NAME = process.env.AZURE_STORAGE_CONTAINER || 'pfcereviewtoolstorage'
 
 // Local directory roots (used when STORAGE_MODE === 'local', and as
 // fallback read paths when blob is primary)

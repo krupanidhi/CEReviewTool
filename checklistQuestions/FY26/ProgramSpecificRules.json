@@ -161,6 +161,7 @@
       "Form 5B: Service Sites"
     ],
     "complianceGuidance": "The applicant must propose to serve a service area listed in the Service Area Announcement Table (SAAT) for the current NOFO. The reviewer should verify that the Service Area ID, city, and state on the Summary Page and Form 5B match an entry in the SAAT. If not, mark Questions 11-15 as N/A.",
+    "saatCheck": "nofo_match",
     "condition": null,
     "dependsOn": null,
     "description": "Checks that the proposed service area matches the NOFO SAAT."
@@ -368,7 +369,7 @@
     "saatCheck": "funding_not_exceed",
     "condition": null,
     "dependsOn": {
-      "question": 11,
+      "question": 10,
       "requiredAnswer": "Yes"
     },
     "description": "Checks for proportional funding reduction if patient projection is less than 95% of SAAT target."

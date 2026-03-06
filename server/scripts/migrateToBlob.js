@@ -5,7 +5,7 @@
  * Prerequisites:
  *   - STORAGE_MODE=blob in .env
  *   - AZURE_STORAGE_CONNECTION_STRING set in .env
- *   - AZURE_STORAGE_CONTAINER set in .env (default: cereviewtool)
+ *   - AZURE_STORAGE_CONTAINER set in .env (default: pfcereviewtoolstorage)
  *
  * Usage:
  *   node server/scripts/migrateToBlob.js [--category documents|extractions|all] [--dry-run]

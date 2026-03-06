@@ -286,17 +286,18 @@ router.post('/save', async (req, res) => {
 })
 
 /**
- * DELETE /api/processed-applications/by-filter?fy=FY26&nofo=HRSA-26-006
- * Delete CE processed applications matching FY and/or NOFO filter.
+ * DELETE /api/processed-applications/by-filter?fy=FY26&nofo=HRSA-26-006&checklistName=FY24
+ * Delete CE processed applications matching FY, NOFO, and/or checklistName filter.
+ * checklistName is the most reliable filter — matches the User Guide name stored in each app's metadata.
  * Also removes companion _checklist_comparison.json files. Does NOT touch pf-results/.
  */
 router.delete('/by-filter', async (req, res) => {
   try {
-    const { fy, nofo } = req.query
-    if (!fy && !nofo) {
-      return res.status(400).json({ error: 'At least one of fy or nofo query param is required' })
+    const { fy, nofo, checklistName } = req.query
+    if (!fy && !nofo && !checklistName) {
+      return res.status(400).json({ error: 'At least one of fy, nofo, or checklistName query param is required' })
     }
-    const result = await applicationProcessingService.deleteByFilter({ fy, nofo })
+    const result = await applicationProcessingService.deleteByFilter({ fy, nofo, checklistName })
     res.json({
       success: true,
       message: `Deleted ${result.deleted} app(s) + ${result.companionFiles} checklist comparison file(s)`,
